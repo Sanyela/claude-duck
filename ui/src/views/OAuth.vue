@@ -84,7 +84,7 @@
       </div>
 
       <!-- 自动模式 - 重定向中 -->
-      <div v-else-if="!isDeviceFlow && authorized" class="auto-redirect">
+      <div v-else-if="!isDeviceFlow && authorized && !error" class="auto-redirect">
         <n-result status="success" title="授权成功" description="正在重定向...">
           <template #footer>
             <n-spin size="large" />
@@ -92,8 +92,29 @@
         </n-result>
       </div>
 
+      <!-- 重定向失败 - 显示token -->
+      <div v-else-if="!isDeviceFlow && authorized && error" class="redirect-failed">
+        <n-result status="warning" :title="error.title" :description="error.message">
+          <template #footer>
+            <n-space vertical>
+              <n-alert type="warning">
+                如果您的浏览器无法自动重定向，请手动复制以下信息到您的应用
+              </n-alert>
+              <n-input
+                :value="error.message"
+                readonly
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 5 }"
+                style="font-family: monospace;"
+              />
+              <n-button @click="copyFailedToken">复制Token</n-button>
+            </n-space>
+          </template>
+        </n-result>
+      </div>
+
       <!-- 错误状态 -->
-      <div v-if="error" class="error-state">
+      <div v-if="error && !authorized" class="error-state">
         <n-result status="error" :title="error.title" :description="error.message">
           <template #footer>
             <n-button @click="resetAuth">重试</n-button>
@@ -106,7 +127,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import axiosInstance from '@/api/request'
 import {
   NCard, NIcon, NSpin, NAlert, NDescriptions, NDescriptionsItem,
   NTag, NSpace, NButton, NResult, NInput, useMessage
@@ -119,6 +142,8 @@ import {
 } from '@vicons/ionicons5'
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 const message = useMessage()
 
 // 状态管理
@@ -135,7 +160,18 @@ const state = ref('')
 const isDeviceFlow = ref(false)
 const authCode = ref('')
 
-onMounted(() => {
+onMounted(async () => {
+  // 首先检查用户是否已登录
+  const isAuthenticated = await authStore.checkAuth()
+  if (!isAuthenticated) {
+    // 未登录，重定向到登录页面
+    router.push({
+      path: '/login',
+      query: { redirect: route.fullPath }
+    })
+    return
+  }
+  
   parseAuthParams()
   setTimeout(() => {
     loading.value = false
@@ -167,10 +203,11 @@ async function handleAuthorize() {
   
   try {
     await handleProductionAuthorize()
-  } catch (err) {
+  } catch (err: any) {
+    console.error('Authorization error:', err)
     error.value = {
       title: '授权失败',
-      message: '处理授权请求时发生错误，请重试'
+      message: err.message || '处理授权请求时发生错误，请重试'
     }
   } finally {
     authorizing.value = false
@@ -179,43 +216,117 @@ async function handleAuthorize() {
 
 // 生产模式授权处理
 async function handleProductionAuthorize() {
-  // 调用真实的后端OAuth授权接口
-  const response = await fetch('/api/sso/authorize', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  try {
+    console.log('Authorizing with params:', {
       client_id: clientId.value,
       redirect_uri: redirectUri.value,
       state: state.value,
       device_flow: isDeviceFlow.value
     })
-  })
-
-  if (!response.ok) {
-    throw new Error('OAuth授权失败')
-  }
-
-  const result = await response.json()
-
-  if (isDeviceFlow.value) {
-    // 手动模式：显示真实的授权码
-    authCode.value = result.code
-    authorized.value = true
-    message.success('授权码已生成')
-  } else {
-    // 自动模式：重定向到回调地址
-    authorized.value = true
-    message.success('授权成功，正在重定向...')
     
-    setTimeout(() => {
-      const callbackUrl = new URL(redirectUri.value)
-      callbackUrl.searchParams.set('token', result.token)
-      callbackUrl.searchParams.set('state', state.value)
+    // 调用真实的后端OAuth授权接口
+    const response: any = await axiosInstance.post('/sso/authorize', {
+      client_id: clientId.value,
+      redirect_uri: redirectUri.value,
+      state: state.value,
+      device_flow: isDeviceFlow.value
+    })
+
+    console.log('Authorization response:', response)
+
+    // 注意：axios拦截器已经返回了response.data，所以这里的response就是data
+    if (!response) {
+      throw new Error('Invalid response from server')
+    }
+
+    if (isDeviceFlow.value) {
+      // 手动模式：显示真实的授权码
+      authCode.value = response.code
+      authorized.value = true
+      message.success('授权码已生成')
+    } else {
+      // 自动模式：重定向到回调地址
+      authorized.value = true
+      message.success('授权成功，正在重定向...')
       
-      window.location.href = callbackUrl.toString()
-    }, 1500)
+      // 确保token存在
+      const token = response.token
+      if (!token) {
+        throw new Error('No token received from server')
+      }
+      
+      setTimeout(() => {
+        try {
+          const callbackUrl = new URL(redirectUri.value)
+          callbackUrl.searchParams.set('token', token)
+          callbackUrl.searchParams.set('state', state.value)
+          
+          const finalUrl = callbackUrl.toString()
+          console.log('Redirecting to:', finalUrl)
+          
+          // 检查是否是同源重定向
+          const currentOrigin = window.location.origin
+          const targetOrigin = callbackUrl.origin
+          
+          if (currentOrigin === targetOrigin) {
+            // 同源，使用 router
+            const path = callbackUrl.pathname + callbackUrl.search
+            router.push(path)
+          } else {
+            // 跨域，尝试使用 window.location.href
+            // 首先尝试在当前窗口重定向
+            window.location.href = finalUrl
+            
+            // 同时尝试通过 postMessage 发送（如果是从其他窗口打开的）
+            if (window.opener) {
+              try {
+                window.opener.postMessage({
+                  type: 'oauth_callback',
+                  success: true,
+                  data: {
+                    token: token,
+                    state: state.value
+                  }
+                }, targetOrigin)
+                message.info('已通过postMessage发送授权信息')
+              } catch (pmErr) {
+                console.warn('PostMessage failed:', pmErr)
+              }
+            }
+            
+            // 如果2秒后还在当前页面，说明重定向可能被阻止
+            setTimeout(() => {
+              if (window.location.href.includes('/oauth/authorize')) {
+                console.warn('Redirect may have been blocked')
+                error.value = {
+                  title: '重定向可能被阻止',
+                  message: `请确保回调地址 ${redirectUri.value} 可访问。Token: ${token}`
+                }
+              }
+            }, 2000)
+          }
+        } catch (err) {
+          console.error('Redirect failed:', err)
+          message.error('重定向失败，请检查回调地址是否正确')
+          
+          // 如果重定向失败，显示token供手动复制
+          error.value = {
+            title: '重定向失败',
+            message: `无法重定向到回调地址 ${redirectUri.value}。Token: ${token}`
+          }
+        }
+      }, 1500)
+    }
+  } catch (error: any) {
+    // 处理错误
+    console.error('API error:', error.response || error)
+    if (error.response?.status === 401) {
+      throw new Error('用户未登录或登录已过期')
+    } else if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    } else {
+      throw new Error('网络请求失败: ' + (error.message || '未知错误'))
+    }
   }
 }
 
@@ -246,6 +357,19 @@ async function copyAuthCode() {
     }
   } finally {
     copying.value = false
+  }
+}
+
+// 复制失败的token
+async function copyFailedToken() {
+  try {
+    const tokenMatch = error.value?.message.match(/Token: (.+)/)
+    if (tokenMatch && tokenMatch[1]) {
+      await navigator.clipboard.writeText(tokenMatch[1])
+      message.success('Token已复制到剪贴板')
+    }
+  } catch (err) {
+    message.error('复制失败，请手动选择并复制')
   }
 }
 

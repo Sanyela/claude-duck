@@ -67,6 +67,25 @@ func HandleAuthorize(c *gin.Context) {
 		return
 	}
 
+	// 从JWT中间件获取用户ID
+	userIDInterface, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+		})
+		return
+	}
+	userID := userIDInterface.(uint)
+
+	// 获取用户信息
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get user information",
+		})
+		return
+	}
+
 	// 验证客户端ID
 	if req.ClientID != config.AppConfig.ClientID {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -86,7 +105,7 @@ func HandleAuthorize(c *gin.Context) {
 	// 根据是否是设备流程返回不同响应
 	if req.DeviceFlow {
 		// 设备码模式 - 生成设备码
-		deviceCode, err := utils.StoreDeviceCode(1) // 暂时使用固定用户ID
+		deviceCode, err := utils.StoreDeviceCode(userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to generate device code",
@@ -99,8 +118,14 @@ func HandleAuthorize(c *gin.Context) {
 			"device_flow": true,
 		})
 	} else {
-		// 自动模式 - 直接返回token和重定向信息
-		token := "sk-BxYNfpirLM4E4TI7k1Cu1WoqOVTpMzyl6B2GNeYngdX9J5VD"
+		// 自动模式 - 生成真实的JWT token
+		token, err := utils.GenerateAccessToken(user.ID, user.Email)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to generate access token",
+			})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"token":       token,
@@ -130,6 +155,7 @@ func HandleVerifyToken(c *gin.Context) {
 	}
 
 	// 检查是否是固定的OAuth token
+	// 这里是我方便测试 debug使用的 实际上下面这一段代码需要注释
 	if req.Token == "sk-BxYNfpirLM4E4TI7k1Cu1WoqOVTpMzyl6B2GNeYngdX9J5VD" {
 		// 返回固定用户信息用于OAuth验证
 		c.JSON(http.StatusOK, TokenVerifyResponse{
@@ -150,9 +176,11 @@ func HandleVerifyToken(c *gin.Context) {
 		return
 	}
 
+	userID := claims.UserID
+
 	// 验证用户是否仍然存在
 	var user models.User
-	if err := database.DB.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, TokenVerifyResponse{
 			Authenticated: false,
 			Error:         "User not found",
@@ -196,14 +224,14 @@ func HandleVerifyCode(c *gin.Context) {
 	}
 
 	// 生成访问令牌
-	// token, err := utils.GenerateAccessToken(user.ID, user.Email)
-	// if err != nil {
-	// 	c.JSON(http.StatusInternalServerError, CodeVerifyResponse{
-	// 		Error: "Failed to generate access token",
-	// 	})
-	// 	return
-	// }
-	token := "sk-BxYNfpirLM4E4TI7k1Cu1WoqOVTpMzyl6B2GNeYngdX9J5VD"
+	token, err := utils.GenerateAccessToken(user.ID, user.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, CodeVerifyResponse{
+			Error: "Failed to generate access token",
+		})
+		return
+	}
+
 	// 返回成功响应
 	c.JSON(http.StatusOK, CodeVerifyResponse{
 		Token:  token,

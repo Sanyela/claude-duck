@@ -23,11 +23,11 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// 注册登录相关响应结构
+// AuthResponse 注册登录相关响应结构
 type AuthResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Token   string `json:"token,omitempty"`
+	Success bool      `json:"success"`
+	Message string    `json:"message"`
+	Token   string    `json:"token,omitempty"`
 	User    *UserData `json:"user,omitempty"`
 }
 
@@ -207,4 +207,4 @@ func HandleLogout(c *gin.Context) {
 		"success": true,
 		"message": "登出成功",
 	})
-} 
+}

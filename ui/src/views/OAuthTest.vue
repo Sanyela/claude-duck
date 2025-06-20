@@ -228,16 +228,20 @@ function addTestResult(type: 'success' | 'warning' | 'error' | 'info', title: st
 
 // 填充默认值
 function fillDefaultValues() {
+  // 获取当前窗口的端口，用于生成正确的回调地址
+  const currentPort = window.location.port || '9998'
+  const callbackUrl = `http://localhost:${currentPort}/oauth/callback`
+  
   const defaultValues = {
     clientId: 'c35a52681f1fa87a6a11f69d26990326',
-    redirectUri: 'http://localhost:3000/oauth/callback',
+    redirectUri: callbackUrl,
     state: 'state_' + Math.random().toString(36).substring(2, 15)
   }
   
   autoForm.value = { ...defaultValues }
   manualForm.value = { ...defaultValues }
   
-  addTestResult('success', '填充默认值', '已为两种模式填充默认测试值')
+  addTestResult('success', '填充默认值', `已为两种模式填充默认测试值，回调地址: ${callbackUrl}`)
   message.success('已填充默认值')
 }
 
@@ -258,13 +262,14 @@ function clearResults() {
 
 // 监听回调消息（从子窗口）
 window.addEventListener('message', (event) => {
-  if (event.data.type === 'oauth_result') {
-    const { success, data, error } = event.data
+  if (event.data.type === 'oauth_callback') {
+    const { success, data } = event.data
     
-    if (success) {
+    if (success && data) {
       addTestResult('success', 'OAuth 授权成功', `Token: ${data.token?.substring(0, 20)}...`)
+      message.success('已接收到授权token')
     } else {
-      addTestResult('error', 'OAuth 授权失败', error || '未知错误')
+      addTestResult('error', 'OAuth 授权失败', '未收到有效的token')
     }
   }
 })

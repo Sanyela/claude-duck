@@ -7,6 +7,7 @@ import Credits from '../views/Credits.vue'
 import Resources from '../views/Resources.vue'
 import Settings from '../views/Settings.vue'
 import OAuth from '../views/OAuth.vue'
+import OAuthCallback from '../views/OAuthCallback.vue'
 import OAuthTest from '../views/OAuthTest.vue'
 import Login from '../views/Login.vue'
 
@@ -55,11 +56,18 @@ const routes = [
       },
     ],
   },
-  // OAuth 授权页面（独立布局）
+  // OAuth 授权页面（独立布局，需要认证）
   {
-    path: '/api/sso/authorize',
+    path: '/oauth/authorize',
     name: 'OAuth',
     component: OAuth,
+    meta: { requiresAuth: true }
+  },
+  // OAuth 回调页面（无需认证）
+  {
+    path: '/oauth/callback',
+    name: 'OAuthCallback',
+    component: OAuthCallback,
     meta: { requiresAuth: false }
   },
 ]
