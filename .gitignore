@@ -1,0 +1,17 @@
+.idea
+.vscode
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+
+.ui.dist
+.ui.node_modules
+.ui.package-lock.json
+.ui.yarn.lock
+.ui.yarn-debug.log*
+.ui.yarn-error.log*
+
+code
+
