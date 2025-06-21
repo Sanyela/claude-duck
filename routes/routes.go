@@ -60,6 +60,10 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/credits/model-costs", handlers.HandleGetModelCosts)
 		api.GET("/credits/history", handlers.HandleGetCreditUsageHistory)
 		api.POST("/credits/request-reset", handlers.HandleRequestCreditReset)
+
+		// Claude API 代理路由
+		api.POST("/claude", handlers.HandleClaudeProxy)
+		api.Any("/claude/*path", handlers.HandleClaudeProxy) // 支持所有方法和子路径
 	}
 
 	// 静态文件服务 - 提供前端构建的静态资源
