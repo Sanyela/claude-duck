@@ -35,6 +35,7 @@ type UserData struct {
 	ID       uint   `json:"id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
+	IsAdmin  bool   `json:"is_admin"`
 }
 
 type UserInfoResponse struct {
@@ -100,11 +101,10 @@ func HandleRegister(c *gin.Context) {
 
 	// 为新用户创建默认积分余额
 	creditBalance := models.CreditBalance{
-		UserID:              user.ID,
-		Available:           1000, // 默认1000积分
-		Total:               1000,
-		RechargeRatePerHour: 0,
-		CanRequestReset:     true,
+		UserID:          user.ID,
+		TotalAmount:     0,
+		UsedAmount:      0,
+		AvailableAmount: 0,
 	}
 	database.DB.Create(&creditBalance)
 
@@ -170,6 +170,7 @@ func HandleLogin(c *gin.Context) {
 			ID:       user.ID,
 			Username: user.Username,
 			Email:    user.Email,
+			IsAdmin:  user.IsAdmin,
 		},
 	})
 }
@@ -195,6 +196,7 @@ func HandleGetUserInfo(c *gin.Context) {
 			ID:       user.ID,
 			Username: user.Username,
 			Email:    user.Email,
+			IsAdmin:  user.IsAdmin,
 		},
 	})
 }

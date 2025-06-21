@@ -55,6 +55,7 @@ func InitDB() error {
 func Migrate() error {
 	err := DB.AutoMigrate(
 		&models.User{},
+		&models.UserGroup{},
 		&models.DeviceCode{},
 		&models.Announcement{},
 		&models.AccessToken{},
@@ -64,6 +65,11 @@ func Migrate() error {
 		&models.CreditBalance{},
 		&models.ModelCost{},
 		&models.CreditUsageHistory{},
+		&models.APIChannel{},
+		&models.ActivationCode{},
+		&models.APIRequest{},
+		&models.StreamingSession{},
+		&models.BillingRule{},
 	)
 
 	if err != nil {

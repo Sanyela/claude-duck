@@ -88,7 +88,7 @@ func HandleGetActiveSubscription(c *gin.Context) {
 		Plan: SubscriptionPlanData{
 			ID:            subscription.Plan.PlanID,
 			Name:          subscription.Plan.Name,
-			PricePerMonth: subscription.Plan.PricePerMonth,
+			PricePerMonth: subscription.Plan.Price,  // 使用Price字段
 			Currency:      subscription.Plan.Currency,
 			Features:      features,
 		},

@@ -71,28 +71,24 @@ func HandleGetCreditBalance(c *gin.Context) {
 	if err != nil {
 		// 如果没有记录，创建默认余额
 		creditBalance = models.CreditBalance{
-			UserID:              userID,
-			Available:           1000, // 默认1000积分
-			Total:               1000,
-			RechargeRatePerHour: 0,
-			CanRequestReset:     true,
-			UpdatedAt:           time.Now(),
+			UserID:          userID,
+			TotalAmount:     0,    // 默认0余额，防止批量注册
+			UsedAmount:      0,
+			AvailableAmount: 0,
+			UpdatedAt:       time.Now(),
 		}
 		database.DB.Create(&creditBalance)
 	}
 
 	// 转换为响应格式
 	balanceData := CreditBalanceData{
-		Available:           creditBalance.Available,
-		Total:               creditBalance.Total,
-		RechargeRatePerHour: creditBalance.RechargeRatePerHour,
-		CanRequestReset:     creditBalance.CanRequestReset,
+		Available:           int(creditBalance.AvailableAmount * 100), // 转换为分显示
+		Total:               int(creditBalance.TotalAmount * 100),      // 转换为分显示
+		RechargeRatePerHour: 0,                                        // 废弃字段，保持兼容
+		CanRequestReset:     true,                                     // 废弃字段，保持兼容
 	}
 
-	if creditBalance.NextResetTime != nil {
-		timeStr := creditBalance.NextResetTime.Format(time.RFC3339)
-		balanceData.NextResetTime = &timeStr
-	}
+	// NextResetTime 已在新模型中移除，不再处理
 
 	c.JSON(http.StatusOK, CreditBalanceResponse{Balance: balanceData})
 }
@@ -144,11 +140,18 @@ func HandleGetModelCosts(c *gin.Context) {
 	// 转换为响应格式
 	var costsData []ModelCostData
 	for _, cost := range modelCosts {
+		// 计算成本因子（用于兼容旧API）
+		var costFactor *float64
+		if cost.InputPricePerK > 0 {
+			factor := cost.InputPricePerK / 0.002 // 基准价格 $0.002
+			costFactor = &factor
+		}
+		
 		costsData = append(costsData, ModelCostData{
 			ID:          cost.ModelID,
 			ModelName:   cost.ModelName,
 			Status:      cost.Status,
-			CostFactor:  cost.CostFactor,
+			CostFactor:  costFactor,
 			Description: cost.Description,
 		})
 	}
@@ -197,9 +200,9 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 		historyData = append(historyData, CreditUsageData{
 			ID:           fmt.Sprintf("%d", usage.ID),
 			Description:  usage.Description,
-			Amount:       usage.Amount,
+			Amount:       int(usage.Amount * 100), // 转换为分显示
 			Timestamp:    usage.CreatedAt.Format(time.RFC3339),
-			RelatedModel: usage.RelatedModel,
+			RelatedModel: usage.ModelName, // 使用ModelName字段
 		})
 	}
 
@@ -214,67 +217,10 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 
 // HandleRequestCreditReset 申请积分重置
 func HandleRequestCreditReset(c *gin.Context) {
-	userID, err := getUserIDFromToken(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	// 查询用户积分余额
-	var creditBalance models.CreditBalance
-	err = database.DB.Where("user_id = ?", userID).First(&creditBalance).Error
-	if err != nil {
-		c.JSON(http.StatusBadRequest, CreditResetResponse{
-			Success: false,
-			Message: "未找到积分账户",
-		})
-		return
-	}
-
-	// 检查是否可以重置
-	if !creditBalance.CanRequestReset {
-		var nextTime *string
-		if creditBalance.NextResetTime != nil {
-			timeStr := creditBalance.NextResetTime.Format(time.RFC3339)
-			nextTime = &timeStr
-		}
-		c.JSON(http.StatusOK, CreditResetResponse{
-			Success:           false,
-			Message:           "今日已重置过积分，请明天再试。",
-			NextAvailableTime: nextTime,
-		})
-		return
-	}
-
-	// 执行重置
-	nextResetTime := time.Now().Add(24 * time.Hour)
-	err = database.DB.Model(&creditBalance).Updates(models.CreditBalance{
-		Available:       creditBalance.Total,
-		CanRequestReset: false,
-		NextResetTime:   &nextResetTime,
-		UpdatedAt:       time.Now(),
-	}).Error
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, CreditResetResponse{
-			Success: false,
-			Message: "重置失败，请稍后重试",
-		})
-		return
-	}
-
-	// 记录重置历史
-	resetHistory := models.CreditUsageHistory{
-		UserID:      userID,
-		Description: "积分重置",
-		Amount:      creditBalance.Total - creditBalance.Available,
-		CreatedAt:   time.Now(),
-	}
-	database.DB.Create(&resetHistory)
-
+	// 此功能已废弃，返回不支持的响应
 	c.JSON(http.StatusOK, CreditResetResponse{
-		Success: true,
-		Message: "积分已成功重置到初始额度。",
+		Success: false,
+		Message: "积分重置功能已停用，请使用激活码或联系管理员获取额度。",
 	})
 }
 
