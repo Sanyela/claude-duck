@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -254,4 +255,223 @@ func HandleAdminUpdateSystemConfig(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "System config updated successfully"})
+}
+
+// HandleAdminGetSubscriptionPlans 获取订阅计划列表
+func HandleAdminGetSubscriptionPlans(c *gin.Context) {
+	pagination := getPagination(c)
+	var plans []models.SubscriptionPlan
+	var total int64
+
+	query := database.DB.Model(&models.SubscriptionPlan{})
+	
+	// 可选过滤参数
+	if active := c.Query("active"); active != "" {
+		query = query.Where("active = ?", active == "true")
+	}
+
+	query.Count(&total)
+
+	offset := (pagination.Page - 1) * pagination.PageSize
+	query.Offset(offset).Limit(pagination.PageSize).Find(&plans)
+
+	c.JSON(http.StatusOK, PaginatedResponse{
+		Data:       plans,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	})
+}
+
+// HandleAdminCreateSubscriptionPlan 创建订阅计划
+func HandleAdminCreateSubscriptionPlan(c *gin.Context) {
+	var plan models.SubscriptionPlan
+	if err := c.ShouldBindJSON(&plan); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 生成唯一的 PlanID
+	if plan.PlanID == "" {
+		plan.PlanID = "PLAN-" + strconv.FormatInt(time.Now().Unix(), 10)
+	}
+
+	if err := database.DB.Create(&plan).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, plan)
+}
+
+// HandleAdminUpdateSubscriptionPlan 更新订阅计划
+func HandleAdminUpdateSubscriptionPlan(c *gin.Context) {
+	planID := c.Param("id")
+	var updateData models.SubscriptionPlan
+
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result := database.DB.Model(&models.SubscriptionPlan{}).Where("id = ?", planID).Updates(updateData)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Subscription plan not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Subscription plan updated successfully"})
+}
+
+// HandleAdminDeleteSubscriptionPlan 删除订阅计划
+func HandleAdminDeleteSubscriptionPlan(c *gin.Context) {
+	planID := c.Param("id")
+	
+	result := database.DB.Delete(&models.SubscriptionPlan{}, planID)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Subscription plan not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Subscription plan deleted successfully"})
+}
+
+// HandleAdminTestConsumePoints 测试扣费功能（仅管理员可用）
+func HandleAdminTestConsumePoints(c *gin.Context) {
+	var request struct {
+		UserID           uint  `json:"user_id" binding:"required"`
+		PointsToConsume  int64 `json:"points_to_consume" binding:"required,min=1"`
+		Model            string `json:"model"`
+		PromptTokens     int   `json:"prompt_tokens"`
+		CompletionTokens int   `json:"completion_tokens"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 设置默认值
+	if request.Model == "" {
+		request.Model = "claude-3-opus-20240229"
+	}
+	if request.PromptTokens == 0 {
+		request.PromptTokens = 1000
+	}
+	if request.CompletionTokens == 0 {
+		request.CompletionTokens = 500
+	}
+
+	// 开始事务
+	tx := database.DB.Begin()
+
+	// 获取用户的可用积分池（按FIFO原则）
+	var pointPools []models.PointPool
+	err := tx.Where("user_id = ? AND expires_at > ? AND points_remaining > 0", 
+		request.UserID, time.Now()).
+		Order("created_at ASC").
+		Find(&pointPools).Error
+	
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取积分池失败"})
+		return
+	}
+
+	// 检查总可用积分
+	var totalAvailable int64
+	for _, pool := range pointPools {
+		totalAvailable += pool.PointsRemaining
+	}
+
+	if totalAvailable < request.PointsToConsume {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "积分不足",
+			"available": totalAvailable,
+			"required": request.PointsToConsume,
+		})
+		return
+	}
+
+	// 扣减积分
+	remainingToConsume := request.PointsToConsume
+	for i := range pointPools {
+		if remainingToConsume <= 0 {
+			break
+		}
+
+		if pointPools[i].PointsRemaining >= remainingToConsume {
+			pointPools[i].PointsRemaining -= remainingToConsume
+			remainingToConsume = 0
+		} else {
+			remainingToConsume -= pointPools[i].PointsRemaining
+			pointPools[i].PointsRemaining = 0
+		}
+
+		if err := tx.Save(&pointPools[i]).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新积分池失败"})
+			return
+		}
+	}
+
+	// 更新用户积分余额汇总
+	var pointBalance models.PointBalance
+	err = tx.Where("user_id = ?", request.UserID).First(&pointBalance).Error
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取积分余额失败"})
+		return
+	}
+
+	pointBalance.UsedPoints += request.PointsToConsume
+	pointBalance.AvailablePoints = pointBalance.TotalPoints - pointBalance.UsedPoints
+	
+	if err := tx.Save(&pointBalance).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新积分余额失败"})
+		return
+	}
+
+	// 记录使用历史
+	usageHistory := models.PointUsageHistory{
+		UserID:               request.UserID,
+		RequestID:            fmt.Sprintf("TEST-%d", time.Now().Unix()),
+		IP:                   c.ClientIP(),
+		UID:                  fmt.Sprintf("%d", request.UserID),
+		Username:             fmt.Sprintf("user_%d", request.UserID),
+		Model:                request.Model,
+		PromptTokens:         request.PromptTokens,
+		CompletionTokens:     request.CompletionTokens,
+		PromptMultiplier:     5.0,
+		CompletionMultiplier: 10.0,
+		PointsUsed:           request.PointsToConsume,
+		IsRoundUp:            false,
+	}
+
+	if err := tx.Create(&usageHistory).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "记录使用历史失败"})
+		return
+	}
+
+	tx.Commit()
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "积分扣除成功",
+		"points_consumed": request.PointsToConsume,
+		"remaining_points": pointBalance.AvailablePoints,
+	})
 }

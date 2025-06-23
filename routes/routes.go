@@ -80,10 +80,19 @@ func SetupRoutes(r *gin.Engine) {
 		admin.GET("/system-configs", handlers.HandleAdminGetSystemConfigs)
 		admin.PUT("/system-config", handlers.HandleAdminUpdateSystemConfig)
 
+		// 订阅计划管理
+		admin.GET("/subscription-plans", handlers.HandleAdminGetSubscriptionPlans)
+		admin.POST("/subscription-plans", handlers.HandleAdminCreateSubscriptionPlan)
+		admin.PUT("/subscription-plans/:id", handlers.HandleAdminUpdateSubscriptionPlan)
+		admin.DELETE("/subscription-plans/:id", handlers.HandleAdminDeleteSubscriptionPlan)
+
 		// 激活码管理
 		admin.GET("/activation-codes", handlers.HandleAdminGetActivationCodes)
 		admin.POST("/activation-codes", handlers.HandleAdminCreateActivationCodes)
 		admin.DELETE("/activation-codes/:id", handlers.HandleAdminDeleteActivationCode)
+
+		// 测试工具（仅管理员可用）
+		admin.POST("/test/consume-points", handlers.HandleAdminTestConsumePoints)
 	}
 
 	// 静态文件服务 - 提供前端构建的静态资源
