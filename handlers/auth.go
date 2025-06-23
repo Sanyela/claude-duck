@@ -100,13 +100,13 @@ func HandleRegister(c *gin.Context) {
 	}
 
 	// 为新用户创建默认积分余额
-	creditBalance := models.CreditBalance{
+	pointBalance := models.PointBalance{
 		UserID:          user.ID,
-		TotalAmount:     0,
-		UsedAmount:      0,
-		AvailableAmount: 0,
+		TotalPoints:     0,
+		UsedPoints:      0,
+		AvailablePoints: 0,
 	}
-	database.DB.Create(&creditBalance)
+	database.DB.Create(&pointBalance)
 
 	c.JSON(http.StatusOK, AuthResponse{
 		Success: true,

@@ -24,6 +24,16 @@ type Config struct {
 	AccessTokenExpireHours int
 	// 设备码过期时间（分钟）
 	DeviceCodeExpireMinutes int
+
+	// New API配置
+	NewAPIEndpoint string
+	NewAPIKey      string
+
+	// 积分系统默认配置
+	DefaultPromptMultiplier     float64
+	DefaultCompletionMultiplier float64
+	DefaultTokensPerPoint       int
+	DefaultRoundUpEnabled       bool
 }
 
 var AppConfig *Config
@@ -47,6 +57,16 @@ func LoadConfig() {
 		// Token过期时间
 		AccessTokenExpireHours:  getEnvAsInt("ACCESS_TOKEN_EXPIRE_HOURS", 24),
 		DeviceCodeExpireMinutes: getEnvAsInt("DEVICE_CODE_EXPIRE_MINUTES", 15),
+
+		// New API配置
+		NewAPIEndpoint: getEnv("NEW_API_ENDPOINT", "http://152.53.82.23:2999"),
+		NewAPIKey:      getEnv("NEW_API_KEY", "sk-ijk47MsAmnmJ7sgb0I8Dx6OVXswFBm5Y760tvwpNv3Te0ptp"),
+
+		// 积分系统默认配置
+		DefaultPromptMultiplier:     getEnvAsFloat("DEFAULT_PROMPT_MULTIPLIER", 5.0),
+		DefaultCompletionMultiplier: getEnvAsFloat("DEFAULT_COMPLETION_MULTIPLIER", 10.0),
+		DefaultTokensPerPoint:       getEnvAsInt("DEFAULT_TOKENS_PER_POINT", 10000),
+		DefaultRoundUpEnabled:       getEnvAsBool("DEFAULT_ROUND_UP_ENABLED", true),
 	}
 }
 
@@ -61,6 +81,24 @@ func getEnvAsInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvAsFloat(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
+			return floatValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
 		}
 	}
 	return defaultValue

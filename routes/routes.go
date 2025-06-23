@@ -59,7 +59,6 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/credits/balance", handlers.HandleGetCreditBalance)
 		api.GET("/credits/model-costs", handlers.HandleGetModelCosts)
 		api.GET("/credits/history", handlers.HandleGetCreditUsageHistory)
-		api.POST("/credits/request-reset", handlers.HandleRequestCreditReset)
 
 		// Claude API 代理路由
 		api.POST("/claude", handlers.HandleClaudeProxy)
@@ -76,34 +75,15 @@ func SetupRoutes(r *gin.Engine) {
 		admin.PUT("/users/:id", handlers.HandleAdminUpdateUser)
 		admin.DELETE("/users/:id", handlers.HandleAdminDeleteUser)
 
-		// 用户分组管理
-		admin.GET("/user-groups", handlers.HandleAdminGetUserGroups)
-		admin.POST("/user-groups", handlers.HandleAdminCreateUserGroup)
-		admin.PUT("/user-groups/:id", handlers.HandleAdminUpdateUserGroup)
-		admin.DELETE("/user-groups/:id", handlers.HandleAdminDeleteUserGroup)
 
-		// API渠道管理
-		admin.GET("/api-channels", handlers.HandleAdminGetAPIChannels)
-		admin.POST("/api-channels", handlers.HandleAdminCreateAPIChannel)
-		admin.PUT("/api-channels/:id", handlers.HandleAdminUpdateAPIChannel)
-		admin.DELETE("/api-channels/:id", handlers.HandleAdminDeleteAPIChannel)
-
-		// 模型成本配置管理
-		admin.GET("/model-costs", handlers.HandleAdminGetModelCosts)
-		admin.POST("/model-costs", handlers.HandleAdminCreateModelCost)
-		admin.PUT("/model-costs/:id", handlers.HandleAdminUpdateModelCost)
-		admin.DELETE("/model-costs/:id", handlers.HandleAdminDeleteModelCost)
+		// 系统配置管理
+		admin.GET("/system-configs", handlers.HandleAdminGetSystemConfigs)
+		admin.PUT("/system-config", handlers.HandleAdminUpdateSystemConfig)
 
 		// 激活码管理
 		admin.GET("/activation-codes", handlers.HandleAdminGetActivationCodes)
 		admin.POST("/activation-codes", handlers.HandleAdminCreateActivationCodes)
 		admin.DELETE("/activation-codes/:id", handlers.HandleAdminDeleteActivationCode)
-
-		// 计费规则管理
-		admin.GET("/billing-rules", handlers.HandleAdminGetBillingRules)
-		admin.POST("/billing-rules", handlers.HandleAdminCreateBillingRule)
-		admin.PUT("/billing-rules/:id", handlers.HandleAdminUpdateBillingRule)
-		admin.DELETE("/billing-rules/:id", handlers.HandleAdminDeleteBillingRule)
 	}
 
 	// 静态文件服务 - 提供前端构建的静态资源

@@ -55,27 +55,72 @@ func InitDB() error {
 func Migrate() error {
 	err := DB.AutoMigrate(
 		&models.User{},
-		&models.UserGroup{},
 		&models.DeviceCode{},
 		&models.Announcement{},
 		&models.AccessToken{},
 		&models.SubscriptionPlan{},
 		&models.Subscription{},
 		&models.PaymentHistory{},
-		&models.CreditBalance{},
-		&models.ModelCost{},
-		&models.CreditUsageHistory{},
-		&models.APIChannel{},
+		&models.PointBalance{},
+		&models.PointUsageHistory{},
 		&models.ActivationCode{},
 		&models.APIRequest{},
-		&models.StreamingSession{},
-		&models.BillingRule{},
+		&models.SystemConfig{},
 	)
 
 	if err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
+	// 初始化默认系统配置
+	initDefaultConfigs()
+
 	log.Println("Database migration completed")
 	return nil
+}
+
+// initDefaultConfigs 初始化默认系统配置
+func initDefaultConfigs() {
+	defaultConfigs := []models.SystemConfig{
+		{
+			ConfigKey:   "prompt_multiplier",
+			ConfigValue: "5",
+			Description: "提示token倍率",
+		},
+		{
+			ConfigKey:   "completion_multiplier",
+			ConfigValue: "10",
+			Description: "补全token倍率",
+		},
+		{
+			ConfigKey:   "tokens_per_point",
+			ConfigValue: "10000",
+			Description: "多少token等于1积分",
+		},
+		{
+			ConfigKey:   "round_up_enabled",
+			ConfigValue: "false",
+			Description: "是否向上取整",
+		},
+		{
+			ConfigKey:   "new_api_endpoint",
+			ConfigValue: config.AppConfig.NewAPIEndpoint,
+			Description: "New API接入点",
+		},
+		{
+			ConfigKey:   "new_api_key",
+			ConfigValue: config.AppConfig.NewAPIKey,
+			Description: "New API密钥",
+		},
+	}
+
+	for _, cfg := range defaultConfigs {
+		var existing models.SystemConfig
+		if err := DB.Where("config_key = ?", cfg.ConfigKey).First(&existing).Error; err != nil {
+			// 配置不存在，创建新配置
+			if err := DB.Create(&cfg).Error; err != nil {
+				log.Printf("Failed to create default config %s: %v", cfg.ConfigKey, err)
+			}
+		}
+	}
 } 
