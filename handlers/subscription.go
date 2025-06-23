@@ -87,7 +87,7 @@ func HandleGetActiveSubscription(c *gin.Context) {
 		ID: subscription.ExternalID,
 		Plan: SubscriptionPlanData{
 			ID:            subscription.Plan.PlanID,
-			Name:          subscription.Plan.Name,
+			Name:          subscription.Plan.Title,
 			PricePerMonth: subscription.Plan.Price,  // 使用Price字段
 			Currency:      subscription.Plan.Currency,
 			Features:      features,
@@ -172,6 +172,15 @@ func HandleRedeemCoupon(c *gin.Context) {
 		return
 	}
 
+	// 检查订阅计划是否启用
+	if !activationCode.Plan.Active {
+		c.JSON(http.StatusOK, RedeemCouponResponse{
+			Success: false,
+			Message: "该订阅计划已停用。",
+		})
+		return
+	}
+
 	// 开始事务
 	tx := database.DB.Begin()
 
@@ -189,187 +198,93 @@ func HandleRedeemCoupon(c *gin.Context) {
 		return
 	}
 
-	// 根据激活码类型处理
-	if activationCode.Type == "point" {
-		// 积分类型：直接增加积分
-		var pointBalance models.PointBalance
-		err = tx.Where("user_id = ?", userID).First(&pointBalance).Error
-		if err != nil {
-			// 创建新的积分余额记录
-			pointBalance = models.PointBalance{
-				UserID:          userID,
-				TotalPoints:     activationCode.PointAmount,
-				UsedPoints:      0,
-				AvailablePoints: activationCode.PointAmount,
-			}
-			if err := tx.Create(&pointBalance).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-					Success: false,
-					Message: "积分充值失败。",
-				})
-				return
-			}
-		} else {
-			// 更新现有积分余额
-			pointBalance.TotalPoints += activationCode.PointAmount
-			pointBalance.AvailablePoints += activationCode.PointAmount
-			if err := tx.Save(&pointBalance).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-					Success: false,
-					Message: "积分充值失败。",
-				})
-				return
-			}
-		}
-
-		// 记录积分使用历史
-		usageHistory := models.PointUsageHistory{
-			UserID:       userID,
-			RequestID:    fmt.Sprintf("REDEEM-%s", activationCode.Code),
-			IP:           c.ClientIP(),
-			UID:          fmt.Sprintf("%d", userID),
-			Username:     "",
-			Model:        "activation_code",
-			PromptTokens: 0,
-			CompletionTokens: 0,
-			PromptMultiplier: 0,
-			CompletionMultiplier: 0,
-			PointsUsed:   -activationCode.PointAmount, // 负数表示充值
-			IsRoundUp:    false,
-		}
-		if err := tx.Create(&usageHistory).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-				Success: false,
-				Message: "记录充值历史失败。",
-			})
-			return
-		}
-
-		tx.Commit()
-		c.JSON(http.StatusOK, RedeemCouponResponse{
-			Success: true,
-			Message: fmt.Sprintf("激活码兑换成功！已充值 %d 积分。", activationCode.PointAmount),
-		})
-	} else if activationCode.Type == "plan" && activationCode.Plan != nil {
-		// 套餐类型：创建订阅
-		// 检查是否已有活跃订阅
-		var existingSubscription models.Subscription
-		err = tx.Where("user_id = ? AND status = ?", userID, "active").First(&existingSubscription).Error
-		if err == nil {
-			tx.Rollback()
-			c.JSON(http.StatusOK, RedeemCouponResponse{
-				Success: false,
-				Message: "您已有活跃的订阅套餐。",
-			})
-			return
-		}
-
-		// 创建新订阅
-		subscription := models.Subscription{
-			UserID:             userID,
-			SubscriptionPlanID: *activationCode.SubscriptionPlanID,
-			ExternalID:         fmt.Sprintf("SUB-%d-%d", userID, time.Now().Unix()),
-			Status:             "active",
-			CurrentPeriodEnd:   time.Now().AddDate(0, 0, activationCode.Plan.ValidityDays),
-			CancelAtPeriodEnd:  false,
-		}
-		if err := tx.Create(&subscription).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-				Success: false,
-				Message: "创建订阅失败。",
-			})
-			return
-		}
-
-		// 增加套餐包含的积分
-		var pointBalance models.PointBalance
-		err = tx.Where("user_id = ?", userID).First(&pointBalance).Error
-		if err != nil {
-			// 创建新的积分余额记录
-			pointBalance = models.PointBalance{
-				UserID:          userID,
-				TotalPoints:     activationCode.Plan.PointAmount,
-				UsedPoints:      0,
-				AvailablePoints: activationCode.Plan.PointAmount,
-			}
-			if err := tx.Create(&pointBalance).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-					Success: false,
-					Message: "套餐积分充值失败。",
-				})
-				return
-			}
-		} else {
-			// 更新现有积分余额
-			pointBalance.TotalPoints += activationCode.Plan.PointAmount
-			pointBalance.AvailablePoints += activationCode.Plan.PointAmount
-			if err := tx.Save(&pointBalance).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-					Success: false,
-					Message: "套餐积分充值失败。",
-				})
-				return
-			}
-		}
-
-		// 记录支付历史
-		paymentHistory := models.PaymentHistory{
-			UserID:      userID,
-			PlanName:    activationCode.Plan.Name,
-			Amount:      0, // 激活码兑换，金额为0
-			Currency:    activationCode.Plan.Currency,
-			Status:      "paid",
-			PaymentDate: time.Now(),
-		}
-		if err := tx.Create(&paymentHistory).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-				Success: false,
-				Message: "记录支付历史失败。",
-			})
-			return
-		}
-
-		tx.Commit()
-
-		// 返回新订阅信息
-		var features []string
-		if activationCode.Plan.Features != "" {
-			json.Unmarshal([]byte(activationCode.Plan.Features), &features)
-		}
-
-		newSubscription := &SubscriptionData{
-			ID: subscription.ExternalID,
-			Plan: SubscriptionPlanData{
-				ID:            activationCode.Plan.PlanID,
-				Name:          activationCode.Plan.Name,
-				PricePerMonth: activationCode.Plan.Price,
-				Currency:      activationCode.Plan.Currency,
-				Features:      features,
-			},
-			Status:            subscription.Status,
-			CurrentPeriodEnd:  subscription.CurrentPeriodEnd.Format(time.RFC3339),
-			CancelAtPeriodEnd: subscription.CancelAtPeriodEnd,
-		}
-
-		c.JSON(http.StatusOK, RedeemCouponResponse{
-			Success:         true,
-			Message:         fmt.Sprintf("激活码兑换成功！已激活 %s 套餐，包含 %d 积分。", activationCode.Plan.Name, activationCode.Plan.PointAmount),
-			NewSubscription: newSubscription,
-		})
-	} else {
-		tx.Rollback()
-		c.JSON(http.StatusOK, RedeemCouponResponse{
-			Success: false,
-			Message: "激活码类型无效。",
-		})
+	// 创建积分池记录
+	pointPool := models.PointPool{
+		UserID:          userID,
+		SourceType:      "activation_code",
+		SourceID:        fmt.Sprintf("AC-%d", activationCode.ID),
+		PointsTotal:     activationCode.Plan.PointAmount,
+		PointsRemaining: activationCode.Plan.PointAmount,
+		ExpiresAt:       time.Now().AddDate(0, 0, activationCode.Plan.ValidityDays),
 	}
+	if err := tx.Create(&pointPool).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
+			Success: false,
+			Message: "积分充值失败。",
+		})
+		return
+	}
+
+	// 更新用户积分余额汇总
+	var pointBalance models.PointBalance
+	err = tx.Where("user_id = ?", userID).First(&pointBalance).Error
+	if err != nil {
+		// 创建新的积分余额记录
+		pointBalance = models.PointBalance{
+			UserID:          userID,
+			TotalPoints:     activationCode.Plan.PointAmount,
+			UsedPoints:      0,
+			AvailablePoints: activationCode.Plan.PointAmount,
+		}
+		if err := tx.Create(&pointBalance).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
+				Success: false,
+				Message: "更新积分余额失败。",
+			})
+			return
+		}
+	} else {
+		// 更新现有积分余额
+		pointBalance.TotalPoints += activationCode.Plan.PointAmount
+		pointBalance.AvailablePoints += activationCode.Plan.PointAmount
+		if err := tx.Save(&pointBalance).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
+				Success: false,
+				Message: "更新积分余额失败。",
+			})
+			return
+		}
+	}
+
+	// 更新用户的服务降级配置（如果未锁定）
+	var user models.User
+	if err := tx.Where("id = ?", userID).First(&user).Error; err == nil {
+		if !user.DegradationLocked && activationCode.Plan.DegradationGuaranteed > user.DegradationGuaranteed {
+			user.DegradationGuaranteed = activationCode.Plan.DegradationGuaranteed
+			user.DegradationSource = "subscription"
+			tx.Save(&user)
+		}
+	}
+
+	// 记录支付历史
+	paymentHistory := models.PaymentHistory{
+		UserID:      userID,
+		PlanName:    activationCode.Plan.Title,
+		Amount:      0, // 激活码兑换，金额为0
+		Currency:    activationCode.Plan.Currency,
+		Status:      "paid",
+		PaymentDate: time.Now(),
+	}
+	if err := tx.Create(&paymentHistory).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
+			Success: false,
+			Message: "记录支付历史失败。",
+		})
+		return
+	}
+
+	tx.Commit()
+
+	c.JSON(http.StatusOK, RedeemCouponResponse{
+		Success: true,
+		Message: fmt.Sprintf("激活码兑换成功！已充值 %d 积分，有效期 %d 天。", 
+			activationCode.Plan.PointAmount, 
+			activationCode.Plan.ValidityDays),
+	})
 }
 
 // getUserIDFromToken 从Authorization header中提取用户ID

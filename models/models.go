@@ -8,14 +8,18 @@ import (
 
 // User 用户模型
 type User struct {
-	ID        uint           `gorm:"primarykey" json:"id"`
-	Email     string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"email"`
-	Username  string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"username"`
-	Password  string         `gorm:"not null" json:"-"` // 密码不在JSON中返回
-	IsAdmin   bool           `gorm:"default:false" json:"is_admin"` // 是否是管理员
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                    uint           `gorm:"primarykey" json:"id"`
+	Email                 string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"email"`
+	Username              string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"username"`
+	Password              string         `gorm:"not null" json:"-"` // 密码不在JSON中返回
+	IsAdmin               bool           `gorm:"default:false" json:"is_admin"` // 是否是管理员
+	DegradationGuaranteed int            `gorm:"default:0" json:"degradation_guaranteed"` // 10条内保证不降级的数量
+	DegradationSource     string         `gorm:"default:'system'" json:"degradation_source"` // system/admin/subscription
+	DegradationLocked     bool           `gorm:"default:false" json:"degradation_locked"` // 是否锁定，不被套餐覆盖
+	DegradationCounter    int64          `gorm:"default:0" json:"degradation_counter"` // 当前计数器
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // DeviceCode 设备码模型
@@ -54,18 +58,20 @@ type AccessToken struct {
 
 // SubscriptionPlan 订阅计划模型
 type SubscriptionPlan struct {
-	ID            uint           `gorm:"primarykey" json:"id"`
-	PlanID        string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"plan_id"`
-	Name          string         `gorm:"not null" json:"name"`
-	PointAmount   int64          `gorm:"not null" json:"point_amount"` // 套餐包含的积分数
-	Price         float64        `gorm:"not null" json:"price"` // 套餐价格
-	Currency      string         `gorm:"default:'USD'" json:"currency"`
-	ValidityDays  int            `gorm:"not null" json:"validity_days"` // 有效期（天数）
-	Features      string         `gorm:"type:text" json:"features"` // JSON string array
-	Active        bool           `gorm:"default:true" json:"active"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                    uint           `gorm:"primarykey" json:"id"`
+	PlanID                string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"plan_id"`
+	Title                 string         `gorm:"not null" json:"title"` // 标题
+	Description           string         `gorm:"type:text" json:"description"` // 描述
+	PointAmount           int64          `gorm:"not null" json:"point_amount"` // 套餐包含的积分数
+	Price                 float64        `gorm:"not null" json:"price"` // 套餐价格
+	Currency              string         `gorm:"default:'USD'" json:"currency"`
+	ValidityDays          int            `gorm:"not null" json:"validity_days"` // 有效期（天数）
+	DegradationGuaranteed int            `gorm:"default:0" json:"degradation_guaranteed"` // 10条内保证不降级的数量
+	Features              string         `gorm:"type:text" json:"features"` // JSON string array
+	Active                bool           `gorm:"default:true" json:"active"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // Subscription 用户订阅模型
@@ -110,6 +116,19 @@ type PointBalance struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+// PointPool 积分池模型
+type PointPool struct {
+	ID              uint      `gorm:"primarykey" json:"id"`
+	UserID          uint      `gorm:"not null;index:idx_user_expires" json:"user_id"`
+	User            User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	SourceType      string    `gorm:"not null" json:"source_type"` // activation_code/admin_grant/subscription
+	SourceID        string    `gorm:"type:varchar(191)" json:"source_id"` // 来源ID（激活码ID/订阅ID等）
+	PointsTotal     int64     `gorm:"not null" json:"points_total"` // 充值积分总量
+	PointsRemaining int64     `gorm:"not null" json:"points_remaining"` // 剩余积分
+	ExpiresAt       time.Time `gorm:"not null;index:idx_user_expires" json:"expires_at"` // 过期时间
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 // PointUsageHistory 积分使用历史
 type PointUsageHistory struct {
 	ID                uint      `gorm:"primarykey" json:"id"`
@@ -131,20 +150,18 @@ type PointUsageHistory struct {
 
 // ActivationCode 激活码
 type ActivationCode struct {
-	ID               uint             `gorm:"primarykey" json:"id"`
-	Code             string           `gorm:"type:varchar(191);uniqueIndex;not null" json:"code"`
-	Type             string           `gorm:"not null" json:"type"` // plan, point
-	SubscriptionPlanID *uint          `json:"subscription_plan_id"` // 关联套餐ID（type=plan时）
-	Plan             *SubscriptionPlan `gorm:"foreignKey:SubscriptionPlanID" json:"plan,omitempty"`
-	PointAmount      int64            `json:"point_amount"` // 积分数量（type=point时）
-	Status           string           `gorm:"default:'unused'" json:"status"` // unused, used, expired
-	UsedByUserID     *uint            `json:"used_by_user_id"`
-	UsedBy           *User            `gorm:"foreignKey:UsedByUserID" json:"used_by,omitempty"`
-	UsedAt           *time.Time       `json:"used_at"`
-	ExpiresAt        *time.Time       `json:"expires_at"`
-	BatchNumber      string           `gorm:"type:varchar(191)" json:"batch_number"` // 批次号
-	CreatedAt        time.Time        `json:"created_at"`
-	DeletedAt        gorm.DeletedAt   `gorm:"index" json:"-"`
+	ID                 uint              `gorm:"primarykey" json:"id"`
+	Code               string            `gorm:"type:varchar(191);uniqueIndex;not null" json:"code"`
+	SubscriptionPlanID uint              `gorm:"not null" json:"subscription_plan_id"` // 关联订阅计划ID
+	Plan               SubscriptionPlan  `gorm:"foreignKey:SubscriptionPlanID" json:"plan,omitempty"`
+	Status             string            `gorm:"default:'unused'" json:"status"` // unused, used, expired
+	UsedByUserID       *uint             `json:"used_by_user_id"`
+	UsedBy             *User             `gorm:"foreignKey:UsedByUserID" json:"used_by,omitempty"`
+	UsedAt             *time.Time        `json:"used_at"`
+	ExpiresAt          *time.Time        `json:"expires_at"`
+	BatchNumber        string            `gorm:"type:varchar(191)" json:"batch_number"` // 批次号
+	CreatedAt          time.Time         `json:"created_at"`
+	DeletedAt          gorm.DeletedAt    `gorm:"index" json:"-"`
 }
 
 // APIRequest API请求记录

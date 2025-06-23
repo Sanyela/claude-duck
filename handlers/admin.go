@@ -145,16 +145,21 @@ func HandleAdminGetActivationCodes(c *gin.Context) {
 // HandleAdminCreateActivationCodes 批量创建激活码
 func HandleAdminCreateActivationCodes(c *gin.Context) {
 	var request struct {
-		Type               string  `json:"type" binding:"required"` // plan, point
 		Count              int     `json:"count" binding:"required,min=1,max=1000"`
-		SubscriptionPlanID *uint   `json:"subscription_plan_id"`
-		PointAmount        int64   `json:"point_amount"`
+		SubscriptionPlanID uint    `json:"subscription_plan_id" binding:"required"`
 		ExpiresAt          *string `json:"expires_at"`
 		BatchNumber        string  `json:"batch_number"`
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 验证订阅计划是否存在
+	var plan models.SubscriptionPlan
+	if err := database.DB.Where("id = ?", request.SubscriptionPlanID).First(&plan).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "订阅计划不存在"})
 		return
 	}
 
@@ -167,9 +172,7 @@ func HandleAdminCreateActivationCodes(c *gin.Context) {
 	for i := 0; i < request.Count; i++ {
 		code := models.ActivationCode{
 			Code:               generateActivationCode(),
-			Type:               request.Type,
 			SubscriptionPlanID: request.SubscriptionPlanID,
-			PointAmount:        request.PointAmount,
 			Status:             "unused",
 			BatchNumber:        request.BatchNumber,
 		}
@@ -191,6 +194,8 @@ func HandleAdminCreateActivationCodes(c *gin.Context) {
 		"message":      "Activation codes created successfully",
 		"count":        request.Count,
 		"batch_number": request.BatchNumber,
+		"plan_id":      plan.PlanID,
+		"plan_title":   plan.Title,
 	})
 }
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"claude/config"
 	"claude/database"
 	"claude/models"
 	"claude/utils"
@@ -76,9 +77,13 @@ func HandleRegister(c *gin.Context) {
 
 	// 创建用户
 	user := models.User{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: string(hashedPassword),
+		Username:              req.Username,
+		Email:                 req.Email,
+		Password:              string(hashedPassword),
+		DegradationGuaranteed: config.AppConfig.DefaultDegradationGuaranteed,
+		DegradationSource:     "system",
+		DegradationLocked:     false,
+		DegradationCounter:    0,
 	}
 
 	if err := database.DB.Create(&user).Error; err != nil {

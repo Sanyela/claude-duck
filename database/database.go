@@ -62,6 +62,7 @@ func Migrate() error {
 		&models.Subscription{},
 		&models.PaymentHistory{},
 		&models.PointBalance{},
+		&models.PointPool{},
 		&models.PointUsageHistory{},
 		&models.ActivationCode{},
 		&models.APIRequest{},
@@ -111,6 +112,16 @@ func initDefaultConfigs() {
 			ConfigKey:   "new_api_key",
 			ConfigValue: config.AppConfig.NewAPIKey,
 			Description: "New API密钥",
+		},
+		{
+			ConfigKey:   "degradation_api_key",
+			ConfigValue: config.AppConfig.DegradationAPIKey,
+			Description: "服务降级API密钥",
+		},
+		{
+			ConfigKey:   "default_degradation_guaranteed",
+			ConfigValue: fmt.Sprintf("%d", config.AppConfig.DefaultDegradationGuaranteed),
+			Description: "默认10条内保证不降级数量",
 		},
 	}
 

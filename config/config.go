@@ -34,6 +34,10 @@ type Config struct {
 	DefaultCompletionMultiplier float64
 	DefaultTokensPerPoint       int
 	DefaultRoundUpEnabled       bool
+
+	// 服务降级配置
+	DegradationAPIKey            string
+	DefaultDegradationGuaranteed int
 }
 
 var AppConfig *Config
@@ -67,6 +71,10 @@ func LoadConfig() {
 		DefaultCompletionMultiplier: getEnvAsFloat("DEFAULT_COMPLETION_MULTIPLIER", 10.0),
 		DefaultTokensPerPoint:       getEnvAsInt("DEFAULT_TOKENS_PER_POINT", 10000),
 		DefaultRoundUpEnabled:       getEnvAsBool("DEFAULT_ROUND_UP_ENABLED", true),
+
+		// 服务降级配置
+		DegradationAPIKey:            getEnv("DEGRADATION_API_KEY", "sk-ijk47MsAmnmJ7sgb0I8Dx6OVXswFBm5Y760tvwpNv3Te0ptp"),
+		DefaultDegradationGuaranteed: getEnvAsInt("DEFAULT_DEGRADATION_GUARANTEED", 0),
 	}
 }
 
