@@ -10,7 +10,6 @@ const pageTitles: Record<string, string> = {
   '/credits': 'Claude Duck - 积分管理',
   '/settings': 'Claude Duck - 设置',
   '/resources': 'Claude Duck - 资源中心',
-  '/test-tool': 'Claude Duck - 测试工具',
   '/login': 'Claude Duck - 登录',
   '/oauth/authorize': 'Claude Duck - 授权',
   '/oauth/callback': 'Claude Duck - 授权回调'

@@ -72,8 +72,13 @@ func HandleAdminGetUsers(c *gin.Context) {
 func HandleAdminUpdateUser(c *gin.Context) {
 	userID := c.Param("id")
 	var updateData struct {
-		IsAdmin *bool  `json:"is_admin"`
-		Email   string `json:"email"`
+		Username              *string `json:"username"`
+		Email                 *string `json:"email"`
+		IsAdmin               *bool   `json:"is_admin"`
+		DegradationGuaranteed *int    `json:"degradation_guaranteed"`
+		DegradationSource     *string `json:"degradation_source"`
+		DegradationLocked     *bool   `json:"degradation_locked"`
+		DegradationCounter    *int    `json:"degradation_counter"`
 	}
 
 	if err := c.ShouldBindJSON(&updateData); err != nil {
@@ -82,16 +87,42 @@ func HandleAdminUpdateUser(c *gin.Context) {
 	}
 
 	updates := make(map[string]interface{})
+
+	if updateData.Username != nil {
+		updates["username"] = *updateData.Username
+	}
+	if updateData.Email != nil {
+		updates["email"] = *updateData.Email
+	}
 	if updateData.IsAdmin != nil {
 		updates["is_admin"] = *updateData.IsAdmin
 	}
-	if updateData.Email != "" {
-		updates["email"] = updateData.Email
+	if updateData.DegradationGuaranteed != nil {
+		updates["degradation_guaranteed"] = *updateData.DegradationGuaranteed
+	}
+	if updateData.DegradationSource != nil {
+		updates["degradation_source"] = *updateData.DegradationSource
+	}
+	if updateData.DegradationLocked != nil {
+		updates["degradation_locked"] = *updateData.DegradationLocked
+	}
+	if updateData.DegradationCounter != nil {
+		updates["degradation_counter"] = *updateData.DegradationCounter
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No fields to update"})
+		return
 	}
 
 	result := database.DB.Model(&models.User{}).Where("id = ?", userID).Updates(updates)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
@@ -193,7 +224,6 @@ func HandleAdminCreateActivationCodes(c *gin.Context) {
 		"message":      "Activation codes created successfully",
 		"count":        request.Count,
 		"batch_number": request.BatchNumber,
-		"plan_id":      plan.PlanID,
 		"plan_title":   plan.Title,
 	})
 }
@@ -284,15 +314,47 @@ func HandleAdminGetSubscriptionPlans(c *gin.Context) {
 
 // HandleAdminCreateSubscriptionPlan 创建订阅计划
 func HandleAdminCreateSubscriptionPlan(c *gin.Context) {
-	var plan models.SubscriptionPlan
-	if err := c.ShouldBindJSON(&plan); err != nil {
+	// 定义请求结构体，排除ID和时间字段
+	var request struct {
+		Title                 string  `json:"title" binding:"required"`
+		Description           string  `json:"description"`
+		PointAmount           int64   `json:"point_amount" binding:"required,min=0"`
+		Price                 float64 `json:"price" binding:"required,min=0"`
+		Currency              string  `json:"currency"`
+		ValidityDays          int     `json:"validity_days" binding:"required,min=1"`
+		DegradationGuaranteed int     `json:"degradation_guaranteed"`
+		Features              string  `json:"features"`
+		Active                *bool   `json:"active"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 生成唯一的 PlanID
-	if plan.PlanID == "" {
-		plan.PlanID = "PLAN-" + strconv.FormatInt(time.Now().Unix(), 10)
+	// 创建订阅计划模型
+	plan := models.SubscriptionPlan{
+		Title:                 request.Title,
+		Description:           request.Description,
+		PointAmount:           request.PointAmount,
+		Price:                 request.Price,
+		Currency:              request.Currency,
+		ValidityDays:          request.ValidityDays,
+		DegradationGuaranteed: request.DegradationGuaranteed,
+		Features:              request.Features,
+	}
+
+	// 设置默认值
+	if request.Currency == "" {
+		plan.Currency = "USD"
+	}
+	if request.Features == "" {
+		plan.Features = "[]"
+	}
+	if request.Active != nil {
+		plan.Active = *request.Active
+	} else {
+		plan.Active = true
 	}
 
 	if err := database.DB.Create(&plan).Error; err != nil {

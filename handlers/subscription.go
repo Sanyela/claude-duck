@@ -20,11 +20,11 @@ type ActiveSubscriptionResponse struct {
 }
 
 type SubscriptionData struct {
-	ID                string                `json:"id"`
-	Plan              SubscriptionPlanData  `json:"plan"`
-	Status            string                `json:"status"`
-	CurrentPeriodEnd  string                `json:"currentPeriodEnd"`
-	CancelAtPeriodEnd bool                  `json:"cancelAtPeriodEnd"`
+	ID                string               `json:"id"`
+	Plan              SubscriptionPlanData `json:"plan"`
+	Status            string               `json:"status"`
+	CurrentPeriodEnd  string               `json:"currentPeriodEnd"`
+	CancelAtPeriodEnd bool                 `json:"cancelAtPeriodEnd"`
 }
 
 type SubscriptionPlanData struct {
@@ -86,9 +86,9 @@ func HandleGetActiveSubscription(c *gin.Context) {
 	subscriptionData := &SubscriptionData{
 		ID: subscription.ExternalID,
 		Plan: SubscriptionPlanData{
-			ID:            subscription.Plan.PlanID,
+			ID:            fmt.Sprintf("%d", subscription.Plan.ID),
 			Name:          subscription.Plan.Title,
-			PricePerMonth: subscription.Plan.Price,  // 使用Price字段
+			PricePerMonth: subscription.Plan.Price,
 			Currency:      subscription.Plan.Currency,
 			Features:      features,
 		},
@@ -281,8 +281,8 @@ func HandleRedeemCoupon(c *gin.Context) {
 
 	c.JSON(http.StatusOK, RedeemCouponResponse{
 		Success: true,
-		Message: fmt.Sprintf("激活码兑换成功！已充值 %d 积分，有效期 %d 天。", 
-			activationCode.Plan.PointAmount, 
+		Message: fmt.Sprintf("激活码兑换成功！已充值 %d 积分，有效期 %d 天。",
+			activationCode.Plan.PointAmount,
 			activationCode.Plan.ValidityDays),
 	})
 }
@@ -305,4 +305,4 @@ func getUserIDFromToken(c *gin.Context) (uint, error) {
 	}
 
 	return claims.UserID, nil
-} 
+}

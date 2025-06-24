@@ -11,13 +11,18 @@ import {
   SettingsIcon,
   Sun,
   Moon,
-  Briefcase,
-  FlaskConical,
+  Shield,
+  Users,
+  Settings,
+  Key,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/contexts/AuthContext"
+import { Separator } from "@/components/ui/separator"
 
-const navItems = [
+// 用户功能导航项
+const userNavItems = [
   {
     href: "/",
     label: "仪表板",
@@ -42,11 +47,39 @@ const navItems = [
     icon: BookOpen,
     activeColor: "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
   },
+]
+
+// 管理员功能导航项
+const adminNavItems = [
   {
-    href: "/test-tool",
-    label: "测试工具",
-    icon: FlaskConical,
-    activeColor: "bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300",
+    href: "/admin/oauth",
+    label: "OAuth 测试工具",
+    icon: Shield,
+    activeColor: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+  },
+  {
+    href: "/admin/users",
+    label: "用户管理",
+    icon: Users,
+    activeColor: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  },
+  {
+    href: "/admin/configs",
+    label: "系统配置",
+    icon: Settings,
+    activeColor: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300",
+  },
+  {
+    href: "/admin/plans",
+    label: "订阅计划",
+    icon: CreditCard,
+    activeColor: "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
+  },
+  {
+    href: "/admin/codes",
+    label: "激活码管理",
+    icon: Key,
+    activeColor: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
   },
 ]
 
@@ -62,6 +95,7 @@ const inactiveItemClasses = "text-slate-600 hover:bg-slate-500/10 dark:text-slat
 export function Sidebar() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
+  const { user } = useAuth()
 
   const currentTheme = theme || "light"
 
@@ -76,8 +110,10 @@ export function Sidebar() {
           Claude Duck
         </Link>
       </div>
+      
       <nav className="flex-1 overflow-y-auto py-4 space-y-1">
-        {navItems.map((item) => (
+        {/* 用户功能 */}
+        {userNavItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -91,7 +127,32 @@ export function Sidebar() {
             {item.label}
           </Link>
         ))}
+
+        {/* 管理员功能分割线 */}
+        {user?.is_admin && (
+          <>
+            <div className="px-4 py-2">
+              <Separator />
+            </div>
+            
+            {adminNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-full px-4 py-2 mx-2 text-sm font-medium transition-colors",
+                  pathname === item.href ? item.activeColor : inactiveItemClasses,
+                )}
+                prefetch={false}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            ))}
+          </>
+        )}
       </nav>
+
       <div className="mt-auto p-2 space-y-1 pt-2">
         <Button
           variant="ghost"

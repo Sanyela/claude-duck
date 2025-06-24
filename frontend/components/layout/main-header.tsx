@@ -5,16 +5,12 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import {
   Menu,
-  Search,
-  Briefcase,
   LayoutDashboard,
   CreditCard,
   DollarSign,
   BookOpen,
   SettingsIcon,
-  FlaskConical,
-} from "lucide-react" // Renamed Settings to SettingsIcon to avoid conflict
-import { Input } from "@/components/ui/input"
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePathname } from "next/navigation"
 
@@ -42,12 +38,6 @@ const navItems = [
     label: "资源中心",
     icon: BookOpen,
     activeColor: "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
-  },
-  {
-    href: "/test-tool",
-    label: "测试工具",
-    icon: FlaskConical,
-    activeColor: "bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-300",
   },
 ]
 const settingsItem = {

@@ -59,7 +59,6 @@ type AccessToken struct {
 // SubscriptionPlan 订阅计划模型
 type SubscriptionPlan struct {
 	ID                    uint           `gorm:"primarykey" json:"id"`
-	PlanID                string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"plan_id"`
 	Title                 string         `gorm:"not null" json:"title"`        // 标题
 	Description           string         `gorm:"type:text" json:"description"` // 描述
 	PointAmount           int64          `gorm:"not null" json:"point_amount"` // 套餐包含的积分数
