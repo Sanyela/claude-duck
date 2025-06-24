@@ -128,25 +128,6 @@ type PointPool struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
-// PointUsageHistory 积分使用历史
-type PointUsageHistory struct {
-	ID                   uint      `gorm:"primarykey" json:"id"`
-	UserID               uint      `gorm:"not null" json:"user_id"`
-	User                 User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	RequestID            string    `gorm:"type:varchar(191)" json:"request_id"`   // API请求ID
-	IP                   string    `gorm:"type:varchar(45)" json:"ip"`            // 用户IP
-	UID                  string    `gorm:"type:varchar(191)" json:"uid"`          // 用户标识
-	Username             string    `gorm:"type:varchar(191)" json:"username"`     // 用户名
-	Model                string    `gorm:"not null" json:"model"`                 // 使用的模型
-	PromptTokens         int       `gorm:"not null" json:"prompt_tokens"`         // new api返回的提示tokens
-	CompletionTokens     int       `gorm:"not null" json:"completion_tokens"`     // new api返回的补全tokens
-	PromptMultiplier     float64   `gorm:"not null" json:"prompt_multiplier"`     // 提示倍率
-	CompletionMultiplier float64   `gorm:"not null" json:"completion_multiplier"` // 补全倍率
-	PointsUsed           int64     `gorm:"not null" json:"points_used"`           // 消耗的积分
-	IsRoundUp            bool      `gorm:"default:false" json:"is_round_up"`      // 是否向上取整
-	CreatedAt            time.Time `json:"created_at"`
-}
-
 // ActivationCode 激活码
 type ActivationCode struct {
 	ID                 uint             `gorm:"primarykey" json:"id"`
@@ -157,26 +138,9 @@ type ActivationCode struct {
 	UsedByUserID       *uint            `json:"used_by_user_id"`
 	UsedBy             *User            `gorm:"foreignKey:UsedByUserID" json:"used_by,omitempty"`
 	UsedAt             *time.Time       `json:"used_at"`
-	ExpiresAt          *time.Time       `json:"expires_at"`
 	BatchNumber        string           `gorm:"type:varchar(191)" json:"batch_number"` // 批次号
 	CreatedAt          time.Time        `json:"created_at"`
 	DeletedAt          gorm.DeletedAt   `gorm:"index" json:"-"`
-}
-
-// APIRequest API请求记录
-type APIRequest struct {
-	ID               uint      `gorm:"primarykey" json:"id"`
-	UserID           uint      `gorm:"not null" json:"user_id"`
-	User             User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	MessageID        string    `gorm:"type:varchar(191)" json:"message_id"` // Claude的message_id
-	Model            string    `gorm:"not null" json:"model"`
-	PromptTokens     int       `gorm:"not null" json:"prompt_tokens"`
-	CompletionTokens int       `gorm:"not null" json:"completion_tokens"`
-	PointsUsed       int64     `gorm:"not null" json:"points_used"` // 本次消耗积分
-	Status           string    `gorm:"not null" json:"status"`      // success, failed
-	Error            string    `gorm:"type:text" json:"error"`
-	Duration         int       `json:"duration"` // 请求耗时（毫秒）
-	CreatedAt        time.Time `json:"created_at"`
 }
 
 // SystemConfig 系统配置
@@ -186,4 +150,42 @@ type SystemConfig struct {
 	ConfigValue string    `gorm:"type:text;not null" json:"config_value"`
 	Description string    `gorm:"type:varchar(255)" json:"description"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// APITransaction 统一的API请求和积分使用记录
+type APITransaction struct {
+	ID     uint `gorm:"primarykey" json:"id"`
+	UserID uint `gorm:"not null;index" json:"user_id"`
+	User   User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+
+	// API请求基本信息
+	MessageID   string `gorm:"type:varchar(191);index" json:"message_id"` // Claude返回的message_id
+	RequestID   string `gorm:"type:varchar(191);index" json:"request_id"` // 请求唯一ID
+	Model       string `gorm:"not null;index" json:"model"`               // 使用的模型
+	RequestType string `gorm:"default:'api'" json:"request_type"`         // api/stream 请求类型
+
+	// Token使用情况
+	InputTokens              int `gorm:"not null" json:"input_tokens"`                 // 输入tokens (prompt_tokens)
+	OutputTokens             int `gorm:"not null" json:"output_tokens"`                // 输出tokens (completion_tokens)
+	CacheCreationInputTokens int `gorm:"default:0" json:"cache_creation_input_tokens"` // 缓存创建输入tokens
+	CacheReadInputTokens     int `gorm:"default:0" json:"cache_read_input_tokens"`     // 缓存读取输入tokens
+
+	// 计费相关
+	InputMultiplier  float64 `gorm:"not null" json:"input_multiplier"`    // 输入token倍率 (原prompt_multiplier)
+	OutputMultiplier float64 `gorm:"not null" json:"output_multiplier"`   // 输出token倍率 (原completion_multiplier)
+	CacheMultiplier  float64 `gorm:"default:1.0" json:"cache_multiplier"` // 缓存token倍率
+	PointsUsed       int64   `gorm:"not null" json:"points_used"`         // 消耗的积分
+	IsRoundUp        bool    `gorm:"default:false" json:"is_round_up"`    // 是否向上取整
+
+	// 请求详情
+	IP          string `gorm:"type:varchar(45)" json:"ip"`             // 用户IP
+	UID         string `gorm:"type:varchar(191)" json:"uid"`           // 用户标识
+	Username    string `gorm:"type:varchar(191)" json:"username"`      // 用户名
+	Status      string `gorm:"not null;index" json:"status"`           // success, failed
+	Error       string `gorm:"type:text" json:"error"`                 // 错误信息
+	Duration    int    `json:"duration"`                               // 请求耗时（毫秒）
+	ServiceTier string `gorm:"default:'standard'" json:"service_tier"` // Claude服务等级
+	StopReason  string `json:"stop_reason"`                            // 停止原因
+
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
 }

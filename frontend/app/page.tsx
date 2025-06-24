@@ -1,50 +1,84 @@
 "use client";
 
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { BellRing, AlertTriangle, ArrowRight, CreditCard, DollarSign, BookOpen, Calendar, ChevronRight, Zap } from "lucide-react"
+import { BellRing, AlertTriangle, ArrowRight, CreditCard, DollarSign, BookOpen, Calendar, ChevronRight, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Greeting } from "@/components/dashboard/greeting"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
+import { dashboardAPI, type DashboardData } from "@/api/dashboard"
+import { announcementsAPI, type PublicAnnouncement } from "@/api/announcements"
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const currentUser = {
-    name: user?.username || "尊贵的用户",
-    email: user?.email || "user@example.com",
-    avatarUrl: user?.avatar || "/placeholder.svg?height=64&width=64",
-  }
-  const subscriptionStatus = "active" // 'active', 'expiring_soon', 'expired'
+  // 加载仪表盘数据
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      const [dashboardResult, announcementsResult] = await Promise.all([
+        dashboardAPI.getDashboardData(),
+        announcementsAPI.getActiveAnnouncements("zh")
+      ]);
+
+      if (dashboardResult.success && dashboardResult.data) {
+        setDashboardData(dashboardResult.data);
+      } else {
+        setError(dashboardResult.message || "加载数据失败");
+      }
+
+      if (announcementsResult.success && announcementsResult.data) {
+        setAnnouncements(announcementsResult.data);
+      }
+      
+      setLoading(false);
+    };
+
+    if (user) {
+      loadDashboardData();
+    }
+  }, [user]);
   
-  // 积分数据
-  const creditBalance = 1250
-  const monthlyAllowance = 5000
-  const creditUsagePercentage = Math.min((creditBalance / monthlyAllowance) * 100, 100)
-  
-  // 订阅数据
-  const currentSubscription = {
-    planName: "专业版 🌟",
-    price: "¥99/月",
-    status: "active",
-    nextBillingDate: "2025-07-15",
-    features: ["无限项目", "优先支持", "高级分析", "API访问"],
-  }
-  
-  const announcements = [
-    { id: 1, title: "系统维护通知", message: "我们的系统将于下周二凌晨2点至4点进行维护。", date: "2025-06-20" },
-    { id: 2, title: "新功能上线！", message: "积分兑换商品功能已上线，快去看看吧！", date: "2025-06-18" },
-  ]
+  // 计算积分使用率
+  const creditUsagePercentage = dashboardData?.pointBalance 
+    ? Math.min(((dashboardData.pointBalance.used_points || 0) / Math.max(dashboardData.pointBalance.total_points || 1, 1)) * 100, 100)
+    : 0;
+
+  // 判断订阅状态
+  const getSubscriptionStatus = () => {
+    if (!dashboardData?.subscription) return "no_subscription";
+    
+    const currentPeriodEnd = new Date(dashboardData.subscription.currentPeriodEnd);
+    const now = new Date();
+    const daysUntilExpiry = Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (dashboardData.subscription.status === "active") {
+      if (daysUntilExpiry <= 3) return "expiring_soon";
+      return "active";
+    }
+    
+    return "expired";
+  };
+
+  const subscriptionStatus = getSubscriptionStatus();
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <Greeting userName={user?.username || "尊贵的用户"} />
 
+        {/* 订阅状态警告 */}
         {subscriptionStatus === "expiring_soon" && (
           <Alert
             variant="destructive"
@@ -81,6 +115,15 @@ export default function DashboardPage() {
           </Alert>
         )}
 
+        {/* 错误提示 */}
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>加载失败</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         {/* 用户积分和订阅状态卡片 */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* 积分卡片 */}
@@ -92,10 +135,22 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="pb-2">
-              <div className="flex items-end justify-between">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="ml-2">加载中...</span>
+                </div>
+              ) : dashboardData?.pointBalance ? (
+                <>
+                  <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-3xl font-bold">{creditBalance.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">总额度: {monthlyAllowance.toLocaleString()} 积分</p>
+                      <p className="text-3xl font-bold">
+                        {(dashboardData.pointBalance.available_points || 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        总积分: {(dashboardData.pointBalance.total_points || 0).toLocaleString()} | 
+                        已使用: {(dashboardData.pointBalance.used_points || 0).toLocaleString()}
+                      </p>
                 </div>
                 <Link 
                   href="/credits"
@@ -104,23 +159,22 @@ export default function DashboardPage() {
                   详情 <ChevronRight className="h-4 w-4 ml-1" />
                 </Link>
               </div>
+                  {(dashboardData.pointBalance.total_points || 0) > 0 && (
+                    <>
               <Progress value={creditUsagePercentage} className="mt-3 h-2 [&>*]:bg-sky-500" />
               <p className="text-xs text-muted-foreground mt-1 text-right">
                 使用率: {creditUsagePercentage.toFixed(1)}%
               </p>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-lg font-medium text-muted-foreground">暂无积分数据</p>
+                  <p className="text-sm text-muted-foreground">请联系管理员或使用激活码充值</p>
+                </div>
+              )}
             </CardContent>
-            <CardFooter className="pt-0">
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="w-full text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 dark:text-green-400 dark:border-green-800/30 dark:hover:bg-green-900/30"
-                asChild
-              >
-                <Link href="/credits">
-                  <Zap className="mr-2 h-4 w-4" /> 充值积分
-                </Link>
-              </Button>
-            </CardFooter>
           </Card>
           
           {/* 订阅卡片 */}
@@ -132,20 +186,42 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="pb-2">
-              <div className="flex items-center justify-between mb-2">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="ml-2">加载中...</span>
+                </div>
+              ) : dashboardData?.subscription ? (
+                <>
+                  <div className="flex items-center justify-between mb-2">
                 <div>
-                  <p className="text-xl font-bold text-sky-500 dark:text-sky-400">{currentSubscription.planName}</p>
-                  <p className="text-sm font-medium">{currentSubscription.price}</p>
+                      <p className="text-xl font-bold text-sky-500 dark:text-sky-400">{dashboardData.subscription.plan.name}</p>
+                      <p className="text-sm font-medium">
+                        ¥{dashboardData.subscription.plan.pricePerMonth}/{dashboardData.subscription.plan.currency === "CNY" ? "月" : "month"}
+                      </p>
                 </div>
                 <Badge 
-                  className="bg-green-500 text-white dark:bg-green-600 dark:text-green-50"
-                >
-                  有效
+                      className={
+                        subscriptionStatus === "active" ? "bg-green-500 text-white dark:bg-green-600" :
+                        subscriptionStatus === "expiring_soon" ? "bg-yellow-500 text-white dark:bg-yellow-600" :
+                        "bg-red-500 text-white dark:bg-red-600"
+                      }
+                    >
+                      {subscriptionStatus === "active" ? "有效" : 
+                       subscriptionStatus === "expiring_soon" ? "即将到期" : "已过期"}
                 </Badge>
               </div>
               <p className="text-xs flex items-center text-muted-foreground">
-                <Calendar className="h-3 w-3 mr-1 inline" /> 下次账单日期: {currentSubscription.nextBillingDate}
+                    <Calendar className="h-3 w-3 mr-1 inline" /> 
+                    下次账单日期: {new Date(dashboardData.subscription.currentPeriodEnd).toLocaleDateString()}
               </p>
+                </>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-lg font-medium text-muted-foreground">暂无套餐</p>
+                  <p className="text-sm text-muted-foreground">您可以使用激活码激活套餐</p>
+                </div>
+              )}
             </CardContent>
             <CardFooter className="pt-0">
               <Button 
@@ -155,7 +231,8 @@ export default function DashboardPage() {
                 asChild
               >
                 <Link href="/subscription">
-                  <CreditCard className="mr-2 h-4 w-4" /> 管理订阅
+                  <CreditCard className="mr-2 h-4 w-4" /> 
+                  {dashboardData?.subscription ? "管理订阅" : "激活套餐"}
                 </Link>
               </Button>
             </CardFooter>
@@ -167,17 +244,28 @@ export default function DashboardPage() {
             <CardTitle className="text-2xl">系统公告 📢</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {announcements.map((ann) => (
-              <Alert key={ann.id} className="bg-card text-card-foreground border-border">
-                {" "}
-                {/* Nested Alert, ensure it uses card's bg or a subtle variant */}
+            {announcements.length > 0 ? (
+              announcements.map((announcement) => (
+                <Alert key={announcement.id} className="bg-card text-card-foreground border-border">
+                  <BellRing className="h-5 w-5 text-sky-500 dark:text-sky-400" />
+                  <AlertTitle>
+                    {announcement.title} 
+                    <span className="text-xs text-muted-foreground ml-2">
+                      {new Date(announcement.created_at).toLocaleDateString()}
+                    </span>
+                  </AlertTitle>
+                  <AlertDescription>
+                    <div dangerouslySetInnerHTML={{ __html: announcement.description }} />
+                  </AlertDescription>
+                </Alert>
+              ))
+            ) : (
+              <Alert className="bg-card text-card-foreground border-border">
                 <BellRing className="h-5 w-5 text-sky-500 dark:text-sky-400" />
-                <AlertTitle>
-                  {ann.title} <span className="text-xs text-muted-foreground ml-2">{ann.date}</span>
-                </AlertTitle>
-                <AlertDescription>{ann.message}</AlertDescription>
+                <AlertTitle>暂无公告</AlertTitle>
+                <AlertDescription>当前没有系统公告。</AlertDescription>
               </Alert>
-            ))}
+            )}
           </CardContent>
         </Card>
 
@@ -211,7 +299,7 @@ export default function DashboardPage() {
                 <DollarSign className="h-6 w-6 text-green-500 dark:text-green-400" />
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">查看您的积分余额、充值、并跟踪使用情况。</p>
+                <p className="text-sm text-muted-foreground mb-3">查看您的积分余额、使用记录和积分历史。</p>
                 <Button
                   variant="outline"
                   size="sm"

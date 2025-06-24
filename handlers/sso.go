@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 
 	"claude/config"
 	"claude/database"
@@ -154,18 +152,6 @@ func HandleVerifyToken(c *gin.Context) {
 		return
 	}
 
-	// 检查是否是固定的OAuth token
-	// 这里是我方便测试 debug使用的 实际上下面这一段代码需要注释
-	if req.Token == "sk-BxYNfpirLM4E4TI7k1Cu1WoqOVTpMzyl6B2GNeYngdX9J5VD" {
-		// 返回固定用户信息用于OAuth验证
-		c.JSON(http.StatusOK, TokenVerifyResponse{
-			Authenticated: true,
-			UserID:        "1",
-			Email:         "oauth@claudecode.com",
-		})
-		return
-	}
-
 	// 验证JWT访问令牌
 	claims, err := utils.ValidateAccessToken(req.Token)
 	if err != nil {
@@ -191,7 +177,7 @@ func HandleVerifyToken(c *gin.Context) {
 	// 返回验证成功的响应
 	c.JSON(http.StatusOK, TokenVerifyResponse{
 		Authenticated: true,
-		UserID:        strconv.FormatUint(uint64(user.ID), 10),
+		UserID:        user.Username, // 返回用户名而不是数字ID
 		Email:         user.Email,
 	})
 }
@@ -235,7 +221,7 @@ func HandleVerifyCode(c *gin.Context) {
 	// 返回成功响应
 	c.JSON(http.StatusOK, CodeVerifyResponse{
 		Token:  token,
-		UserID: fmt.Sprintf("%d", user.ID),
+		UserID: user.Username, // 返回用户名而不是数字ID
 		Email:  user.Email,
 	})
 }

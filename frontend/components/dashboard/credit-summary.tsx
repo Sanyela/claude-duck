@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 import { Sparkles, CreditCard } from "lucide-react"
-import { getCreditBalance } from "@/api/credits"
+import { creditsAPI } from "@/api/credits"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 
@@ -18,8 +18,15 @@ export function CreditSummary() {
   useEffect(() => {
     const fetchCreditBalance = async () => {
       try {
-        const response = await getCreditBalance()
-        setCreditData(response.balance)
+        const response = await creditsAPI.getBalance()
+        if (response.success && response.data) {
+          setCreditData({
+            available: response.data.available_points,
+            total: response.data.total_points
+          })
+        } else {
+          setError("无法加载积分信息")
+        }
       } catch (err) {
         console.error("获取积分余额失败:", err)
         setError("无法加载积分信息")

@@ -17,6 +17,13 @@ func SetupRoutes(r *gin.Engine) {
 		})
 	})
 
+	// 无需认证的公共API
+	public := r.Group("/api")
+	{
+		// Bing每日图片API
+		public.GET("/bing", handlers.GetBingDailyImage)
+	}
+
 	// 认证相关路由（无需token验证）
 	auth := r.Group("/api/auth")
 	{
@@ -24,6 +31,11 @@ func SetupRoutes(r *gin.Engine) {
 		auth.POST("/login", handlers.HandleLogin)
 		auth.POST("/logout", handlers.HandleLogout)
 		auth.GET("/user", middleware.JWTAuth(), handlers.HandleGetUserInfo) // 需要token验证
+
+		// 邮箱验证码相关路由
+		auth.POST("/send-verification-code", handlers.HandleSendVerificationCode)
+		auth.POST("/register-with-code", handlers.HandleRegisterWithCode)
+		auth.POST("/login-with-code", handlers.HandleLoginWithCode)
 	}
 
 	// SSO相关路由
@@ -81,6 +93,12 @@ func SetupRoutes(r *gin.Engine) {
 		admin.GET("/activation-codes", handlers.HandleAdminGetActivationCodes)
 		admin.POST("/activation-codes", handlers.HandleAdminCreateActivationCodes)
 		admin.DELETE("/activation-codes/:id", handlers.HandleAdminDeleteActivationCode)
+
+		// 公告管理
+		admin.GET("/announcements", handlers.HandleAdminGetAnnouncements)
+		admin.POST("/announcements", handlers.HandleAdminCreateAnnouncement)
+		admin.PUT("/announcements/:id", handlers.HandleAdminUpdateAnnouncement)
+		admin.DELETE("/announcements/:id", handlers.HandleAdminDeleteAnnouncement)
 	}
 
 	// 静态文件服务 - 提供前端构建的静态资源

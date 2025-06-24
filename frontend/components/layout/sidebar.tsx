@@ -15,6 +15,7 @@ import {
   Users,
   Settings,
   Key,
+  Megaphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -80,6 +81,12 @@ const adminNavItems = [
     label: "激活码管理",
     icon: Key,
     activeColor: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
+  },
+  {
+    href: "/admin/announcements",
+    label: "公告管理",
+    icon: Megaphone,
+    activeColor: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
   },
 ]
 
@@ -169,6 +176,8 @@ export function Sidebar() {
           )}
           <span>切换主题</span>
         </Button>
+        {/* 设置按钮已隐藏 - 暂时不开放给用户使用 */}
+        {/*
         <Link
           href="/settings"
           className={cn(
@@ -180,6 +189,7 @@ export function Sidebar() {
           <settingsItem.icon className="h-4 w-4" />
           {settingsItem.label}
         </Link>
+        */}
       </div>
     </aside>
   )

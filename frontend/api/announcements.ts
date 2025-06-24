@@ -1,4 +1,4 @@
-import request from './request';
+import { request } from "./request";
 
 // 类型定义
 export interface Announcement {
@@ -24,3 +24,30 @@ export function getAnnouncements(language: string = 'zh'): Promise<GetAnnounceme
     params: { language },
   });
 }
+
+// 公告接口定义
+export interface PublicAnnouncement {
+  id: number;
+  type: string;
+  title: string;
+  description: string;
+  language: string;
+  created_at: string;
+}
+
+// 获取公告数据
+export const announcementsAPI = {
+  // 获取活跃公告列表（用户端）
+  async getActiveAnnouncements(language: string = "zh"): Promise<{ success: boolean; data?: PublicAnnouncement[]; message?: string }> {
+    try {
+      const response = await request.get(`/api/announcements?language=${language}&active=true`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      console.error("获取公告失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "获取公告失败" 
+      };
+    }
+  }
+};

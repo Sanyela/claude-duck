@@ -6,6 +6,7 @@ import (
 
 	"claude/config"
 	"claude/database"
+	"claude/handlers"
 	"claude/routes"
 
 	"github.com/gin-contrib/cors"
@@ -25,6 +26,10 @@ func main() {
 	if err := database.Migrate(); err != nil {
 		log.Fatal("Failed to migrate database:", err)
 	}
+
+	// 初始化Redis客户端
+	handlers.InitRedisClient()
+	handlers.InitAuthRedisClient()
 
 	// 设置Gin模式
 	if os.Getenv("GIN_MODE") == "" {

@@ -63,9 +63,8 @@ func Migrate() error {
 		&models.PaymentHistory{},
 		&models.PointBalance{},
 		&models.PointPool{},
-		&models.PointUsageHistory{},
+		&models.APITransaction{},
 		&models.ActivationCode{},
-		&models.APIRequest{},
 		&models.SystemConfig{},
 	)
 
@@ -134,4 +133,4 @@ func initDefaultConfigs() {
 			}
 		}
 	}
-} 
+}

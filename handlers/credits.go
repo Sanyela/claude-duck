@@ -18,8 +18,8 @@ type CreditBalanceResponse struct {
 }
 
 type CreditBalanceData struct {
-	Available           int     `json:"available"`
-	Total               int     `json:"total"`
+	Available int `json:"available"`
+	Total     int `json:"total"`
 }
 
 type ModelCostsResponse struct {
@@ -35,9 +35,9 @@ type ModelCostData struct {
 }
 
 type CreditUsageHistoryResponse struct {
-	History      []CreditUsageData `json:"history"`
-	TotalPages   int               `json:"totalPages"`
-	CurrentPage  int               `json:"currentPage"`
+	History     []CreditUsageData `json:"history"`
+	TotalPages  int               `json:"totalPages"`
+	CurrentPage int               `json:"currentPage"`
 }
 
 type CreditUsageData struct {
@@ -46,6 +46,8 @@ type CreditUsageData struct {
 	Amount       int    `json:"amount"`
 	Timestamp    string `json:"timestamp"`
 	RelatedModel string `json:"relatedModel,omitempty"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
 }
 
 // HandleGetCreditBalance 获取积分余额
@@ -63,7 +65,7 @@ func HandleGetCreditBalance(c *gin.Context) {
 		// 如果没有记录，创建默认余额
 		pointBalance = models.PointBalance{
 			UserID:          userID,
-			TotalPoints:     0,    // 默认0余额，防止批量注册
+			TotalPoints:     0, // 默认0余额，防止批量注册
 			UsedPoints:      0,
 			AvailablePoints: 0,
 			UpdatedAt:       time.Now(),
@@ -74,7 +76,7 @@ func HandleGetCreditBalance(c *gin.Context) {
 	// 转换为响应格式
 	balanceData := CreditBalanceData{
 		Available: int(pointBalance.AvailablePoints), // 直接使用积分
-		Total:     int(pointBalance.TotalPoints),      // 直接使用积分
+		Total:     int(pointBalance.TotalPoints),     // 直接使用积分
 	}
 
 	c.JSON(http.StatusOK, CreditBalanceResponse{Balance: balanceData})
@@ -112,7 +114,7 @@ func HandleGetModelCosts(c *gin.Context) {
 			Description: "快速响应的轻量级模型",
 		},
 	}
-	
+
 	c.JSON(http.StatusOK, ModelCostsResponse{Costs: defaultCosts})
 }
 
@@ -136,16 +138,16 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 
 	// 查询总数
 	var total int64
-	database.DB.Model(&models.PointUsageHistory{}).Where("user_id = ?", userID).Count(&total)
+	database.DB.Model(&models.APITransaction{}).Where("user_id = ?", userID).Count(&total)
 
 	// 查询分页数据
-	var usageHistory []models.PointUsageHistory
+	var apiTransactions []models.APITransaction
 	offset := (page - 1) * pageSize
 	err = database.DB.Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Limit(pageSize).
 		Offset(offset).
-		Find(&usageHistory).Error
+		Find(&apiTransactions).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to fetch usage history"})
 		return
@@ -153,17 +155,25 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 
 	// 转换为响应格式
 	var historyData []CreditUsageData
-	for _, usage := range usageHistory {
+	for _, transaction := range apiTransactions {
 		// 生成描述信息
-		description := fmt.Sprintf("使用 %s 模型，消耗 %d prompt tokens，%d completion tokens", 
-			usage.Model, usage.PromptTokens, usage.CompletionTokens)
-		
+		description := fmt.Sprintf("使用 %s 模型，消耗 %d 输入tokens，%d 输出tokens",
+			transaction.Model, transaction.InputTokens, transaction.OutputTokens)
+
+		// 如果有缓存相关的tokens，添加到描述中
+		if transaction.CacheCreationInputTokens > 0 || transaction.CacheReadInputTokens > 0 {
+			description += fmt.Sprintf("，缓存创建 %d tokens，缓存读取 %d tokens",
+				transaction.CacheCreationInputTokens, transaction.CacheReadInputTokens)
+		}
+
 		historyData = append(historyData, CreditUsageData{
-			ID:           fmt.Sprintf("%d", usage.ID),
+			ID:           fmt.Sprintf("%d", transaction.ID),
 			Description:  description,
-			Amount:       -int(usage.PointsUsed), // 负数表示消耗
-			Timestamp:    usage.CreatedAt.Format(time.RFC3339),
-			RelatedModel: usage.Model,
+			Amount:       -int(transaction.PointsUsed), // 负数表示消耗
+			Timestamp:    transaction.CreatedAt.Format(time.RFC3339),
+			RelatedModel: transaction.Model,
+			InputTokens:  int(transaction.InputTokens),
+			OutputTokens: int(transaction.OutputTokens),
 		})
 	}
 

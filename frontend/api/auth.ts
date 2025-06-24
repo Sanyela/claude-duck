@@ -31,6 +31,69 @@ export interface RegisterRequest {
   password: string;
 }
 
+// 发送验证码请求
+export interface SendVerificationCodeRequest {
+  email: string;
+  type: 'register' | 'login';
+}
+
+// 带验证码的注册请求
+export interface RegisterWithCodeRequest {
+  username: string;
+  email: string;
+  password: string;
+  code: string;
+}
+
+// 带验证码的登录请求
+export interface LoginWithCodeRequest {
+  email_or_username: string;
+  password: string;
+  code: string;
+}
+
+// 发送验证码
+export const sendVerificationCode = async (data: SendVerificationCodeRequest): Promise<{ success: boolean; message?: string }> => {
+  try {
+    const response = await request.post("/api/auth/send-verification-code", data);
+    return response.data;
+  } catch (error: any) {
+    console.error("发送验证码失败:", error);
+    return {
+      success: false,
+      message: error.response?.data?.message || "发送验证码失败，请稍后再试"
+    };
+  }
+};
+
+// 带验证码的用户注册
+export const registerWithCode = async (data: RegisterWithCodeRequest): Promise<AuthResponse> => {
+  try {
+    const response = await request.post("/api/auth/register-with-code", data);
+    return response.data;
+  } catch (error: any) {
+    console.error("注册请求失败:", error);
+    return {
+      success: false,
+      message: error.response?.data?.message || "注册失败，请稍后再试"
+    };
+  }
+};
+
+// 带验证码的用户登录
+export const loginWithCode = async (data: LoginWithCodeRequest): Promise<AuthResponse> => {
+  try {
+    const response = await request.post("/api/auth/login-with-code", data);
+    return response.data;
+  } catch (error: any) {
+    console.error("登录请求失败:", error);
+    return {
+      success: false,
+      message: error.response?.data?.message || "邮箱或密码错误"
+    };
+  }
+};
+
 // 用户注册
 export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
   try {
@@ -78,15 +141,15 @@ export const getUserInfo = async (): Promise<{ success: boolean; user?: User; me
   try {
     const response = await request.get("/api/auth/user");
     if (response.data && response.data.user) {
-      return {
-        success: true,
+    return {
+      success: true,
         user: response.data.user
       };
     } else {
       return {
         success: false,
         message: "用户信息格式错误"
-      };
+    };
     }
   } catch (error: any) {
     console.error("获取用户信息失败:", error);

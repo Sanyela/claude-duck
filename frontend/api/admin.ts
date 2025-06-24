@@ -51,8 +51,19 @@ export interface ActivationCode {
   created_at: string;
 }
 
+export interface Announcement {
+  id: number;
+  type: string;
+  title: string;
+  description: string;
+  language: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // 分页响应接口
-interface PaginatedResponse<T> {
+export interface PaginatedResponse<T> {
   data: T[];
   total: number;
   page: number;
@@ -219,7 +230,6 @@ export const adminAPI = {
     subscription_plan_id: number; 
     count: number; 
     batch_number?: string;
-    expires_at?: string;
   }): Promise<{ success: boolean; message?: string }> => {
     try {
       await request.post("/api/admin/activation-codes", data);
@@ -233,14 +243,71 @@ export const adminAPI = {
   },
 
   // 删除激活码
-  deleteActivationCode: async (id: number): Promise<{ success: boolean; message?: string }> => {
+  async deleteActivationCode(id: number): Promise<{ success: boolean; message?: string }> {
     try {
       await request.delete(`/api/admin/activation-codes/${id}`);
       return { success: true };
     } catch (error: any) {
-      return {
-        success: false,
-        message: error.response?.data?.message || "删除激活码失败"
+      console.error("删除激活码失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "删除激活码失败" 
+      };
+    }
+  },
+
+  // 获取公告列表
+  async getAnnouncements(): Promise<{ success: boolean; announcements?: Announcement[]; message?: string }> {
+    try {
+      const response = await request.get("/api/admin/announcements");
+      return { success: true, announcements: response.data.data || response.data };
+    } catch (error: any) {
+      console.error("获取公告列表失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "获取公告列表失败" 
+      };
+    }
+  },
+
+  // 创建公告
+  async createAnnouncement(announcement: Omit<Announcement, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; message?: string }> {
+    try {
+      await request.post("/api/admin/announcements", announcement);
+      return { success: true };
+    } catch (error: any) {
+      console.error("创建公告失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "创建公告失败" 
+      };
+    }
+  },
+
+  // 更新公告
+  async updateAnnouncement(id: number, announcement: Partial<Announcement>): Promise<{ success: boolean; message?: string }> {
+    try {
+      await request.put(`/api/admin/announcements/${id}`, announcement);
+      return { success: true };
+    } catch (error: any) {
+      console.error("更新公告失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "更新公告失败" 
+      };
+    }
+  },
+
+  // 删除公告
+  async deleteAnnouncement(id: number): Promise<{ success: boolean; message?: string }> {
+    try {
+      await request.delete(`/api/admin/announcements/${id}`);
+      return { success: true };
+    } catch (error: any) {
+      console.error("删除公告失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "删除公告失败" 
       };
     }
   }

@@ -266,7 +266,7 @@ paths:
               properties:
                 client_id:
                   type: string
-                  example: c35a52681f1fa87a6a11f69d26990326
+                  example: Claude Duck
                 scope:
                   type: string
                   example: api
@@ -316,7 +316,7 @@ paths:
               properties:
                 client_id:
                   type: string
-                  example: c35a52681f1fa87a6a11f69d26990326
+                  example: Claude Duck
                 client_secret:
                   type: string
                   example: 2935467f5e0e1d383a51a467c9680091dc29015291245dbb6b440adcaf9e1011
@@ -367,7 +367,7 @@ paths:
               properties:
                 client_id:
                   type: string
-                  example: c35a52681f1fa87a6a11f69d26990326
+                  example: Claude Duck
                 client_secret:
                   type: string
                   example: 2935467f5e0e1d383a51a467c9680091dc29015291245dbb6b440adcaf9e1011
@@ -1508,9 +1508,6 @@ components:
         id:
           type: integer
           example: 1
-        plan_id:
-          type: string
-          example: PLAN-001
         title:
           type: string
           example: 标准套餐
@@ -1554,9 +1551,6 @@ components:
         - price
         - validity_days
       properties:
-        plan_id:
-          type: string
-          example: PLAN-001
         title:
           type: string
           example: 标准套餐

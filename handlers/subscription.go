@@ -163,15 +163,6 @@ func HandleRedeemCoupon(c *gin.Context) {
 		return
 	}
 
-	// 检查是否过期
-	if activationCode.ExpiresAt != nil && activationCode.ExpiresAt.Before(time.Now()) {
-		c.JSON(http.StatusOK, RedeemCouponResponse{
-			Success: false,
-			Message: "激活码已过期。",
-		})
-		return
-	}
-
 	// 检查订阅计划是否启用
 	if !activationCode.Plan.Active {
 		c.JSON(http.StatusOK, RedeemCouponResponse{
@@ -184,12 +175,12 @@ func HandleRedeemCoupon(c *gin.Context) {
 	// 开始事务
 	tx := database.DB.Begin()
 
-	// 标记激活码为已使用
 	now := time.Now()
-	activationCode.Status = "used"
-	activationCode.UsedByUserID = &userID
-	activationCode.UsedAt = &now
-	if err := tx.Save(&activationCode).Error; err != nil {
+	if err := tx.Model(&activationCode).Updates(map[string]interface{}{
+		"status":          "used",
+		"used_by_user_id": userID,
+		"used_at":         now,
+	}).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
 			Success: false,
@@ -256,6 +247,46 @@ func HandleRedeemCoupon(c *gin.Context) {
 			user.DegradationGuaranteed = activationCode.Plan.DegradationGuaranteed
 			user.DegradationSource = "subscription"
 			tx.Save(&user)
+		}
+	}
+
+	// 创建或更新订阅记录
+	var subscription models.Subscription
+	err = tx.Preload("Plan").Where("user_id = ? AND status = 'active'", userID).First(&subscription).Error
+	if err != nil {
+		// 创建新的订阅记录
+		subscription = models.Subscription{
+			UserID:             userID,
+			SubscriptionPlanID: activationCode.Plan.ID,
+			ExternalID:         fmt.Sprintf("AC-%d-%d", activationCode.ID, time.Now().Unix()),
+			Status:             "active",
+			CurrentPeriodEnd:   time.Now().AddDate(0, 0, activationCode.Plan.ValidityDays),
+			CancelAtPeriodEnd:  false,
+		}
+		if err := tx.Create(&subscription).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
+				Success: false,
+				Message: "创建订阅记录失败。",
+			})
+			return
+		}
+	} else {
+		// 更新现有订阅记录，延长有效期
+		newEndDate := subscription.CurrentPeriodEnd.AddDate(0, 0, activationCode.Plan.ValidityDays)
+		subscription.CurrentPeriodEnd = newEndDate
+		subscription.CancelAtPeriodEnd = false
+		// 如果新计划的等级更高，则更新订阅计划
+		if activationCode.Plan.PointAmount > subscription.Plan.PointAmount {
+			subscription.SubscriptionPlanID = activationCode.Plan.ID
+		}
+		if err := tx.Save(&subscription).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
+				Success: false,
+				Message: "更新订阅记录失败。",
+			})
+			return
 		}
 	}
 

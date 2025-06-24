@@ -175,10 +175,9 @@ func HandleAdminGetActivationCodes(c *gin.Context) {
 // HandleAdminCreateActivationCodes 批量创建激活码
 func HandleAdminCreateActivationCodes(c *gin.Context) {
 	var request struct {
-		Count              int     `json:"count" binding:"required,min=1,max=1000"`
-		SubscriptionPlanID uint    `json:"subscription_plan_id" binding:"required"`
-		ExpiresAt          *string `json:"expires_at"`
-		BatchNumber        string  `json:"batch_number"`
+		Count              int    `json:"count" binding:"required,min=1,max=1000"`
+		SubscriptionPlanID uint   `json:"subscription_plan_id" binding:"required"`
+		BatchNumber        string `json:"batch_number"`
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -205,11 +204,6 @@ func HandleAdminCreateActivationCodes(c *gin.Context) {
 			SubscriptionPlanID: request.SubscriptionPlanID,
 			Status:             "unused",
 			BatchNumber:        request.BatchNumber,
-		}
-
-		if request.ExpiresAt != nil {
-			expiresTime, _ := time.Parse(time.RFC3339, *request.ExpiresAt)
-			code.ExpiresAt = &expiresTime
 		}
 
 		codes[i] = code
@@ -405,4 +399,120 @@ func HandleAdminDeleteSubscriptionPlan(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Subscription plan deleted successfully"})
+}
+
+// HandleAdminGetAnnouncements 获取公告列表
+func HandleAdminGetAnnouncements(c *gin.Context) {
+	pagination := getPagination(c)
+	var announcements []models.Announcement
+	var total int64
+
+	query := database.DB.Model(&models.Announcement{})
+
+	// 可选过滤参数
+	if active := c.Query("active"); active != "" {
+		query = query.Where("active = ?", active == "true")
+	}
+	if language := c.Query("language"); language != "" {
+		query = query.Where("language = ?", language)
+	}
+	if announcementType := c.Query("type"); announcementType != "" {
+		query = query.Where("type = ?", announcementType)
+	}
+
+	query.Count(&total)
+
+	offset := (pagination.Page - 1) * pagination.PageSize
+	query.Offset(offset).Limit(pagination.PageSize).Order("created_at DESC").Find(&announcements)
+
+	c.JSON(http.StatusOK, PaginatedResponse{
+		Data:       announcements,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	})
+}
+
+// HandleAdminCreateAnnouncement 创建公告
+func HandleAdminCreateAnnouncement(c *gin.Context) {
+	var request struct {
+		Type        string `json:"type" binding:"required"`
+		Title       string `json:"title" binding:"required"`
+		Description string `json:"description" binding:"required"`
+		Language    string `json:"language"`
+		Active      *bool  `json:"active"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 创建公告模型
+	announcement := models.Announcement{
+		Type:        request.Type,
+		Title:       request.Title,
+		Description: request.Description,
+		Language:    request.Language,
+	}
+
+	// 设置默认值
+	if request.Language == "" {
+		announcement.Language = "zh"
+	}
+	if request.Active != nil {
+		announcement.Active = *request.Active
+	} else {
+		announcement.Active = true
+	}
+
+	if err := database.DB.Create(&announcement).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, announcement)
+}
+
+// HandleAdminUpdateAnnouncement 更新公告
+func HandleAdminUpdateAnnouncement(c *gin.Context) {
+	announcementID := c.Param("id")
+	var updateData models.Announcement
+
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result := database.DB.Model(&models.Announcement{}).Where("id = ?", announcementID).Updates(updateData)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Announcement not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Announcement updated successfully"})
+}
+
+// HandleAdminDeleteAnnouncement 删除公告
+func HandleAdminDeleteAnnouncement(c *gin.Context) {
+	announcementID := c.Param("id")
+
+	result := database.DB.Delete(&models.Announcement{}, announcementID)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Announcement not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Announcement deleted successfully"})
 }

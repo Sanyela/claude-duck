@@ -40,6 +40,8 @@ const navItems = [
     activeColor: "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
   },
 ]
+
+// 设置项定义 - 暂时不开放给用户使用
 const settingsItem = {
   href: "/settings",
   label: "设置",
@@ -73,7 +75,8 @@ export function MainHeader() {
             </Link>
           </div>
           <nav className="grid gap-2 text-lg font-medium p-4">
-            {[...navItems, settingsItem].map((item) => (
+            {/* 只显示主要导航项，不包含设置 */}
+            {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -89,6 +92,22 @@ export function MainHeader() {
                 {item.label}
               </Link>
             ))}
+            {/* 设置按钮已隐藏 - 暂时不开放给用户使用 */}
+            {/*
+            <Link
+              href="/settings"
+              className={cn(
+                "flex items-center gap-3 rounded-full px-3 py-2 transition-all",
+                pathname === settingsItem.href
+                  ? settingsItem.activeColor
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
+              prefetch={false}
+            >
+              <settingsItem.icon className="h-5 w-5" />
+              {settingsItem.label}
+            </Link>
+            */}
           </nav>
         </SheetContent>
       </Sheet>

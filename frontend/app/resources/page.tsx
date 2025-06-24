@@ -1,13 +1,15 @@
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { BookOpen, FileText, CodeIcon, HelpCircle } from "lucide-react"
+import { Download } from "lucide-react"
 import Link from "next/link"
 
 const resources = [
-  { title: "快速入门指南 🚀", description: "了解如何快速开始使用我们的平台。", icon: FileText, href: "#" },
-  { title: "API 文档 💻", description: "详细的API参考和集成指南。", icon: CodeIcon, href: "#" },
-  { title: "常见问题 (FAQ) 🤔", description: "查找常见问题的答案。", icon: HelpCircle, href: "#" },
-  { title: "教程与案例 📚", description: "学习如何通过实际案例使用我们的功能。", icon: BookOpen, href: "#" },
+  { 
+    title: "安装 Claude Duck 🦆", 
+    description: "安装Claude浏览器插件，获得更便捷的AI助手体验。", 
+    icon: Download, 
+    href: "https://swjqc4r0111.feishu.cn/docx/SqnkdO9CKojJ33xCgc3ceYbLn7e"
+  }
 ]
 
 export default function ResourcesPage() {
@@ -16,7 +18,7 @@ export default function ResourcesPage() {
       <div className="space-y-6">
         <h1 className="text-3xl font-bold mb-6">🎉 欢迎使用资源中心</h1>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-1">
           {resources.map((resource) => (
             <Card
               key={resource.title}
@@ -34,8 +36,10 @@ export default function ResourcesPage() {
                   href={resource.href}
                   className="text-sm font-medium text-sky-500 hover:underline dark:text-sky-400 dark:hover:text-sky-300"
                   prefetch={false}
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  了解更多 &rarr;
+                  立即安装 &rarr;
                 </Link>
               </CardContent>
             </Card>

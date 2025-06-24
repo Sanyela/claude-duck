@@ -23,8 +23,7 @@ export default function AdminCodesPage() {
   const [newCodeData, setNewCodeData] = useState({
     subscription_plan_id: 0,
     count: 1,
-    batch_number: "",
-    expires_at: ""
+    batch_number: ""
   })
 
   const loadCodes = async () => {
@@ -71,8 +70,7 @@ export default function AdminCodesPage() {
       setNewCodeData({
         subscription_plan_id: 0,
         count: 1,
-        batch_number: "",
-        expires_at: ""
+        batch_number: ""
       })
       loadCodes()
     } else {
@@ -198,7 +196,7 @@ export default function AdminCodesPage() {
                     <SelectContent>
                       {Array.isArray(plans) && plans.map((plan) => (
                         <SelectItem key={plan.id} value={plan.id.toString()}>
-                          {plan.title} ({plan.point_amount.toLocaleString()} 积分)
+                          {plan.title} ({plan.point_amount.toLocaleString()} 积分, {plan.validity_days}天)
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -220,14 +218,6 @@ export default function AdminCodesPage() {
                     value={newCodeData.batch_number}
                     onChange={(e) => setNewCodeData({...newCodeData, batch_number: e.target.value})}
                     placeholder="例如: BATCH-2024-001"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>过期时间 (可选)</Label>
-                  <Input
-                    type="datetime-local"
-                    value={newCodeData.expires_at}
-                    onChange={(e) => setNewCodeData({...newCodeData, expires_at: e.target.value})}
                   />
                 </div>
               </div>

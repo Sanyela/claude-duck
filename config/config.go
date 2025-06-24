@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -38,6 +39,24 @@ type Config struct {
 	// 服务降级配置
 	DegradationAPIKey            string
 	DefaultDegradationGuaranteed int
+
+	// Redis配置
+	RedisHost     string
+	RedisPort     string
+	RedisPassword string
+
+	// SMTP邮件配置
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+
+	// 允许注册的邮箱域名
+	AllowedEmailDomains []string
+
+	// 验证码配置
+	VerificationCodeExpireMinutes int
 }
 
 var AppConfig *Config
@@ -52,11 +71,11 @@ func LoadConfig() {
 		DBName:     getEnv("DB_NAME", "claudecode"),
 
 		// OAuth配置
-		ClientID:     getEnv("OAUTH_CLIENT_ID", "c35a52681f1fa87a6a11f69d26990326"),
+		ClientID:     getEnv("OAUTH_CLIENT_ID", "Claude Duck"),
 		ClientSecret: getEnv("OAUTH_CLIENT_SECRET", "2935467f5e0e1d383a51a467c9680091dc29015291245dbb6b440adcaf9e1011"),
 
 		// JWT配置
-		JWTSecret: getEnv("JWT_SECRET_KEY", "claude-code-jwt-secret-key-change-in-production"),
+		JWTSecret: getEnv("JWT_SECRET_KEY", "$xhE6D0%FtYa4se\"Ooy#.LBK*1/9lwfJNuzC3qvkHrdbT7mAMX2j+RQVnUIcZ8i'"),
 
 		// Token过期时间
 		AccessTokenExpireHours:  getEnvAsInt("ACCESS_TOKEN_EXPIRE_HOURS", 24),
@@ -75,6 +94,32 @@ func LoadConfig() {
 		// 服务降级配置
 		DegradationAPIKey:            getEnv("DEGRADATION_API_KEY", "sk-ijk47MsAmnmJ7sgb0I8Dx6OVXswFBm5Y760tvwpNv3Te0ptp"),
 		DefaultDegradationGuaranteed: getEnvAsInt("DEFAULT_DEGRADATION_GUARANTEED", 0),
+
+		// Redis配置
+		RedisHost:     getEnv("REDIS_HOST", "110.42.42.200"),
+		RedisPort:     getEnv("REDIS_PORT", "6379"),
+		RedisPassword: getEnv("REDIS_PASSWORD", "EtK67tbzP6kabzhZ"),
+
+		// SMTP邮件配置
+		SMTPHost:     getEnv("SMTP_HOST", "smtpdm.aliyun.com"),
+		SMTPPort:     getEnv("SMTP_PORT", "25"),
+		SMTPUser:     getEnv("SMTP_USER", "no-reply@mail.claude-duck.com"),
+		SMTPPassword: getEnv("SMTP_PASSWORD", "ASDasd123456"),
+		SMTPFrom:     getEnv("SMTP_FROM", "no-reply@mail.claude-duck.com"),
+
+		// 允许注册的邮箱域名
+		AllowedEmailDomains: getEnvAsSlice("ALLOWED_EMAIL_DOMAINS", []string{
+			"qq.com",
+			"outlook.com",
+			"google.com",
+			"foxmail.com",
+			"163.com",
+			"cloxl.com",
+			"52ai.org",
+		}),
+
+		// 验证码配置
+		VerificationCodeExpireMinutes: getEnvAsInt("VERIFICATION_CODE_EXPIRE_MINUTES", 10),
 	}
 }
 
@@ -108,6 +153,13 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 		if boolValue, err := strconv.ParseBool(value); err == nil {
 			return boolValue
 		}
+	}
+	return defaultValue
+}
+
+func getEnvAsSlice(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		return strings.Split(value, ",")
 	}
 	return defaultValue
 }

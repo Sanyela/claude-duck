@@ -1,74 +1,99 @@
-import request from './request';
+import { request } from "./request";
 
-// 类型定义
-export interface CreditBalance {
-  available: number;
-  total: number;
-}
-
-export interface ModelCost {
-  id: string;
-  modelName: string;
-  status: 'available' | 'unavailable' | 'limited';
-  costFactor?: number;
-  description?: string;
-}
-
-export interface CreditUsageRecord {
+// 积分使用历史接口
+export interface CreditUsageHistory {
   id: string;
   description: string;
-  amount: number; // 消耗的积分，可为负数表示退款/补偿
-  timestamp: string; // ISO Date string
-  relatedModel?: string;
+  amount: number;
+  timestamp: string;
+  relatedModel: string;
+  input_tokens: number;
+  output_tokens: number;
 }
 
-export interface GetCreditBalanceResponse {
-  balance: CreditBalance;
+// 积分余额接口
+export interface CreditBalance {
+  id: number;
+  user_id: number;
+  total_points: number;
+  used_points: number;
+  available_points: number;
+  updated_at: string;
 }
 
-export interface GetModelCostsResponse {
-  costs: ModelCost[];
+// 模型价格接口
+export interface ModelCost {
+  model: string;
+  prompt_multiplier: number;
+  completion_multiplier: number;
+  description: string;
 }
 
-export interface GetCreditUsageHistoryResponse {
-  history: CreditUsageRecord[];
-  totalPages: number;
-  currentPage: number;
+// 积分API
+export const creditsAPI = {
+  // 获取积分余额
+  async getBalance(): Promise<{ success: boolean; data?: CreditBalance; message?: string }> {
+    try {
+      const response = await request.get("/api/credits/balance");
+      
+      // 检查并处理后端返回的数据结构
+      if (response.data && response.data.balance) {
+        // 将后端返回的balance格式转换为前端需要的CreditBalance格式
+        const balance = response.data.balance;
+        const creditBalance: CreditBalance = {
+          id: 0, // 这个字段前端实际没有使用
+          user_id: 0, // 这个字段前端实际没有使用
+          total_points: balance.total || 0,
+          used_points: balance.total - balance.available || 0,
+          available_points: balance.available || 0,
+          updated_at: new Date().toISOString()
+        };
+        return { success: true, data: creditBalance };
 }
 
-// API 函数
-/**
- * 获取用户积分余额
- */
-export function getCreditBalance(): Promise<GetCreditBalanceResponse> {
-  return request({
-    url: '/credits/balance',
-    method: 'get',
-  });
-}
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      console.error("获取积分余额失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "获取积分余额失败" 
+      };
+    }
+  },
 
-/**
- * 获取模型费率
- */
-export function getModelCosts(): Promise<GetModelCostsResponse> {
-  return request({
-    url: '/credits/model-costs',
-    method: 'get',
-  });
+  // 获取积分使用历史
+  async getUsageHistory(params?: { 
+    page?: number; 
+    page_size?: number;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<{ success: boolean; data?: { history: CreditUsageHistory[]; totalPages: number; currentPage: number } | null; message?: string }> {
+    try {
+      const response = await request.get("/api/credits/history", { params });
+      return { 
+        success: true, 
+        data: response.data
+      };
+    } catch (error: any) {
+      console.error("获取积分使用历史失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "获取积分使用历史失败" 
+      };
 }
+  },
 
-/**
- * 获取积分使用历史
- * @param page 页码
- * @param pageSize 每页记录数
- */
-export function getCreditUsageHistory(
-  page: number = 1, 
-  pageSize: number = 10
-): Promise<GetCreditUsageHistoryResponse> {
-  return request({
-    url: '/credits/history',
-    method: 'get',
-    params: { page, pageSize },
-  });
+  // 获取模型价格
+  async getModelCosts(): Promise<{ success: boolean; data?: ModelCost[]; message?: string }> {
+    try {
+      const response = await request.get("/api/credits/model-costs");
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      console.error("获取模型价格失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "获取模型价格失败" 
+      };
 }
+  }
+};
