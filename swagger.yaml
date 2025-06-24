@@ -1,0 +1,1755 @@
+openapi: 3.0.0
+info:
+  title: Claude API 代理服务
+  description: |
+    提供用户管理、订阅管理、积分计费和 API 请求转发等功能的 Claude API 代理服务。
+  version: 1.0.0
+  contact:
+    email: admin@example.com
+
+servers:
+  - url: http://localhost:9998/api
+    description: 本地开发服务器
+
+tags:
+  # 用户接口标签
+  - name: auth
+    description: 用户认证相关接口
+  - name: user-subscription
+    description: 用户订阅管理接口
+  - name: user-credits
+    description: 用户积分管理接口
+  - name: claude-api
+    description: Claude API 代理接口
+  
+  # 管理员接口标签
+  - name: admin-users
+    description: 管理员用户管理接口
+  - name: admin-subscription-plans
+    description: 管理员订阅计划管理接口
+  - name: admin-activation-codes
+    description: 管理员激活码管理接口
+  - name: admin-system
+    description: 管理员系统配置接口
+
+paths:
+  #============================================
+  # 用户接口
+  #============================================
+  
+  #--------------------------------------------
+  # 认证接口
+  #--------------------------------------------
+  /auth/register:
+    post:
+      tags:
+        - auth
+      summary: 用户注册
+      description: 创建新用户并返回 JWT Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - password
+              properties:
+                username:
+                  type: string
+                  example: user123
+                  description: 用户名，长度3-20个字符
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                  description: 有效的邮箱地址
+                password:
+                  type: string
+                  format: password
+                  example: password123
+                  description: 密码，至少6个字符
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 注册成功
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      username:
+                        type: string
+                        example: user123
+                      email:
+                        type: string
+                        example: user@example.com
+        '400':
+          description: 请求格式错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 用户名或邮箱已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /auth/login:
+    post:
+      tags:
+        - auth
+      summary: 用户登录
+      description: 验证用户凭据并返回 JWT Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: password123
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 登录成功
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      username:
+                        type: string
+                        example: user123
+                      email:
+                        type: string
+                        example: user@example.com
+                      is_admin:
+                        type: boolean
+                        example: false
+        '401':
+          description: 邮箱或密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /auth/logout:
+    post:
+      tags:
+        - auth
+      summary: 用户登出
+      description: 使当前 token 失效
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 登出成功
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /auth/user:
+    get:
+      tags:
+        - auth
+      summary: 获取当前用户信息
+      description: 返回当前登录用户的详细信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      username:
+                        type: string
+                        example: user123
+                      email:
+                        type: string
+                        example: user@example.com
+                      is_admin:
+                        type: boolean
+                        example: false
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #--------------------------------------------
+  # SSO认证接口
+  #--------------------------------------------
+  /sso/authorize:
+    post:
+      tags:
+        - auth
+      summary: OAuth授权
+      description: 为第三方应用创建OAuth授权
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - client_id
+                - scope
+              properties:
+                client_id:
+                  type: string
+                  example: c35a52681f1fa87a6a11f69d26990326
+                scope:
+                  type: string
+                  example: api
+                device_code:
+                  type: string
+                  example: DEVICE-123456
+      responses:
+        '200':
+          description: 授权成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  expires_in:
+                    type: integer
+                    example: 86400
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  /sso/verify-token:
+    post:
+      tags:
+        - auth
+      summary: 验证Token
+      description: 验证客户端传入的Token是否有效
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - client_id
+                - client_secret
+                - token
+              properties:
+                client_id:
+                  type: string
+                  example: c35a52681f1fa87a6a11f69d26990326
+                client_secret:
+                  type: string
+                  example: 2935467f5e0e1d383a51a467c9680091dc29015291245dbb6b440adcaf9e1011
+                token:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Token验证结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: true
+                  user_id:
+                    type: integer
+                    example: 1
+                  expires_at:
+                    type: string
+                    format: date-time
+                    example: '2024-07-23T16:12:32Z'
+        '401':
+          description: 无效的客户端凭据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /sso/verify-code:
+    post:
+      tags:
+        - auth
+      summary: 验证设备码
+      description: 验证设备授权码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - client_id
+                - client_secret
+                - device_code
+              properties:
+                client_id:
+                  type: string
+                  example: c35a52681f1fa87a6a11f69d26990326
+                client_secret:
+                  type: string
+                  example: 2935467f5e0e1d383a51a467c9680091dc29015291245dbb6b440adcaf9e1011
+                device_code:
+                  type: string
+                  example: DEVICE-123456
+      responses:
+        '200':
+          description: 设备码验证结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: true
+                  user_id:
+                    type: integer
+                    example: 1
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          description: 无效的客户端凭据或设备码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #--------------------------------------------
+  # 用户订阅接口
+  #--------------------------------------------
+  /subscription/active:
+    get:
+      tags:
+        - user-subscription
+      summary: 获取活跃订阅
+      description: 获取用户当前活跃的订阅信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscription:
+                    $ref: '#/components/schemas/SubscriptionData'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /subscription/history:
+    get:
+      tags:
+        - user-subscription
+      summary: 获取订阅历史
+      description: 获取用户的订阅和支付历史
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  history:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentHistoryData'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /subscription/redeem:
+    post:
+      tags:
+        - user-subscription
+      summary: 兑换激活码
+      description: 兑换订阅激活码，获取积分和订阅
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - couponCode
+              properties:
+                couponCode:
+                  type: string
+                  example: ABCD-EFGH-IJKL-MNOP
+      responses:
+        '200':
+          description: 兑换结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 激活码兑换成功！已充值 10000 积分，有效期 30 天。
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: 无效的激活码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #--------------------------------------------
+  # 用户积分接口
+  #--------------------------------------------
+  /credits/balance:
+    get:
+      tags:
+        - user-credits
+      summary: 获取积分余额
+      description: 获取用户当前的积分余额
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance:
+                    type: object
+                    properties:
+                      available:
+                        type: integer
+                        example: 5000
+                      total:
+                        type: integer
+                        example: 10000
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /credits/model-costs:
+    get:
+      tags:
+        - user-credits
+      summary: 获取模型费率
+      description: 获取不同模型的积分消耗费率
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  costs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: claude-3-opus-20240229
+                        modelName:
+                          type: string
+                          example: Claude 3 Opus
+                        status:
+                          type: string
+                          example: available
+                        costFactor:
+                          type: number
+                          example: 1.0
+                        description:
+                          type: string
+                          example: 最强大的模型，适合复杂任务
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /credits/history:
+    get:
+      tags:
+        - user-credits
+      summary: 获取积分使用历史
+      description: 获取用户的积分使用记录
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: 页码
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: 每页记录数
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "1"
+                        description:
+                          type: string
+                          example: 使用 claude-3-opus 模型，消耗 1000 prompt tokens，500 completion tokens
+                        amount:
+                          type: integer
+                          example: -100
+                        timestamp:
+                          type: string
+                          format: date-time
+                          example: '2024-06-23T16:12:32Z'
+                        relatedModel:
+                          type: string
+                          example: claude-3-opus-20240229
+                  totalPages:
+                    type: integer
+                    example: 5
+                  currentPage:
+                    type: integer
+                    example: 1
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #--------------------------------------------
+  # Claude API 代理接口
+  #--------------------------------------------
+  /claude:
+    post:
+      tags:
+        - claude-api
+      summary: Claude API代理
+      description: 转发请求到Claude API，并处理积分扣费
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 与Claude API兼容的请求体
+      responses:
+        '200':
+          description: Claude API的响应
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Claude API的响应体
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: 积分不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /claude/{path}:
+    parameters:
+      - name: path
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Claude API的子路径
+    any:
+      tags:
+        - claude-api
+      summary: Claude API任意路径代理
+      description: 转发请求到Claude API的任意路径
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 与Claude API兼容的请求体
+      responses:
+        '200':
+          description: Claude API的响应
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Claude API的响应体
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: 积分不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #--------------------------------------------
+  # 公告接口
+  #--------------------------------------------
+  /announcements:
+    get:
+      tags:
+        - user-subscription
+      summary: 获取公告
+      description: 获取系统公告信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: language
+          in: query
+          schema:
+            type: string
+            default: zh
+          description: 语言代码
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  announcements:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        type:
+                          type: string
+                          example: info
+                        title:
+                          type: string
+                          example: 系统升级通知
+                        description:
+                          type: string
+                          example: 系统将于明天进行升级维护
+                        language:
+                          type: string
+                          example: zh
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #============================================
+  # 管理员接口
+  #============================================
+  
+  #--------------------------------------------
+  # 用户管理接口
+  #--------------------------------------------
+  /admin/users:
+    get:
+      tags:
+        - admin-users
+      summary: 获取用户列表
+      description: 管理员获取所有用户的列表
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: 页码
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: 每页记录数
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  total:
+                    type: integer
+                    example: 100
+                  page:
+                    type: integer
+                    example: 1
+                  page_size:
+                    type: integer
+                    example: 10
+                  total_pages:
+                    type: integer
+                    example: 10
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /admin/users/{id}:
+    put:
+      tags:
+        - admin-users
+      summary: 更新用户
+      description: 管理员更新用户信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 用户ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_admin:
+                  type: boolean
+                  example: false
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User updated successfully
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - admin-users
+      summary: 删除用户
+      description: 管理员删除用户
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 用户ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User deleted successfully
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #--------------------------------------------
+  # 订阅计划管理接口
+  #--------------------------------------------
+  /admin/subscription-plans:
+    get:
+      tags:
+        - admin-subscription-plans
+      summary: 获取订阅计划列表
+      description: 管理员获取所有订阅计划
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: 页码
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: 每页记录数
+        - name: active
+          in: query
+          schema:
+            type: string
+            enum: [true, false]
+          description: 是否筛选活跃的计划
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SubscriptionPlan'
+                  total:
+                    type: integer
+                    example: 100
+                  page:
+                    type: integer
+                    example: 1
+                  page_size:
+                    type: integer
+                    example: 10
+                  total_pages:
+                    type: integer
+                    example: 10
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - admin-subscription-plans
+      summary: 创建订阅计划
+      description: 管理员创建新的订阅计划
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionPlanCreate'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionPlan'
+        '400':
+          description: 请求格式错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /admin/subscription-plans/{id}:
+    put:
+      tags:
+        - admin-subscription-plans
+      summary: 更新订阅计划
+      description: 管理员更新订阅计划
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 订阅计划ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionPlanUpdate'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Subscription plan updated successfully
+        '400':
+          description: 请求格式错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 订阅计划不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - admin-subscription-plans
+      summary: 删除订阅计划
+      description: 管理员删除订阅计划
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 订阅计划ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Subscription plan deleted successfully
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 订阅计划不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #--------------------------------------------
+  # 激活码管理接口
+  #--------------------------------------------
+  /admin/activation-codes:
+    get:
+      tags:
+        - admin-activation-codes
+      summary: 获取激活码列表
+      description: 管理员获取所有激活码
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: 页码
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: 每页记录数
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [unused, used, expired]
+          description: 激活码状态
+        - name: batch_number
+          in: query
+          schema:
+            type: string
+          description: 批次号
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ActivationCode'
+                  total:
+                    type: integer
+                    example: 100
+                  page:
+                    type: integer
+                    example: 1
+                  page_size:
+                    type: integer
+                    example: 10
+                  total_pages:
+                    type: integer
+                    example: 10
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - admin-activation-codes
+      summary: 创建激活码
+      description: 管理员批量创建激活码
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - count
+                - subscription_plan_id
+              properties:
+                count:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                  example: 10
+                  description: 要生成的激活码数量
+                subscription_plan_id:
+                  type: integer
+                  example: 1
+                  description: 关联的订阅计划ID
+                expires_at:
+                  type: string
+                  format: date-time
+                  example: '2024-12-31T23:59:59Z'
+                  description: 激活码过期时间
+                batch_number:
+                  type: string
+                  example: BATCH-001
+                  description: 批次号
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Activation codes created successfully
+                  count:
+                    type: integer
+                    example: 10
+                  batch_number:
+                    type: string
+                    example: BATCH-001
+                  plan_id:
+                    type: string
+                    example: PLAN-001
+                  plan_title:
+                    type: string
+                    example: 标准套餐
+        '400':
+          description: 请求格式错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /admin/activation-codes/{id}:
+    delete:
+      tags:
+        - admin-activation-codes
+      summary: 删除激活码
+      description: 管理员删除激活码
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 激活码ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Activation code deleted successfully
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 激活码不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  #--------------------------------------------
+  # 系统配置接口
+  #--------------------------------------------
+  /admin/system-configs:
+    get:
+      tags:
+        - admin-system
+      summary: 获取系统配置
+      description: 管理员获取所有系统配置
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SystemConfig'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /admin/system-config:
+    put:
+      tags:
+        - admin-system
+      summary: 更新系统配置
+      description: 管理员更新系统配置
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - config_key
+                - config_value
+              properties:
+                config_key:
+                  type: string
+                  example: prompt_multiplier
+                config_value:
+                  type: string
+                  example: "5"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: System config updated successfully
+        '400':
+          description: 请求格式错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 配置不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Unauthorized access
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: 错误消息
+          
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          example: user@example.com
+        username:
+          type: string
+          example: user123
+        is_admin:
+          type: boolean
+          example: false
+        degradation_guaranteed:
+          type: integer
+          example: 3
+        degradation_source:
+          type: string
+          example: subscription
+        degradation_locked:
+          type: boolean
+          example: false
+        degradation_counter:
+          type: integer
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          
+    SubscriptionPlan:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        plan_id:
+          type: string
+          example: PLAN-001
+        title:
+          type: string
+          example: 标准套餐
+        description:
+          type: string
+          example: 包含10000积分的标准套餐
+        point_amount:
+          type: integer
+          example: 10000
+        price:
+          type: number
+          format: float
+          example: 9.99
+        currency:
+          type: string
+          example: USD
+        validity_days:
+          type: integer
+          example: 30
+        degradation_guaranteed:
+          type: integer
+          example: 3
+        features:
+          type: string
+          example: '["特性1", "特性2"]'
+        active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          
+    SubscriptionPlanCreate:
+      type: object
+      required:
+        - title
+        - point_amount
+        - price
+        - validity_days
+      properties:
+        plan_id:
+          type: string
+          example: PLAN-001
+        title:
+          type: string
+          example: 标准套餐
+        description:
+          type: string
+          example: 包含10000积分的标准套餐
+        point_amount:
+          type: integer
+          example: 10000
+        price:
+          type: number
+          format: float
+          example: 9.99
+        currency:
+          type: string
+          example: USD
+        validity_days:
+          type: integer
+          example: 30
+        degradation_guaranteed:
+          type: integer
+          example: 3
+        features:
+          type: string
+          example: '["特性1", "特性2"]'
+        active:
+          type: boolean
+          example: true
+          
+    SubscriptionPlanUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          example: 标准套餐
+        description:
+          type: string
+          example: 包含10000积分的标准套餐
+        point_amount:
+          type: integer
+          example: 10000
+        price:
+          type: number
+          format: float
+          example: 9.99
+        currency:
+          type: string
+          example: USD
+        validity_days:
+          type: integer
+          example: 30
+        degradation_guaranteed:
+          type: integer
+          example: 3
+        features:
+          type: string
+          example: '["特性1", "特性2"]'
+        active:
+          type: boolean
+          example: true
+          
+    ActivationCode:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        code:
+          type: string
+          example: ABCD-EFGH-IJKL-MNOP
+        subscription_plan_id:
+          type: integer
+          example: 1
+        plan:
+          $ref: '#/components/schemas/SubscriptionPlan'
+        status:
+          type: string
+          enum: [unused, used, expired]
+          example: unused
+        used_by_user_id:
+          type: integer
+          nullable: true
+          example: null
+        used_by:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+              example: 2
+            username:
+              type: string
+              example: user123
+            email:
+              type: string
+              example: user@example.com
+        used_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        batch_number:
+          type: string
+          example: BATCH-001
+        created_at:
+          type: string
+          format: date-time
+          
+    SubscriptionData:
+      type: object
+      properties:
+        id:
+          type: string
+          example: SUB-1-1234567890
+        plan:
+          type: object
+          properties:
+            id:
+              type: string
+              example: PLAN-001
+            name:
+              type: string
+              example: 标准套餐
+            pricePerMonth:
+              type: number
+              format: float
+              example: 9.99
+            currency:
+              type: string
+              example: USD
+            features:
+              type: array
+              items:
+                type: string
+              example: ["特性1", "特性2"]
+        status:
+          type: string
+          example: active
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          example: '2024-07-23T16:12:32Z'
+        cancelAtPeriodEnd:
+          type: boolean
+          example: false
+          
+    PaymentHistoryData:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "1"
+        planName:
+          type: string
+          example: 标准套餐
+        amount:
+          type: number
+          format: float
+          example: 9.99
+        currency:
+          type: string
+          example: USD
+        date:
+          type: string
+          format: date-time
+          example: '2024-06-23T16:12:32Z'
+        status:
+          type: string
+          example: paid
+        invoiceURL:
+          type: string
+          example: https://example.com/invoice/123
+          
+    SystemConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        config_key:
+          type: string
+          example: prompt_multiplier
+        config_value:
+          type: string
+          example: "5"
+        description:
+          type: string
+          example: 提示token倍率
+        updated_at:
+          type: string
+          format: date-time
