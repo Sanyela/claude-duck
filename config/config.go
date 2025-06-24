@@ -45,7 +45,7 @@ var AppConfig *Config
 func LoadConfig() {
 	AppConfig = &Config{
 		// 数据库配置
-		DBHost:     getEnv("DB_HOST", "111.180.197.234"),
+		DBHost:     getEnv("DB_HOST", "110.42.42.200"),
 		DBPort:     getEnv("DB_PORT", "3306"),
 		DBUser:     getEnv("DB_USER", "claudecode"),
 		DBPassword: getEnv("DB_PASSWORD", "dhEEjzESJLnndSDh"),

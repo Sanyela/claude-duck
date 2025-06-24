@@ -1,24 +1,26 @@
 import request from './request';
 
+// 类型定义
 export interface Announcement {
   id: number;
   type: 'info' | 'warning' | 'error' | 'success';
   title: string;
-  description: string; // 支持HTML
+  description: string;
   language: string;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface AnnouncementsResponse {
+export interface GetAnnouncementsResponse {
   announcements: Announcement[];
 }
 
-// 获取公告列表
-export function getAnnouncements(): Promise<AnnouncementsResponse> {
+/**
+ * 获取系统公告
+ * @param language 语言代码
+ */
+export function getAnnouncements(language: string = 'zh'): Promise<GetAnnouncementsResponse> {
   return request({
     url: '/announcements',
     method: 'get',
+    params: { language },
   });
 }

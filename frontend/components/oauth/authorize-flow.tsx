@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { ShieldCheck, Copy, AlertTriangle, ExternalLink } from "lucide-react"
-// import { authorizeOAuth } from "@/app/actions/auth-actions"; // Placeholder
+import { useAuth } from "@/contexts/AuthContext"
+import { authorize } from "@/api/auth"
 
 export function AuthorizeFlow() {
   const searchParams = useSearchParams()
+  const { user, isAuthenticated } = useAuth()
   const [clientId, setClientId] = useState("")
   const [redirectUri, setRedirectUri] = useState("")
   const [state, setState] = useState("")
@@ -28,6 +30,29 @@ export function AuthorizeFlow() {
     setDeviceFlow(searchParams.get("device_flow") === "true")
   }, [searchParams])
 
+  // 如果用户未登录，显示登录提示
+  if (!isAuthenticated) {
+    return (
+      <Card className="w-full max-w-md shadow-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+        <CardHeader className="text-center">
+          <AlertTriangle className="mx-auto h-10 w-10 text-yellow-500" />
+          <CardTitle className="text-2xl text-slate-900 dark:text-slate-100">需要登录</CardTitle>
+          <CardDescription className="text-slate-600 dark:text-slate-400">
+            请先登录您的账户以完成OAuth授权。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            onClick={() => window.location.href = '/login'}
+            className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+          >
+            前往登录
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const handleAuthorize = async () => {
     setIsLoading(true)
     setError("")
@@ -35,60 +60,61 @@ export function AuthorizeFlow() {
     setToken("")
     setShowToken(false)
 
-    // const response = await authorizeOAuth({ // Placeholder for server action
-    //   client_id: clientId,
-    //   redirect_uri: redirectUri,
-    //   state: state,
-    //   device_flow: deviceFlow,
-    // });
+    try {
+      const response = await authorize({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: "read",
+        state: state,
+        device_flow: deviceFlow
+      })
 
-    // Mocked server action response
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    const response = deviceFlow
-      ? { success: true, code: "XYZ123ABC", message: "授权码已生成" }
-      : { success: true, token: "mock_token_string_for_redirect", state: state, message: "授权成功，正在重定向..." }
-
-    setIsLoading(false)
-
-    if (response.success) {
-      if (deviceFlow) {
-        setAuthCode(response.code!)
-      } else {
-        setToken(response.token!)
-        // Attempt redirect
-        if (redirectUri) {
-          try {
-            const callbackUrl = new URL(redirectUri)
-            callbackUrl.searchParams.set("token", response.token!)
-            if (response.state) {
-              callbackUrl.searchParams.set("state", response.state)
-            }
-
-            // Try postMessage if opener exists (e.g. popup)
-            if (window.opener) {
-              window.opener.postMessage(
-                { type: "oauth_callback", success: true, data: { token: response.token, state: response.state } },
-                new URL(redirectUri).origin, // Be specific with targetOrigin in production
-              )
-              // Optionally close popup after postMessage
-              // window.close();
-              // return; // Stop further execution if postMessage is primary method
-            }
-
-            // Standard redirect
-            window.location.href = callbackUrl.toString()
-          } catch (e) {
-            console.error("重定向失败:", e)
-            setError("重定向失败。请手动复制 Token。")
-            setShowToken(true) // Show token if redirect fails
-          }
+      if (response.success) {
+        if (deviceFlow) {
+          setAuthCode(response.code!)
         } else {
-          setError("缺少 redirect_uri，无法自动重定向。")
-          setShowToken(true) // Show token if no redirect_uri
+          setToken(response.token!)
+          // Attempt redirect
+          if (redirectUri) {
+            try {
+              const callbackUrl = new URL(redirectUri)
+              callbackUrl.searchParams.set("token", response.token!)
+              if (state) {
+                callbackUrl.searchParams.set("state", state)
+              }
+
+              // Try postMessage if opener exists (e.g. popup)
+              if (window.opener) {
+                window.opener.postMessage(
+                  { type: "oauth_callback", success: true, data: { token: response.token, state: state } },
+                  new URL(redirectUri).origin,
+                )
+                // Optionally close popup after postMessage
+                // window.close();
+                // return;
+              }
+
+              // Standard redirect
+              window.location.href = callbackUrl.toString()
+            } catch (e) {
+              console.error("重定向失败:", e)
+              setError("重定向失败。请手动复制 Token。")
+              setShowToken(true)
+            }
+          } else {
+            setError("缺少 redirect_uri，无法自动重定向。")
+            setShowToken(true)
+          }
         }
+      } else {
+        setError(response.message || "授权失败，请重试。")
       }
-    } else {
-      setError(response.message || "授权失败，请重试。")
+    } catch (error) {
+      console.error("授权请求失败:", error)
+      setError("授权请求失败，请重试。")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -216,13 +242,20 @@ export function AuthorizeFlow() {
         <p className="text-sm text-slate-700 dark:text-slate-300">此应用将能够：</p>
         <ul className="list-disc list-inside space-y-1 text-sm text-slate-600 dark:text-slate-400">
           <li>读取您的基本用户信息</li>
-          <li>代表您执行操作（示例权限）</li>
+          <li>代表您执行操作</li>
         </ul>
         {deviceFlow && (
           <div className="rounded-md border border-yellow-500 bg-yellow-50 p-3 dark:bg-yellow-900/30 dark:border-yellow-700">
             <p className="text-sm text-yellow-700 dark:text-yellow-300">
               <AlertTriangle className="inline h-4 w-4 mr-1" />
               您正在使用设备流程。授权后，您将获得一个授权码，需要手动输入到您的设备或应用中。
+            </p>
+          </div>
+        )}
+        {user && (
+          <div className="rounded-md border border-blue-500 bg-blue-50 p-3 dark:bg-blue-900/30 dark:border-blue-700">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              当前登录用户：<strong>{user.username ? user.username : (user.email || '未知用户')}</strong>
             </p>
           </div>
         )}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 
 	"claude/config"
@@ -166,6 +167,8 @@ func HandleLogin(c *gin.Context) {
 		})
 		return
 	}
+
+	log.Printf("登录成功: user_id=%d", user.ID)
 
 	c.JSON(http.StatusOK, AuthResponse{
 		Success: true,

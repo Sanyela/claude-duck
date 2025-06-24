@@ -1,5 +1,6 @@
 import request from './request';
 
+// 类型定义
 export interface SubscriptionPlan {
   id: string;
   name: string;
@@ -45,6 +46,9 @@ export interface RedeemCouponResponse {
 }
 
 // API 函数
+/**
+ * 获取活跃订阅
+ */
 export function getActiveSubscription(): Promise<GetActiveSubscriptionResponse> {
   return request({
     url: '/subscription/active',
@@ -52,6 +56,9 @@ export function getActiveSubscription(): Promise<GetActiveSubscriptionResponse> 
   });
 }
 
+/**
+ * 获取订阅历史
+ */
 export function getSubscriptionHistory(): Promise<GetSubscriptionHistoryResponse> {
   return request({
     url: '/subscription/history',
@@ -59,6 +66,9 @@ export function getSubscriptionHistory(): Promise<GetSubscriptionHistoryResponse
   });
 }
 
+/**
+ * 兑换激活码
+ */
 export function redeemCoupon(data: RedeemCouponRequest): Promise<RedeemCouponResponse> {
   return request({
     url: '/subscription/redeem',

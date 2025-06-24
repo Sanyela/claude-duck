@@ -3,7 +3,6 @@ package routes
 import (
 	"claude/handlers"
 	"claude/middleware"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,13 +15,6 @@ func SetupRoutes(r *gin.Engine) {
 			"status":  "ok",
 			"service": "claude-code-api",
 		})
-	})
-
-	// OAuth授权页面重定向（兼容旧的URL）
-	r.GET("/api/sso/authorize", func(c *gin.Context) {
-		// 将请求重定向到正确的前端OAuth页面
-		redirectURL := "/oauth/authorize?" + c.Request.URL.RawQuery
-		c.Redirect(http.StatusMovedPermanently, redirectURL)
 	})
 
 	// 认证相关路由（无需token验证）
@@ -75,7 +67,6 @@ func SetupRoutes(r *gin.Engine) {
 		admin.PUT("/users/:id", handlers.HandleAdminUpdateUser)
 		admin.DELETE("/users/:id", handlers.HandleAdminDeleteUser)
 
-
 		// 系统配置管理
 		admin.GET("/system-configs", handlers.HandleAdminGetSystemConfigs)
 		admin.PUT("/system-config", handlers.HandleAdminUpdateSystemConfig)
@@ -90,9 +81,6 @@ func SetupRoutes(r *gin.Engine) {
 		admin.GET("/activation-codes", handlers.HandleAdminGetActivationCodes)
 		admin.POST("/activation-codes", handlers.HandleAdminCreateActivationCodes)
 		admin.DELETE("/activation-codes/:id", handlers.HandleAdminDeleteActivationCode)
-
-		// 测试工具（仅管理员可用）
-		admin.POST("/test/consume-points", handlers.HandleAdminTestConsumePoints)
 	}
 
 	// 静态文件服务 - 提供前端构建的静态资源

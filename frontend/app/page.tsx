@@ -1,3 +1,5 @@
+"use client";
+
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -7,12 +9,15 @@ import Link from "next/link"
 import { Greeting } from "@/components/dashboard/greeting"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  
   const currentUser = {
-    name: "尊贵的用户",
-    email: "user@example.com",
-    avatarUrl: "/placeholder.svg?height=64&width=64",
+    name: user?.username || "尊贵的用户",
+    email: user?.email || "user@example.com",
+    avatarUrl: user?.avatar || "/placeholder.svg?height=64&width=64",
   }
   const subscriptionStatus = "active" // 'active', 'expiring_soon', 'expired'
   
@@ -38,7 +43,7 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <Greeting userName="Cloxl" />
+        <Greeting userName={user?.username || "尊贵的用户"} />
 
         {subscriptionStatus === "expiring_soon" && (
           <Alert

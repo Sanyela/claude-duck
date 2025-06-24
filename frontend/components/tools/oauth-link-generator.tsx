@@ -10,8 +10,8 @@ import { LinkIcon, Copy, Check } from "lucide-react"
 import Link from "next/link"
 
 export function OAuthLinkGenerator() {
-  const [clientId, setClientId] = useState("my-awesome-app")
-  const [redirectUri, setRedirectUri] = useState("https://oauth.pstmn.io/v1/callback")
+  const [clientId, setClientId] = useState("c35a52681f1fa87a6a11f69d26990326")
+  const [redirectUri, setRedirectUri] = useState("http://localhost:3000/oauth/callback")
   const [state, setState] = useState("random_state_string")
   const [deviceFlow, setDeviceFlow] = useState(false)
   const [generatedUrl, setGeneratedUrl] = useState("")
@@ -38,6 +38,39 @@ export function OAuthLinkGenerator() {
     })
   }
 
+  const presets = [
+    {
+      name: "ClaudeCode CLI (设备流程)",
+      clientId: "c35a52681f1fa87a6a11f69d26990326",
+      redirectUri: "http://localhost:8080/oauth/callback",
+      state: "cli_auth_state",
+      deviceFlow: true
+    },
+    {
+      name: "Web应用回调",
+      clientId: "c35a52681f1fa87a6a11f69d26990326", 
+      redirectUri: "http://localhost:3000/oauth/callback",
+      state: "web_auth_state",
+      deviceFlow: false
+    },
+    {
+      name: "Postman测试",
+      clientId: "c35a52681f1fa87a6a11f69d26990326",
+      redirectUri: "https://oauth.pstmn.io/v1/callback",
+      state: "postman_test_state",
+      deviceFlow: false
+    }
+  ]
+
+  const applyPreset = (preset: typeof presets[0]) => {
+    setClientId(preset.clientId)
+    setRedirectUri(preset.redirectUri)
+    setState(preset.state)
+    setDeviceFlow(preset.deviceFlow)
+    setGeneratedUrl("")
+    setIsCopied(false)
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
@@ -49,6 +82,23 @@ export function OAuthLinkGenerator() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
+            <Label className="text-slate-700 dark:text-slate-300">快速预设</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {presets.map((preset, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => applyPreset(preset)}
+                  className="text-xs"
+                >
+                  {preset.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="client_id" className="text-slate-700 dark:text-slate-300">
               Client ID
             </Label>
@@ -56,7 +106,7 @@ export function OAuthLinkGenerator() {
               id="client_id"
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              placeholder="例如：my-awesome-app"
+              placeholder="例如：c35a52681f1fa87a6a11f69d26990326"
               className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600"
             />
           </div>
@@ -68,7 +118,7 @@ export function OAuthLinkGenerator() {
               id="redirect_uri"
               value={redirectUri}
               onChange={(e) => setRedirectUri(e.target.value)}
-              placeholder="例如：https://myapp.com/callback"
+              placeholder="例如：http://localhost:3000/oauth/callback"
               className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600"
             />
           </div>
@@ -95,6 +145,16 @@ export function OAuthLinkGenerator() {
               启用设备流程 (Device Flow)
             </Label>
           </div>
+          
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-md border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>说明：</strong>
+              {deviceFlow 
+                ? " 设备流程模式将生成一个授权码，适用于CLI应用或无法直接处理回调的应用。" 
+                : " 标准流程模式将直接重定向到指定的回调URI，适用于Web应用。"
+              }
+            </p>
+          </div>
         </CardContent>
         <CardFooter className="flex-col items-start gap-4 border-t border-slate-200 dark:border-slate-700 pt-4">
           <Button onClick={handleGenerateLink} className="w-full sm:w-auto bg-sky-500 hover:bg-sky-600 text-white">
@@ -113,6 +173,9 @@ export function OAuthLinkGenerator() {
                   {isCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                   <span className="sr-only">复制</span>
                 </Button>
+              </div>
+              <div className="text-sm text-slate-600 dark:text-slate-400 break-all">
+                完整URL: {window.location.origin}{generatedUrl}
               </div>
               <Button
                 variant="default"
