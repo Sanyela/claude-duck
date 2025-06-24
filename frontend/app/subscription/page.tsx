@@ -25,7 +25,7 @@ export default function SubscriptionPage() {
   const isSubscriptionActive = currentSubscription.status === "active"
 
   return (
-    <DashboardLayout currentPageTitle="订阅管理">
+    <DashboardLayout>
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <Card className="shadow-lg bg-card text-card-foreground border-border">
@@ -60,20 +60,7 @@ export default function SubscriptionPage() {
                 </ul>
               </div>
             </CardContent>
-            <CardFooter className="border-t border-border pt-4">
-              {isSubscriptionActive ? (
-                <Button
-                  variant="destructive"
-                  className="bg-red-500 hover:bg-red-600 text-white dark:text-destructive-foreground"
-                >
-                  <XCircle className="mr-2 h-4 w-4" /> 取消订阅
-                </Button>
-              ) : (
-                <Button className="bg-green-500 hover:bg-green-600 text-white dark:text-primary-foreground">
-                  <RotateCcw className="mr-2 h-4 w-4" /> 重新激活订阅
-                </Button>
-              )}
-            </CardFooter>
+            {/* 删除了取消订阅按钮 */}
           </Card>
 
           <Card className="shadow-lg bg-card text-card-foreground border-border">

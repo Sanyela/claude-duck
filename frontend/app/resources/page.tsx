@@ -12,14 +12,9 @@ const resources = [
 
 export default function ResourcesPage() {
   return (
-    <DashboardLayout currentPageTitle="资源中心">
+    <DashboardLayout>
       <div className="space-y-6">
-        <Card className="shadow-lg bg-card text-card-foreground border-border">
-          <CardHeader>
-            <CardTitle className="text-2xl">欢迎来到资源中心</CardTitle>
-            <CardDescription>在这里您可以找到帮助您更好使用我们服务的各类文档和指南。</CardDescription>
-          </CardHeader>
-        </Card>
+        <h1 className="text-3xl font-bold mb-6">🎉 欢迎使用资源中心</h1>
 
         <div className="grid gap-6 md:grid-cols-2">
           {resources.map((resource) => (

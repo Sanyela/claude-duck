@@ -70,11 +70,10 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden md:flex md:flex-col md:w-64 bg-background">
+    <aside className="hidden md:flex md:flex-col md:w-56 bg-background">
       <div className="flex h-16 items-center justify-center px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-lg text-foreground" prefetch={false}>
-          <Briefcase className="h-6 w-6 text-sky-500" />
-          <span>Claude Duck</span>
+        <Link href="/" className="font-semibold text-lg text-foreground" prefetch={false}>
+          Claude Duck
         </Link>
       </div>
       <nav className="flex-1 overflow-y-auto py-4 space-y-1">
@@ -83,7 +82,7 @@ export function Sidebar() {
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-4 py-2.5 mx-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-full px-4 py-2 mx-2 text-sm font-medium transition-colors",
               pathname === item.href ? item.activeColor : inactiveItemClasses,
             )}
             prefetch={false}
@@ -98,7 +97,7 @@ export function Sidebar() {
           variant="ghost"
           onClick={toggleTheme}
           className={cn(
-            "w-full flex items-center justify-start gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+            "w-full flex items-center justify-start gap-3 rounded-full px-4 py-2 text-sm font-medium transition-colors",
             inactiveItemClasses,
           )}
         >
@@ -112,7 +111,7 @@ export function Sidebar() {
         <Link
           href="/settings"
           className={cn(
-            "flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+            "flex items-center gap-3 rounded-full px-4 py-2 text-sm font-medium transition-colors",
             pathname === settingsItem.href ? settingsItem.activeColor : inactiveItemClasses,
           )}
           prefetch={false}

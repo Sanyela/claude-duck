@@ -12,7 +12,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <DashboardLayout currentPageTitle="设置">
+    <DashboardLayout>
       <div className="space-y-8 max-w-3xl mx-auto">
         <Card className="shadow-lg bg-card text-card-foreground border-border">
           <CardHeader>

@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 
 export default function TestToolPage() {
   return (
-    <DashboardLayout currentPageTitle="OAuth 测试工具">
+    <DashboardLayout>
       <Card className="shadow-lg bg-card text-card-foreground border-border">
         <OAuthLinkGenerator />
       </Card>

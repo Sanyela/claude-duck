@@ -57,10 +57,10 @@ const settingsItem = {
   activeColor: "bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-slate-200",
 }
 
-export function MainHeader({ pageTitle }: { pageTitle: string }) {
+export function MainHeader() {
   const pathname = usePathname()
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 bg-background/80 backdrop-blur-sm px-4 md:px-6">
+    <header className="sticky top-0 z-30 flex h-12 items-center gap-4 bg-background/80 backdrop-blur-sm px-4 md:px-6">
       <Sheet>
         <SheetTrigger asChild>
           <Button
@@ -76,11 +76,10 @@ export function MainHeader({ pageTitle }: { pageTitle: string }) {
           <div className="flex h-16 items-center justify-center px-4">
             <Link
               href="/"
-              className="flex items-center gap-2 font-semibold text-lg text-card-foreground"
+              className="font-semibold text-lg text-card-foreground"
               prefetch={false}
             >
-              <Briefcase className="h-6 w-6 text-sky-500" />
-              <span>Claude Duck</span>
+              Claude Duck
             </Link>
           </div>
           <nav className="grid gap-2 text-lg font-medium p-4">
@@ -89,7 +88,7 @@ export function MainHeader({ pageTitle }: { pageTitle: string }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 transition-all",
+                  "flex items-center gap-3 rounded-full px-3 py-2 transition-all",
                   pathname === item.href
                     ? item.activeColor
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -104,21 +103,7 @@ export function MainHeader({ pageTitle }: { pageTitle: string }) {
         </SheetContent>
       </Sheet>
 
-      <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
-        <h1 className="text-xl font-semibold text-foreground hidden md:block">{pageTitle}</h1>
-        <form className="ml-auto flex-1 sm:flex-initial hidden">
-          {" "}
-          {/* Hidden for now, can be enabled */}
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="搜索..."
-              className="pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px] bg-card border-border text-foreground placeholder:text-muted-foreground"
-            />
-          </div>
-        </form>
-      </div>
+      {/* 已删除标题栏 */}
     </header>
   )
 }

@@ -1,10 +1,12 @@
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { BellRing, AlertTriangle, ArrowRight, CreditCard, DollarSign, BookOpen } from "lucide-react"
+import { BellRing, AlertTriangle, ArrowRight, CreditCard, DollarSign, BookOpen, Calendar, ChevronRight, Zap } from "lucide-react"
 import Link from "next/link"
 import { Greeting } from "@/components/dashboard/greeting"
+import { Progress } from "@/components/ui/progress"
+import { Badge } from "@/components/ui/badge"
 
 export default function DashboardPage() {
   const currentUser = {
@@ -13,13 +15,28 @@ export default function DashboardPage() {
     avatarUrl: "/placeholder.svg?height=64&width=64",
   }
   const subscriptionStatus = "active" // 'active', 'expiring_soon', 'expired'
+  
+  // 积分数据
+  const creditBalance = 1250
+  const monthlyAllowance = 5000
+  const creditUsagePercentage = Math.min((creditBalance / monthlyAllowance) * 100, 100)
+  
+  // 订阅数据
+  const currentSubscription = {
+    planName: "专业版 🌟",
+    price: "¥99/月",
+    status: "active",
+    nextBillingDate: "2025-07-15",
+    features: ["无限项目", "优先支持", "高级分析", "API访问"],
+  }
+  
   const announcements = [
     { id: 1, title: "系统维护通知", message: "我们的系统将于下周二凌晨2点至4点进行维护。", date: "2025-06-20" },
     { id: 2, title: "新功能上线！", message: "积分兑换商品功能已上线，快去看看吧！", date: "2025-06-18" },
   ]
 
   return (
-    <DashboardLayout currentPageTitle="仪表板">
+    <DashboardLayout>
       <div className="space-y-6">
         <Greeting userName="Cloxl" />
 
@@ -59,6 +76,87 @@ export default function DashboardPage() {
           </Alert>
         )}
 
+        {/* 用户积分和订阅状态卡片 */}
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* 积分卡片 */}
+          <Card className="shadow-lg bg-card text-card-foreground border-border">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle>当前积分</CardTitle>
+                <DollarSign className="h-5 w-5 text-green-500 dark:text-green-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-3xl font-bold">{creditBalance.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">总额度: {monthlyAllowance.toLocaleString()} 积分</p>
+                </div>
+                <Link 
+                  href="/credits"
+                  className="text-sm text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 flex items-center"
+                >
+                  详情 <ChevronRight className="h-4 w-4 ml-1" />
+                </Link>
+              </div>
+              <Progress value={creditUsagePercentage} className="mt-3 h-2 [&>*]:bg-sky-500" />
+              <p className="text-xs text-muted-foreground mt-1 text-right">
+                使用率: {creditUsagePercentage.toFixed(1)}%
+              </p>
+            </CardContent>
+            <CardFooter className="pt-0">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="w-full text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 dark:text-green-400 dark:border-green-800/30 dark:hover:bg-green-900/30"
+                asChild
+              >
+                <Link href="/credits">
+                  <Zap className="mr-2 h-4 w-4" /> 充值积分
+                </Link>
+              </Button>
+            </CardFooter>
+          </Card>
+          
+          {/* 订阅卡片 */}
+          <Card className="shadow-lg bg-card text-card-foreground border-border">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle>订阅状态</CardTitle>
+                <CreditCard className="h-5 w-5 text-sky-500 dark:text-sky-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="pb-2">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-xl font-bold text-sky-500 dark:text-sky-400">{currentSubscription.planName}</p>
+                  <p className="text-sm font-medium">{currentSubscription.price}</p>
+                </div>
+                <Badge 
+                  className="bg-green-500 text-white dark:bg-green-600 dark:text-green-50"
+                >
+                  有效
+                </Badge>
+              </div>
+              <p className="text-xs flex items-center text-muted-foreground">
+                <Calendar className="h-3 w-3 mr-1 inline" /> 下次账单日期: {currentSubscription.nextBillingDate}
+              </p>
+            </CardContent>
+            <CardFooter className="pt-0">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="w-full text-sky-600 border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:text-sky-400 dark:border-sky-800/30 dark:hover:bg-sky-900/30"
+                asChild
+              >
+                <Link href="/subscription">
+                  <CreditCard className="mr-2 h-4 w-4" /> 管理订阅
+                </Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+        
         <Card className="shadow-lg bg-card text-card-foreground border-border">
           <CardHeader>
             <CardTitle className="text-2xl">系统公告 📢</CardTitle>
