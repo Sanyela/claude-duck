@@ -203,6 +203,14 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 		return
 	}
 
+	// 特殊处理429状态码
+	if resp.StatusCode == http.StatusTooManyRequests {
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error": "我们的API服务正在历经高负载请求,请稍等一分钟后重试(此条消息可忽略)",
+		})
+		return
+	}
+
 	// 复制响应头
 	for key, values := range resp.Header {
 		for _, value := range values {
@@ -252,6 +260,17 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 
 // 处理流式响应
 func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, username string, model string, startTime time.Time, configMap map[string]string) {
+	// 特殊处理429状态码
+	if resp.StatusCode == http.StatusTooManyRequests {
+		c.Header("Content-Type", "text/event-stream")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Connection", "keep-alive")
+		c.Status(http.StatusTooManyRequests)
+		c.Writer.Write([]byte("data: {\"error\": \"我们的API服务正在历经高负载请求,请稍等一分钟后重试(此条消息可忽略)\"}\n\n"))
+		c.Writer.Flush()
+		return
+	}
+
 	// 设置SSE相关头
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")

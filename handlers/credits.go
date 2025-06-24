@@ -42,7 +42,6 @@ type CreditUsageHistoryResponse struct {
 
 type CreditUsageData struct {
 	ID           string `json:"id"`
-	Description  string `json:"description"`
 	Amount       int    `json:"amount"`
 	Timestamp    string `json:"timestamp"`
 	RelatedModel string `json:"relatedModel,omitempty"`
@@ -128,7 +127,7 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 
 	// 获取分页参数
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", c.DefaultQuery("pageSize", "10")))
 	if page < 1 {
 		page = 1
 	}
@@ -136,15 +135,29 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 		pageSize = 10
 	}
 
+	// 获取日期筛选参数
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	// 构建查询条件
+	query := database.DB.Model(&models.APITransaction{}).Where("user_id = ?", userID)
+
+	// 添加日期筛选
+	if startDate != "" {
+		query = query.Where("DATE(created_at) >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("DATE(created_at) <= ?", endDate)
+	}
+
 	// 查询总数
 	var total int64
-	database.DB.Model(&models.APITransaction{}).Where("user_id = ?", userID).Count(&total)
+	query.Count(&total)
 
 	// 查询分页数据
 	var apiTransactions []models.APITransaction
 	offset := (page - 1) * pageSize
-	err = database.DB.Where("user_id = ?", userID).
-		Order("created_at DESC").
+	err = query.Order("created_at DESC").
 		Limit(pageSize).
 		Offset(offset).
 		Find(&apiTransactions).Error
@@ -156,19 +169,8 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 	// 转换为响应格式
 	var historyData []CreditUsageData
 	for _, transaction := range apiTransactions {
-		// 生成描述信息
-		description := fmt.Sprintf("使用 %s 模型，消耗 %d 输入tokens，%d 输出tokens",
-			transaction.Model, transaction.InputTokens, transaction.OutputTokens)
-
-		// 如果有缓存相关的tokens，添加到描述中
-		if transaction.CacheCreationInputTokens > 0 || transaction.CacheReadInputTokens > 0 {
-			description += fmt.Sprintf("，缓存创建 %d tokens，缓存读取 %d tokens",
-				transaction.CacheCreationInputTokens, transaction.CacheReadInputTokens)
-		}
-
 		historyData = append(historyData, CreditUsageData{
 			ID:           fmt.Sprintf("%d", transaction.ID),
-			Description:  description,
 			Amount:       -int(transaction.PointsUsed), // 负数表示消耗
 			Timestamp:    transaction.CreatedAt.Format(time.RFC3339),
 			RelatedModel: transaction.Model,

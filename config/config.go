@@ -64,7 +64,7 @@ var AppConfig *Config
 func LoadConfig() {
 	AppConfig = &Config{
 		// 数据库配置
-		DBHost:     getEnv("DB_HOST", "110.42.42.200"),
+		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
 		DBPort:     getEnv("DB_PORT", "3306"),
 		DBUser:     getEnv("DB_USER", "claudecode"),
 		DBPassword: getEnv("DB_PASSWORD", "dhEEjzESJLnndSDh"),
@@ -72,10 +72,10 @@ func LoadConfig() {
 
 		// OAuth配置
 		ClientID:     getEnv("OAUTH_CLIENT_ID", "Claude Duck"),
-		ClientSecret: getEnv("OAUTH_CLIENT_SECRET", "2935467f5e0e1d383a51a467c9680091dc29015291245dbb6b440adcaf9e1011"),
+		ClientSecret: getEnv("OAUTH_CLIENT_SECRET", "peh63yltlhiue7yv5qs193b3bm9tc02w04acaup5tub6nzrylk9r6gkrvgkzssur"),
 
 		// JWT配置
-		JWTSecret: getEnv("JWT_SECRET_KEY", "$xhE6D0%FtYa4se\"Ooy#.LBK*1/9lwfJNuzC3qvkHrdbT7mAMX2j+RQVnUIcZ8i'"),
+		JWTSecret: getEnv("JWT_SECRET_KEY", "$xhE6D0gFtYa4sey'Ooy#.LBK*1/9lwfJNuzC3qvkHrdbT7mAMX2j+RQVnUIcZ8i'"),
 
 		// Token过期时间
 		AccessTokenExpireHours:  getEnvAsInt("ACCESS_TOKEN_EXPIRE_HOURS", 24),
@@ -96,7 +96,7 @@ func LoadConfig() {
 		DefaultDegradationGuaranteed: getEnvAsInt("DEFAULT_DEGRADATION_GUARANTEED", 0),
 
 		// Redis配置
-		RedisHost:     getEnv("REDIS_HOST", "110.42.42.200"),
+		RedisHost:     getEnv("REDIS_HOST", "127.0.0.1"),
 		RedisPort:     getEnv("REDIS_PORT", "6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", "EtK67tbzP6kabzhZ"),
 
