@@ -111,7 +111,7 @@ func LoadConfig() {
 		AllowedEmailDomains: getEnvAsSlice("ALLOWED_EMAIL_DOMAINS", []string{
 			"qq.com",
 			"outlook.com",
-			"google.com",
+			"gmail.com",
 			"foxmail.com",
 			"163.com",
 			"cloxl.com",

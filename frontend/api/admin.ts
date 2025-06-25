@@ -74,14 +74,35 @@ export interface PaginatedResponse<T> {
 // 用户管理API
 export const adminAPI = {
   // 获取所有用户
-  getUsers: async (): Promise<{ success: boolean; users?: AdminUser[]; message?: string }> => {
+  getUsers: async (params?: {
+    page?: number;
+    page_size?: number;
+  }): Promise<{ 
+    success: boolean; 
+    users?: AdminUser[]; 
+    total?: number;
+    page?: number;
+    page_size?: number;
+    total_pages?: number;
+    message?: string;
+  }> => {
     try {
-      const response = await request.get("/api/admin/users");
+      // 构建查询参数
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append('page', params.page.toString());
+      if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+      
+      const url = `/api/admin/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await request.get(url);
       // 后端返回分页格式，数据在data字段中
       const paginatedData = response.data as PaginatedResponse<AdminUser>;
       return {
         success: true,
-        users: paginatedData.data || []
+        users: paginatedData.data || [],
+        total: paginatedData.total,
+        page: paginatedData.page,
+        page_size: paginatedData.page_size,
+        total_pages: paginatedData.total_pages
       };
     } catch (error: any) {
       return {
@@ -208,14 +229,39 @@ export const adminAPI = {
   },
 
   // 获取激活码
-  getActivationCodes: async (): Promise<{ success: boolean; codes?: ActivationCode[]; message?: string }> => {
+  getActivationCodes: async (params?: {
+    page?: number;
+    page_size?: number;
+    status?: 'unused' | 'used' | 'expired';
+    batch_number?: string;
+  }): Promise<{ 
+    success: boolean; 
+    codes?: ActivationCode[]; 
+    total?: number;
+    page?: number;
+    page_size?: number;
+    total_pages?: number;
+    message?: string;
+  }> => {
     try {
-      const response = await request.get("/api/admin/activation-codes");
+      // 构建查询参数
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append('page', params.page.toString());
+      if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+      if (params?.status) queryParams.append('status', params.status);
+      if (params?.batch_number) queryParams.append('batch_number', params.batch_number);
+      
+      const url = `/api/admin/activation-codes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await request.get(url);
       // 后端返回分页格式，数据在data字段中
       const paginatedData = response.data as PaginatedResponse<ActivationCode>;
       return {
         success: true,
-        codes: paginatedData.data || []
+        codes: paginatedData.data || [],
+        total: paginatedData.total,
+        page: paginatedData.page,
+        page_size: paginatedData.page_size,
+        total_pages: paginatedData.total_pages
       };
     } catch (error: any) {
       return {
