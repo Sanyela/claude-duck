@@ -32,6 +32,12 @@ export function LoginForm() {
     register: { isValid: true, message: '' }
   })
 
+  // 用户名验证状态
+  const [usernameValidation, setUsernameValidation] = useState({
+    isValid: true,
+    message: ''
+  })
+
   // 验证邮箱并更新状态
   const validateEmail = (email: string, type: 'login' | 'register') => {
     const error = getEmailValidationError(email)
@@ -44,6 +50,33 @@ export function LoginForm() {
         message: error || ''
       }
     }))
+    
+    return isValid
+  }
+
+  // 验证用户名
+  const validateUsername = (username: string) => {
+    let error = null
+    let isValid = true
+    
+    if (!username) {
+      error = "用户名不能为空"
+      isValid = false
+    } else if (username.length < 5) {
+      error = "用户名至少需要5个字符"
+      isValid = false
+    } else if (username.length > 20) {
+      error = "用户名不能超过20个字符"
+      isValid = false
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+      error = "用户名只能包含字母、数字、下划线和连字符"
+      isValid = false
+    }
+    
+    setUsernameValidation({
+      isValid,
+      message: error || ''
+    })
     
     return isValid
   }
@@ -163,6 +196,12 @@ export function LoginForm() {
     const email = formData.get("email") as string
     const password = formData.get("password") as string
     const code = formData.get("code") as string
+    
+    // 验证用户名
+    if (!validateUsername(username)) {
+      setIsLoading(false)
+      return
+    }
     
     // 验证邮箱
     if (!validateEmail(email, 'register')) {
@@ -315,14 +354,40 @@ export function LoginForm() {
                 <Label htmlFor="username-register" className="text-slate-700 dark:text-slate-300">
                   用户名
                 </Label>
-                <Input
-                  id="username-register"
-                  name="username"
-                  type="text"
-                  placeholder="johndoe"
-                  required
-                  className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-50"
-                />
+                <div className="relative">
+                  <Input
+                    id="username-register"
+                    name="username"
+                    type="text"
+                    placeholder="johndoe"
+                    required
+                    minLength={5}
+                    maxLength={20}
+                    pattern="^[a-zA-Z0-9_-]+$"
+                    className={`bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-slate-50 pr-10 ${
+                      !usernameValidation.isValid ? 'border-red-500 dark:border-red-400' : ''
+                    }`}
+                    onChange={(e) => validateUsername(e.target.value)}
+                  />
+                  {usernameValidation.message && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      {usernameValidation.isValid ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-red-500" />
+                      )}
+                    </div>
+                  )}
+                </div>
+                {!usernameValidation.isValid && (
+                  <p className="text-sm text-red-500 dark:text-red-400 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {usernameValidation.message}
+                  </p>
+                )}
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  用户名长度为5-20个字符，只能包含字母、数字、下划线和连字符
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email-register" className="text-slate-700 dark:text-slate-300">
@@ -419,7 +484,7 @@ export function LoginForm() {
               <Button 
                 type="submit" 
                 className="w-full bg-sky-500 hover:bg-sky-600 text-white dark:text-slate-900"
-                disabled={isLoading || !emailValidation.register.isValid}
+                disabled={isLoading || !emailValidation.register.isValid || !usernameValidation.isValid}
               >
                 {isLoading ? "注册中..." : "注册"}
               </Button>

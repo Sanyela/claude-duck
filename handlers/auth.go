@@ -15,7 +15,7 @@ import (
 
 // 注册登录相关请求结构
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=20"`
+	Username string `json:"username" binding:"required,min=5,max=20"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
 }
