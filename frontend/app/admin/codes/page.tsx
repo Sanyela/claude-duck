@@ -8,7 +8,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal, Key, Plus, Download, Search } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Key, Plus, Download, Search, Copy } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,8 +35,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { adminAPI, type ActivationCode, type SubscriptionPlan } from "@/api/admin"
+import { getUserInfo, type User } from "@/api/auth"
 
 // 数据类型定义
 type ActivationCodeRow = {
@@ -54,6 +55,7 @@ export default function AdminCodesPage() {
   const { toast } = useToast()
   const [data, setData] = useState<ActivationCodeRow[]>([])
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(false)
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = useState({})
@@ -72,6 +74,8 @@ export default function AdminCodesPage() {
   
   // 对话框状态
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false)
+  const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false)
+  const [generatedBatchNumber, setGeneratedBatchNumber] = useState("")
   const [newCodeData, setNewCodeData] = useState({
     subscription_plan_id: 0,
     count: 1,
@@ -294,8 +298,17 @@ export default function AdminCodesPage() {
     }
   }
 
+  // 获取当前用户信息
+  const loadCurrentUser = async () => {
+    const result = await getUserInfo()
+    if (result.success && result.user) {
+      setCurrentUser(result.user)
+    }
+  }
+
   useEffect(() => {
     loadPlans()
+    loadCurrentUser()
   }, [])
 
   useEffect(() => {
@@ -335,7 +348,19 @@ export default function AdminCodesPage() {
 
     const result = await adminAPI.createActivationCodes(newCodeData)
     if (result.success) {
-      toast({ title: "创建成功", variant: "default" })
+      const batchNumber = newCodeData.batch_number
+      
+      // 显示成功toast
+      toast({
+        title: "创建成功",
+        description: "激活码生成完成",
+        variant: "default"
+      })
+      
+      // 设置批次号并显示复制弹窗
+      setGeneratedBatchNumber(batchNumber)
+      setIsCopyDialogOpen(true)
+      
       setIsCodeDialogOpen(false)
       setNewCodeData({
         subscription_plan_id: 0,
@@ -404,6 +429,40 @@ export default function AdminCodesPage() {
       title: "导出成功",
       description: `已导出 ${dataToExport.length} 条记录${selectedRows.length > 0 ? ' (仅选中项)' : ''}`,
     })
+  }
+
+  // 生成批次号
+  const generateBatchNumber = () => {
+    if (!currentUser) return ""
+    
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const hour = String(now.getHours()).padStart(2, '0')
+    const minute = String(now.getMinutes()).padStart(2, '0')
+    const second = String(now.getSeconds()).padStart(2, '0')
+    
+    return `${currentUser.username}-${year}-${month}-${day}-${hour}-${minute}-${second}`
+  }
+
+  // 处理复制批次号
+  const handleCopyBatchNumber = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedBatchNumber)
+      toast({
+        title: "复制成功",
+        description: "批次号已复制到剪贴板",
+        variant: "default"
+      })
+      setIsCopyDialogOpen(false)
+    } catch (error) {
+      toast({
+        title: "复制失败",
+        description: "请手动选择批次号文本进行复制",
+        variant: "destructive"
+      })
+    }
   }
 
   return (
@@ -498,7 +557,15 @@ export default function AdminCodesPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Button
-                  onClick={() => setIsCodeDialogOpen(true)}
+                  onClick={() => {
+                    // 自动填入批次号
+                    setNewCodeData({
+                      subscription_plan_id: 0,
+                      count: 1,
+                      batch_number: generateBatchNumber()
+                    })
+                    setIsCodeDialogOpen(true)
+                  }}
                   className="bg-orange-500 hover:bg-orange-600 text-white"
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -696,6 +763,34 @@ export default function AdminCodesPage() {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsCodeDialogOpen(false)}>取消</Button>
                 <Button onClick={handleCreateCodes}>生成</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* 复制批次号对话框 */}
+          <Dialog open={isCopyDialogOpen} onOpenChange={setIsCopyDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>激活码生成成功</DialogTitle>
+                <DialogDescription>请复制以下批次号用于管理激活码</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>批次号</Label>
+                  <div className="bg-muted p-3 rounded text-sm font-mono break-all select-all border">
+                    {generatedBatchNumber}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    点击上方文本可选中，或点击下方按钮自动复制
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCopyDialogOpen(false)}>稍后复制</Button>
+                <Button onClick={handleCopyBatchNumber}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  复制批次号
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

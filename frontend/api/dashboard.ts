@@ -7,6 +7,8 @@ export interface PointBalance {
   total_points: number;
   used_points: number;
   available_points: number;
+  expired_points: number;
+  is_current_subscription: boolean;
   updated_at: string;
 }
 
@@ -16,7 +18,6 @@ export interface ActiveSubscription {
   plan: {
     id: string;
     name: string;
-    currency: string;
     features: string[];
   };
   status: string;
@@ -45,8 +46,10 @@ export const dashboardAPI = {
           id: 0, // 这个字段前端实际没有使用
           user_id: 0, // 这个字段前端实际没有使用
           total_points: balance.total || 0,
-          used_points: balance.total - balance.available || 0,
+          used_points: balance.used || 0,  // 使用后端返回的实际已使用积分
           available_points: balance.available || 0,
+          expired_points: balance.expired || 0,  // 使用后端返回的已过期积分
+          is_current_subscription: balance.is_current_subscription || false,
           updated_at: new Date().toISOString()
         };
         return { success: true, data: pointBalance };

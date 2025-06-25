@@ -18,8 +18,11 @@ type CreditBalanceResponse struct {
 }
 
 type CreditBalanceData struct {
-	Available int `json:"available"`
-	Total     int `json:"total"`
+	Available             int  `json:"available"`               // 可用积分
+	Total                 int  `json:"total"`                   // 历史总充值积分
+	Used                  int  `json:"used"`                    // 实际已使用积分
+	Expired               int  `json:"expired"`                 // 已过期积分
+	IsCurrentSubscription bool `json:"is_current_subscription"` // 是否为当前活跃订阅
 }
 
 type ModelCostsResponse struct {
@@ -57,25 +60,100 @@ func HandleGetCreditBalance(c *gin.Context) {
 		return
 	}
 
-	// 查询用户积分余额
-	var pointBalance models.PointBalance
-	err = database.DB.Where("user_id = ?", userID).First(&pointBalance).Error
+	// 获取用户当前活跃订阅
+	var subscription models.Subscription
+	var subscriptionStartTime time.Time
+	var isCurrentSubscription bool
+
+	// 先查找状态为active且未过期的订阅
+	err = database.DB.Where("user_id = ? AND status = 'active' AND current_period_end > ?", userID, time.Now()).First(&subscription).Error
 	if err != nil {
-		// 如果没有记录，创建默认余额
-		pointBalance = models.PointBalance{
-			UserID:          userID,
-			TotalPoints:     0, // 默认0余额，防止批量注册
-			UsedPoints:      0,
-			AvailablePoints: 0,
-			UpdatedAt:       time.Now(),
+		// 如果没有有效的活跃订阅，查找最近一个订阅（包括过期的）
+		err = database.DB.Where("user_id = ?", userID).Order("created_at DESC").First(&subscription).Error
+		if err != nil {
+			// 如果真的没有任何订阅记录，使用用户注册时间
+			var user models.User
+			if err := database.DB.Where("id = ?", userID).First(&user).Error; err == nil {
+				subscriptionStartTime = user.CreatedAt
+			} else {
+				subscriptionStartTime = time.Now().AddDate(0, -1, 0) // 默认最近一个月
+			}
+			isCurrentSubscription = false
+		} else {
+			// 使用最近一个订阅的创建时间
+			subscriptionStartTime = subscription.CreatedAt
+			// 检查这个订阅是否真的是当前有效的
+			isCurrentSubscription = subscription.Status == "active" && subscription.CurrentPeriodEnd.After(time.Now())
 		}
-		database.DB.Create(&pointBalance)
+	} else {
+		// 有有效的活跃订阅
+		subscriptionStartTime = subscription.CreatedAt
+		isCurrentSubscription = true
 	}
 
-	// 转换为响应格式
+	// 为了避免毫秒级时间差导致的问题，统计时间稍微向前推一点
+	queryStartTime := subscriptionStartTime.Add(-time.Second)
+
+	// 额外调试信息：查看所有积分池和API交易
+	var allPools []models.PointPool
+	database.DB.Where("user_id = ?", userID).Find(&allPools)
+
+	var allTransactions []models.APITransaction
+	database.DB.Where("user_id = ? AND status = 'success'", userID).Order("created_at DESC").Limit(10).Find(&allTransactions)
+
+	// 只统计当前订阅周期内的积分池
+	var validPoints int64
+	err = database.DB.Model(&models.PointPool{}).
+		Where("user_id = ? AND points_remaining > 0 AND expires_at > ? AND created_at >= ?",
+			userID, time.Now(), queryStartTime).
+		Select("COALESCE(SUM(points_remaining), 0)").
+		Scan(&validPoints).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate valid points"})
+		return
+	}
+
+	// 计算当前订阅周期内的已过期积分
+	var expiredPoints int64
+	err = database.DB.Model(&models.PointPool{}).
+		Where("user_id = ? AND points_remaining > 0 AND expires_at <= ? AND created_at >= ?",
+			userID, time.Now(), queryStartTime).
+		Select("COALESCE(SUM(points_remaining), 0)").
+		Scan(&expiredPoints).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate expired points"})
+		return
+	}
+
+	// 计算当前订阅周期内的总充值积分
+	var totalPoints int64
+	err = database.DB.Model(&models.PointPool{}).
+		Where("user_id = ? AND created_at >= ?", userID, queryStartTime).
+		Select("COALESCE(SUM(points_total), 0)").
+		Scan(&totalPoints).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate total points"})
+		return
+	}
+
+	// 计算当前订阅周期内的已使用积分
+	var usedPoints int64
+	err = database.DB.Model(&models.APITransaction{}).
+		Where("user_id = ? AND status = 'success' AND created_at >= ?", userID, queryStartTime).
+		Select("COALESCE(SUM(points_used), 0)").
+		Scan(&usedPoints).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate used points"})
+		return
+	}
+
+	// 转换为响应格式 - 只显示当前订阅周期的数据
 	balanceData := CreditBalanceData{
-		Available: int(pointBalance.AvailablePoints), // 直接使用积分
-		Total:     int(pointBalance.TotalPoints),     // 直接使用积分
+		Available:             int(validPoints),   // 当前可用积分
+		Total:                 int(totalPoints),   // 当前订阅周期总充值积分
+		Used:                  int(usedPoints),    // 当前订阅周期已使用积分
+		Expired:               int(expiredPoints), // 当前订阅周期已过期积分
+		IsCurrentSubscription: isCurrentSubscription,
 	}
 
 	c.JSON(http.StatusOK, CreditBalanceResponse{Balance: balanceData})
@@ -125,6 +203,34 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 		return
 	}
 
+	// 获取用户当前活跃订阅，确定统计起始时间
+	var subscription models.Subscription
+	var subscriptionStartTime time.Time
+	// 先查找状态为active且未过期的订阅
+	err = database.DB.Where("user_id = ? AND status = 'active' AND current_period_end > ?", userID, time.Now()).First(&subscription).Error
+	if err != nil {
+		// 如果没有有效的活跃订阅，查找最近一个订阅（包括过期的）
+		err = database.DB.Where("user_id = ?", userID).Order("created_at DESC").First(&subscription).Error
+		if err != nil {
+			// 如果真的没有任何订阅记录，使用用户注册时间
+			var user models.User
+			if err := database.DB.Where("id = ?", userID).First(&user).Error; err == nil {
+				subscriptionStartTime = user.CreatedAt
+			} else {
+				subscriptionStartTime = time.Now().AddDate(0, -1, 0) // 默认最近一个月
+			}
+		} else {
+			// 使用最近一个订阅的创建时间
+			subscriptionStartTime = subscription.CreatedAt
+		}
+	} else {
+		// 有有效的活跃订阅
+		subscriptionStartTime = subscription.CreatedAt
+	}
+
+	// 为了避免毫秒级时间差导致的问题，统计时间稍微向前推一点
+	queryStartTime := subscriptionStartTime.Add(-time.Second)
+
 	// 获取分页参数
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", c.DefaultQuery("pageSize", "10")))
@@ -139,8 +245,8 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 
-	// 构建查询条件
-	query := database.DB.Model(&models.APITransaction{}).Where("user_id = ?", userID)
+	// 构建查询条件 - 只查询当前订阅周期内的记录
+	query := database.DB.Model(&models.APITransaction{}).Where("user_id = ? AND created_at >= ?", userID, queryStartTime)
 
 	// 添加日期筛选
 	if startDate != "" {

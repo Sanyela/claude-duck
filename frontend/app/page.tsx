@@ -83,7 +83,9 @@ export default function DashboardPage() {
     const daysUntilExpiry = Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     const timeRemaining = formatTimeRemaining(currentPeriodEnd);
     
+    // 首先检查订阅是否已过期
     if (dashboardData.subscription.status === "active") {
+      if (daysUntilExpiry <= 0) return { status: "expired", timeRemaining };
       if (daysUntilExpiry <= 3) return { status: "expiring_soon", timeRemaining };
       return { status: "active", timeRemaining };
     }
@@ -168,8 +170,14 @@ export default function DashboardPage() {
                         {(dashboardData.pointBalance.available_points || 0).toLocaleString()}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        总积分: {(dashboardData.pointBalance.total_points || 0).toLocaleString()} | 
+                        {dashboardData.pointBalance.is_current_subscription ? "本期积分" : "上期积分"}: {(dashboardData.pointBalance.total_points || 0).toLocaleString()} | 
                         已使用: {(dashboardData.pointBalance.used_points || 0).toLocaleString()}
+                        {(dashboardData.pointBalance.expired_points || 0) > 0 && (
+                          <> | <span className="text-orange-500">已过期: {(dashboardData.pointBalance.expired_points || 0).toLocaleString()}</span></>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground opacity-75 mt-1">
+                        * {dashboardData.pointBalance.is_current_subscription ? "仅显示当前订阅周期数据" : "显示最近订阅周期数据"}
                       </p>
                 </div>
                 <Link 

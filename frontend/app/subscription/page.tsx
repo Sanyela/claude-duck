@@ -18,10 +18,9 @@ import { request } from "@/api/request"
 interface PaymentHistory {
   id: string;
   planName: string;
-  amount: number;
-  currency: string;
   date: string;
-  status: string;
+  paymentStatus: string; // 支付状态：paid, failed
+  subscriptionStatus: string; // 订阅状态：active, expired
   invoiceUrl?: string;
 }
 
@@ -203,8 +202,8 @@ export default function SubscriptionPage() {
                     <TableHead>账单ID</TableHead>
                     <TableHead>日期</TableHead>
                     <TableHead>计划</TableHead>
-                    <TableHead className="text-right">金额</TableHead>
-                    <TableHead className="text-right">状态</TableHead>
+                    <TableHead>支付状态</TableHead>
+                    <TableHead className="text-right">订阅状态</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -215,19 +214,28 @@ export default function SubscriptionPage() {
                           {new Date(item.date).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{item.planName}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {item.currency === "CNY" ? "¥" : "$"}{item.amount.toFixed(2)}
-                        </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell>
                         <Badge
-                            variant={item.status === "paid" ? "default" : "secondary"}
+                            variant={item.paymentStatus === "paid" ? "default" : "destructive"}
                           className={
-                              item.status === "paid"
+                              item.paymentStatus === "paid"
                               ? "bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-300"
-                              : "bg-slate-100 text-slate-700 dark:bg-slate-700/30 dark:text-slate-300"
+                              : "bg-red-100 text-red-700 dark:bg-red-700/30 dark:text-red-300"
                           }
                         >
-                            {item.status === "paid" ? "已支付" : item.status}
+                            {item.paymentStatus === "paid" ? "支付成功" : "支付失败"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                            variant={item.subscriptionStatus === "active" ? "default" : "secondary"}
+                          className={
+                              item.subscriptionStatus === "active"
+                              ? "bg-blue-100 text-blue-700 dark:bg-blue-700/30 dark:text-blue-300"
+                              : "bg-gray-100 text-gray-700 dark:bg-gray-700/30 dark:text-gray-300"
+                          }
+                        >
+                            {item.subscriptionStatus === "active" ? "有效" : "已过期"}
                         </Badge>
                       </TableCell>
                     </TableRow>

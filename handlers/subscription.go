@@ -30,7 +30,6 @@ type SubscriptionData struct {
 type SubscriptionPlanData struct {
 	ID       string   `json:"id"`
 	Name     string   `json:"name"`
-	Currency string   `json:"currency"`
 	Features []string `json:"features"`
 }
 
@@ -39,13 +38,12 @@ type SubscriptionHistoryResponse struct {
 }
 
 type PaymentHistoryData struct {
-	ID         string  `json:"id"`
-	PlanName   string  `json:"planName"`
-	Amount     float64 `json:"amount"`
-	Currency   string  `json:"currency"`
-	Date       string  `json:"date"`
-	Status     string  `json:"status"`
-	InvoiceURL string  `json:"invoiceUrl,omitempty"`
+	ID                 string `json:"id"`
+	PlanName           string `json:"planName"`
+	Date               string `json:"date"`
+	PaymentStatus      string `json:"paymentStatus"`      // 支付状态：paid, failed
+	SubscriptionStatus string `json:"subscriptionStatus"` // 订阅状态：active, expired
+	InvoiceURL         string `json:"invoiceUrl,omitempty"`
 }
 
 type RedeemCouponRequest struct {
@@ -67,11 +65,11 @@ func HandleGetActiveSubscription(c *gin.Context) {
 		return
 	}
 
-	// 查询用户活跃订阅
+	// 查询用户活跃订阅（状态为active且未过期）
 	var subscription models.Subscription
-	err = database.DB.Preload("Plan").Where("user_id = ? AND status = 'active'", userID).First(&subscription).Error
+	err = database.DB.Preload("Plan").Where("user_id = ? AND status = 'active' AND current_period_end > ?", userID, time.Now()).First(&subscription).Error
 	if err != nil {
-		// 没有找到活跃订阅
+		// 没有找到活跃且未过期的订阅
 		c.JSON(http.StatusOK, ActiveSubscriptionResponse{Subscription: nil})
 		return
 	}
@@ -87,7 +85,6 @@ func HandleGetActiveSubscription(c *gin.Context) {
 		Plan: SubscriptionPlanData{
 			ID:       fmt.Sprintf("%d", subscription.Plan.ID),
 			Name:     subscription.Plan.Title,
-			Currency: subscription.Plan.Currency,
 			Features: features,
 		},
 		Status:            subscription.Status,
@@ -118,14 +115,34 @@ func HandleGetSubscriptionHistory(c *gin.Context) {
 	// 转换为响应格式
 	var historyData []PaymentHistoryData
 	for _, payment := range paymentHistory {
+		// 查找对应的订阅记录来判断过期状态
+		var subscription models.Subscription
+		subscriptionStatus := "expired" // 默认为过期
+
+		// 通过用户ID和支付时间范围查找对应的订阅
+		err := database.DB.Where("user_id = ? AND created_at <= ? AND created_at >= ?",
+			userID,
+			payment.PaymentDate.Add(24*time.Hour),   // 支付后24小时内
+			payment.PaymentDate.Add(-24*time.Hour)). // 支付前24小时内
+			Order("created_at DESC").
+			First(&subscription).Error
+
+		if err == nil {
+			// 找到了对应的订阅，检查是否还有效
+			if subscription.Status == "active" && subscription.CurrentPeriodEnd.After(time.Now()) {
+				subscriptionStatus = "active"
+			} else {
+				subscriptionStatus = "expired"
+			}
+		}
+
 		historyData = append(historyData, PaymentHistoryData{
-			ID:         fmt.Sprintf("%d", payment.ID),
-			PlanName:   payment.PlanName,
-			Amount:     payment.Amount,
-			Currency:   payment.Currency,
-			Date:       payment.PaymentDate.Format(time.RFC3339),
-			Status:     payment.Status,
-			InvoiceURL: payment.InvoiceURL,
+			ID:                 fmt.Sprintf("%d", payment.ID),
+			PlanName:           payment.PlanName,
+			Date:               payment.PaymentDate.Format(time.RFC3339),
+			PaymentStatus:      payment.Status,
+			SubscriptionStatus: subscriptionStatus,
+			InvoiceURL:         payment.InvoiceURL,
 		})
 	}
 
