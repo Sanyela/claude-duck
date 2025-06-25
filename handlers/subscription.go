@@ -28,11 +28,10 @@ type SubscriptionData struct {
 }
 
 type SubscriptionPlanData struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	PricePerMonth float64  `json:"pricePerMonth"`
-	Currency      string   `json:"currency"`
-	Features      []string `json:"features"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Currency string   `json:"currency"`
+	Features []string `json:"features"`
 }
 
 type SubscriptionHistoryResponse struct {
@@ -86,11 +85,10 @@ func HandleGetActiveSubscription(c *gin.Context) {
 	subscriptionData := &SubscriptionData{
 		ID: subscription.ExternalID,
 		Plan: SubscriptionPlanData{
-			ID:            fmt.Sprintf("%d", subscription.Plan.ID),
-			Name:          subscription.Plan.Title,
-			PricePerMonth: subscription.Plan.Price,
-			Currency:      subscription.Plan.Currency,
-			Features:      features,
+			ID:       fmt.Sprintf("%d", subscription.Plan.ID),
+			Name:     subscription.Plan.Title,
+			Currency: subscription.Plan.Currency,
+			Features: features,
 		},
 		Status:            subscription.Status,
 		CurrentPeriodEnd:  subscription.CurrentPeriodEnd.Format(time.RFC3339),

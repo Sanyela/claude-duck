@@ -16,7 +16,6 @@ interface ActiveSubscription {
   plan: {
     id: string
     name: string
-    pricePerMonth: number
     currency: string
     features: string[]
   }

@@ -1679,10 +1679,6 @@ components:
             name:
               type: string
               example: 标准套餐
-            pricePerMonth:
-              type: number
-              format: float
-              example: 9.99
             currency:
               type: string
               example: USD

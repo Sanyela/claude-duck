@@ -55,23 +55,43 @@ export default function DashboardPage() {
     ? Math.min(((dashboardData.pointBalance.used_points || 0) / Math.max(dashboardData.pointBalance.total_points || 1, 1)) * 100, 100)
     : 0;
 
-  // 判断订阅状态
-  const getSubscriptionStatus = () => {
-    if (!dashboardData?.subscription) return "no_subscription";
+  // 格式化剩余时间
+  const formatTimeRemaining = (endDate: Date): string => {
+    const now = new Date();
+    const diff = endDate.getTime() - now.getTime();
+    
+    if (diff <= 0) return "已过期";
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    const parts = [];
+    if (days > 0) parts.push(`${days}天`);
+    if (hours > 0) parts.push(`${hours}小时`);
+    if (minutes > 0) parts.push(`${minutes}分钟`);
+    
+    return parts.length > 0 ? parts.join('') : "不足1分钟";
+  };
+
+  // 判断订阅状态和剩余时间
+  const getSubscriptionInfo = () => {
+    if (!dashboardData?.subscription) return { status: "no_subscription", timeRemaining: "" };
     
     const currentPeriodEnd = new Date(dashboardData.subscription.currentPeriodEnd);
     const now = new Date();
     const daysUntilExpiry = Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const timeRemaining = formatTimeRemaining(currentPeriodEnd);
     
     if (dashboardData.subscription.status === "active") {
-      if (daysUntilExpiry <= 3) return "expiring_soon";
-      return "active";
+      if (daysUntilExpiry <= 3) return { status: "expiring_soon", timeRemaining };
+      return { status: "active", timeRemaining };
     }
     
-    return "expired";
+    return { status: "expired", timeRemaining };
   };
 
-  const subscriptionStatus = getSubscriptionStatus();
+  const subscriptionInfo = getSubscriptionInfo();
 
   return (
     <DashboardLayout>
@@ -79,7 +99,7 @@ export default function DashboardPage() {
         <Greeting userName={user?.username || "尊贵的用户"} />
 
         {/* 订阅状态警告 */}
-        {subscriptionStatus === "expiring_soon" && (
+        {subscriptionInfo.status === "expiring_soon" && (
           <Alert
             variant="destructive"
             className="shadow-lg bg-card text-card-foreground border-yellow-400 dark:border-yellow-600"
@@ -87,7 +107,7 @@ export default function DashboardPage() {
             <AlertTriangle className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
             <AlertTitle className="text-yellow-700 dark:text-yellow-300">订阅即将到期</AlertTitle>
             <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-              您的订阅将在 <strong>3天后</strong> 到期。请及时{" "}
+              您的订阅将在 <strong>{subscriptionInfo.timeRemaining}</strong> 后到期。请及时{" "}
               <Link
                 href="/subscription"
                 className="font-semibold underline hover:text-yellow-600 dark:hover:text-yellow-200"
@@ -98,7 +118,7 @@ export default function DashboardPage() {
             </AlertDescription>
           </Alert>
         )}
-        {subscriptionStatus === "expired" && (
+        {subscriptionInfo.status === "expired" && (
           <Alert
             variant="destructive"
             className="shadow-lg bg-card text-card-foreground border-red-400 dark:border-red-600"
@@ -196,19 +216,16 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between mb-2">
                 <div>
                       <p className="text-xl font-bold text-sky-500 dark:text-sky-400">{dashboardData.subscription.plan.name}</p>
-                      <p className="text-sm font-medium">
-                        ¥{dashboardData.subscription.plan.pricePerMonth}/{dashboardData.subscription.plan.currency === "CNY" ? "月" : "month"}
-                      </p>
                 </div>
                 <Badge 
                       className={
-                        subscriptionStatus === "active" ? "bg-green-500 text-white dark:bg-green-600" :
-                        subscriptionStatus === "expiring_soon" ? "bg-yellow-500 text-white dark:bg-yellow-600" :
+                        subscriptionInfo.status === "active" ? "bg-green-500 text-white dark:bg-green-600" :
+                        subscriptionInfo.status === "expiring_soon" ? "bg-yellow-500 text-white dark:bg-yellow-600" :
                         "bg-red-500 text-white dark:bg-red-600"
                       }
                     >
-                      {subscriptionStatus === "active" ? "有效" : 
-                       subscriptionStatus === "expiring_soon" ? "即将到期" : "已过期"}
+                      {subscriptionInfo.status === "active" ? "有效" : 
+                       subscriptionInfo.status === "expiring_soon" ? "即将到期" : "已过期"}
                 </Badge>
               </div>
               <p className="text-xs flex items-center text-muted-foreground">

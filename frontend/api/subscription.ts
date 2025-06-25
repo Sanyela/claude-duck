@@ -1,10 +1,9 @@
-import request from './request';
+import { request } from './request';
 
 // 类型定义
 export interface SubscriptionPlan {
   id: string;
   name: string;
-  pricePerMonth: number;
   currency: string;
   features: string[];
 }

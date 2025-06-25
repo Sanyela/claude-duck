@@ -2,7 +2,7 @@
 export const ALLOWED_EMAIL_DOMAINS = [
   'qq.com',
   'outlook.com', 
-  'google.com',
+  'gmail.com',
   'foxmail.com',
   '163.com',
   'cloxl.com',

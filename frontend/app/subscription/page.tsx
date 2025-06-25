@@ -162,22 +162,19 @@ export default function SubscriptionPage() {
                       {isSubscriptionActive ? "有效" : subscription.status === "canceled" ? "已取消" : "已过期"}
                 </Badge>
               </div>
-                  <p className="text-3xl font-bold">
-                    {subscription.plan.currency === "CNY" ? "¥" : "$"}{subscription.plan.pricePerMonth}/月
-                  </p>
+              <div>
+                <h4 className="font-medium mb-2">核心功能:</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>模型智能不降级，保证回答质量</li>
+                  <li>享受完整Claude 4 Sonnet能力</li>
+                  <li>优先处理请求，响应更快</li>
+                </ul>
+              </div>
               {isSubscriptionActive && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground border-t pt-3">
                       下次账单日期: {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
                     </p>
               )}
-              <div>
-                <h4 className="font-medium mb-1">包含功能:</h4>
-                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                      {subscription.plan.features.map((feature, index) => (
-                        <li key={index}>{feature}</li>
-                  ))}
-                </ul>
-              </div>
                 </>
               ) : (
                 <div className="text-center py-8">
