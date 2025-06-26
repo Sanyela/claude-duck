@@ -1,9 +1,12 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -60,59 +63,56 @@ type Config struct {
 var AppConfig *Config
 
 func LoadConfig() {
+	// 加载 .env 文件
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found, using environment variables")
+	}
+
 	AppConfig = &Config{
 		// 数据库配置
-		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
-		DBPort:     getEnv("DB_PORT", "3306"),
-		DBUser:     getEnv("DB_USER", "claudecode"),
-		DBPassword: getEnv("DB_PASSWORD", "dhEEjzESJLnndSDh"),
-		DBName:     getEnv("DB_NAME", "claudecode"),
+		DBHost:     getEnv("DB_HOST", ""),
+		DBPort:     getEnv("DB_PORT", ""),
+		DBUser:     getEnv("DB_USER", ""),
+		DBPassword: getEnv("DB_PASSWORD", ""),
+		DBName:     getEnv("DB_NAME", ""),
 
 		// OAuth配置
-		ClientID:     getEnv("OAUTH_CLIENT_ID", "Claude Duck"),
-		ClientSecret: getEnv("OAUTH_CLIENT_SECRET", "peh63yltlhiue7yv5qs193b3bm9tc02w04acaup5tub6nzrylk9r6gkrvgkzssur"),
+		ClientID:     getEnv("OAUTH_CLIENT_ID", ""),
+		ClientSecret: getEnv("OAUTH_CLIENT_SECRET", ""),
 
 		// JWT配置
-		JWTSecret: getEnv("JWT_SECRET_KEY", "$xhE6D0gFtYa4sey'Ooy#.LBK*1/9lwfJNuzC3qvkHrdbT7mAMX2j+RQVnUIcZ8i'"),
+		JWTSecret: getEnv("JWT_SECRET_KEY", ""),
 
 		// Token过期时间
 		AccessTokenExpireHours:  getEnvAsInt("ACCESS_TOKEN_EXPIRE_HOURS", 24),
 		DeviceCodeExpireMinutes: getEnvAsInt("DEVICE_CODE_EXPIRE_MINUTES", 15),
 
 		// New API配置
-		NewAPIEndpoint: getEnv("NEW_API_ENDPOINT", "http://152.53.82.23:2999"),
-		NewAPIKey:      getEnv("NEW_API_KEY", "sk-ijk47MsAmnmJ7sgb0I8Dx6OVXswFBm5Y760tvwpNv3Te0ptp"),
+		NewAPIEndpoint: getEnv("NEW_API_ENDPOINT", ""),
+		NewAPIKey:      getEnv("NEW_API_KEY", ""),
 
 		// 积分系统默认配置
 		DefaultPromptMultiplier:     getEnvAsFloat("DEFAULT_PROMPT_MULTIPLIER", 5.0),
 		DefaultCompletionMultiplier: getEnvAsFloat("DEFAULT_COMPLETION_MULTIPLIER", 10.0),
 
 		// 服务降级配置
-		DegradationAPIKey:            getEnv("DEGRADATION_API_KEY", "sk-ijk47MsAmnmJ7sgb0I8Dx6OVXswFBm5Y760tvwpNv3Te0ptp"),
+		DegradationAPIKey:            getEnv("DEGRADATION_API_KEY", ""),
 		DefaultDegradationGuaranteed: getEnvAsInt("DEFAULT_DEGRADATION_GUARANTEED", 0),
 
 		// Redis配置
-		RedisHost:     getEnv("REDIS_HOST", "127.0.0.1"),
-		RedisPort:     getEnv("REDIS_PORT", "6379"),
-		RedisPassword: getEnv("REDIS_PASSWORD", "EtK67tbzP6kabzhZ"),
+		RedisHost:     getEnv("REDIS_HOST", ""),
+		RedisPort:     getEnv("REDIS_PORT", ""),
+		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 
 		// SMTP邮件配置
-		SMTPHost:     getEnv("SMTP_HOST", "smtpdm.aliyun.com"),
-		SMTPPort:     getEnv("SMTP_PORT", "25"),
-		SMTPUser:     getEnv("SMTP_USER", "no-reply@mail.claude-duck.com"),
-		SMTPPassword: getEnv("SMTP_PASSWORD", "ASDasd123456"),
-		SMTPFrom:     getEnv("SMTP_FROM", "no-reply@mail.claude-duck.com"),
+		SMTPHost:     getEnv("SMTP_HOST", ""),
+		SMTPPort:     getEnv("SMTP_PORT", ""),
+		SMTPUser:     getEnv("SMTP_USER", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:     getEnv("SMTP_FROM", ""),
 
 		// 允许注册的邮箱域名
-		AllowedEmailDomains: getEnvAsSlice("ALLOWED_EMAIL_DOMAINS", []string{
-			"qq.com",
-			"outlook.com",
-			"gmail.com",
-			"foxmail.com",
-			"163.com",
-			"cloxl.com",
-			"52ai.org",
-		}),
+		AllowedEmailDomains: getEnvAsSlice("ALLOWED_EMAIL_DOMAINS", []string{}),
 
 		// 验证码配置
 		VerificationCodeExpireMinutes: getEnvAsInt("VERIFICATION_CODE_EXPIRE_MINUTES", 10),
@@ -139,15 +139,6 @@ func getEnvAsFloat(key string, defaultValue float64) float64 {
 	if value := os.Getenv(key); value != "" {
 		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
 			return floatValue
-		}
-	}
-	return defaultValue
-}
-
-func getEnvAsBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		if boolValue, err := strconv.ParseBool(value); err == nil {
-			return boolValue
 		}
 	}
 	return defaultValue

@@ -313,7 +313,7 @@ export function CreditsContent() {
             <>
               <div className="flex flex-wrap gap-2 mb-4">
                 <Badge className="bg-red-500 text-white hover:bg-red-600 px-2.5 py-1.5 shadow-sm">
-                  <span className="font-semibold">{totalUsage.toLocaleString()}</span> 
+                  <span className="font-semibold">{(creditBalance?.used_points || 0).toLocaleString()}</span> 
                   <span className="ml-1 text-xs opacity-90">{creditBalance?.is_current_subscription ? "本期消耗" : "上期消耗"}</span>
                 </Badge>
                 <Badge className="bg-sky-500 text-white hover:bg-sky-600 px-2.5 py-1.5 shadow-sm">

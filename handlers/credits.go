@@ -124,21 +124,33 @@ func HandleGetCreditBalance(c *gin.Context) {
 	var validPoints, expiredPoints, totalPoints, usedPoints int64
 
 	if isCurrentSubscription {
-		// 如果有当前有效订阅，只统计未过期的积分池相关数据
-		// 先获取所有未过期的积分池，用于确定统计范围
+
+
+		// 如果有当前有效订阅，只统计当前订阅相关的积分池
+		// 获取当前订阅期间创建的积分池（从订阅创建时间到现在）
 		var validPools []models.PointPool
-		err = database.DB.Where("user_id = ? AND expires_at > ? AND created_at >= ?",
-			userID, time.Now(), queryStartTime).Find(&validPools).Error
+		err = database.DB.Where("user_id = ? AND expires_at > ? AND created_at >= ? AND created_at <= ?",
+			userID, time.Now(), queryStartTime, time.Now()).Find(&validPools).Error
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get valid pools"})
 			return
 		}
 
-		// 如果有有效的积分池，找到最早的创建时间作为统计起始时间
+		// 进一步筛选：只包含在当前订阅期间内的积分池
+		// 这确保不会包含之前订阅的积分池
+		var currentSubscriptionPools []models.PointPool
+		for _, pool := range validPools {
+			// 只统计在当前订阅创建之后且未过期的积分池
+			if pool.CreatedAt.After(queryStartTime) && pool.ExpiresAt.After(time.Now()) {
+				currentSubscriptionPools = append(currentSubscriptionPools, pool)
+			}
+		}
+
+		// 如果有当前订阅的积分池，使用最早的积分池创建时间作为统计起始时间
 		var validPoolStartTime time.Time
-		if len(validPools) > 0 {
-			validPoolStartTime = validPools[0].CreatedAt
-			for _, pool := range validPools {
+		if len(currentSubscriptionPools) > 0 {
+			validPoolStartTime = currentSubscriptionPools[0].CreatedAt
+			for _, pool := range currentSubscriptionPools {
 				if pool.CreatedAt.Before(validPoolStartTime) {
 					validPoolStartTime = pool.CreatedAt
 				}
@@ -146,21 +158,21 @@ func HandleGetCreditBalance(c *gin.Context) {
 			// 统计时间稍微向前推一点，避免毫秒级时间差
 			validPoolStartTime = validPoolStartTime.Add(-time.Second)
 		} else {
-			// 如果没有有效积分池，使用当前时间，这样所有统计都为0
-			validPoolStartTime = time.Now()
+			// 如果没有当前订阅的有效积分池，使用订阅创建时间
+			validPoolStartTime = queryStartTime
 		}
 
-		// 可用积分：只统计未过期的积分池
-		for _, pool := range validPools {
+		// 可用积分：只统计当前订阅的未过期积分池
+		for _, pool := range currentSubscriptionPools {
 			validPoints += pool.PointsRemaining
 		}
 
-		// 总积分：只统计未过期的积分池的总量
-		for _, pool := range validPools {
+		// 总积分：只统计当前订阅的积分池总量
+		for _, pool := range currentSubscriptionPools {
 			totalPoints += pool.PointsTotal
 		}
 
-		// 已使用积分：只统计有效积分池创建时间之后的使用量
+		// 已使用积分：只统计当前订阅期间的使用量
 		err = database.DB.Model(&models.APITransaction{}).
 			Where("user_id = ? AND status = 'success' AND created_at >= ?", userID, validPoolStartTime).
 			Select("COALESCE(SUM(points_used), 0)").

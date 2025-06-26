@@ -2,7 +2,7 @@ import axios from "axios";
 
 // 创建axios实例
 export const request = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://110.42.42.200:9998",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:9998",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
