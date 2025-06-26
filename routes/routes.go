@@ -63,6 +63,7 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/credits/balance", handlers.HandleGetCreditBalance)
 		api.GET("/credits/model-costs", handlers.HandleGetModelCosts)
 		api.GET("/credits/history", handlers.HandleGetCreditUsageHistory)
+		api.GET("/credits/pricing-table", handlers.HandleGetPricingTable)
 
 		// Claude API 代理路由
 		api.POST("/claude", handlers.HandleClaudeProxy)

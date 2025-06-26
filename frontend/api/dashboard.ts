@@ -9,6 +9,7 @@ export interface PointBalance {
   available_points: number;
   expired_points: number;
   is_current_subscription: boolean;
+  free_model_usage_count: number;
   updated_at: string;
 }
 
@@ -50,6 +51,7 @@ export const dashboardAPI = {
           available_points: balance.available || 0,
           expired_points: balance.expired || 0,  // 使用后端返回的已过期积分
           is_current_subscription: balance.is_current_subscription || false,
+          free_model_usage_count: balance.free_model_usage_count || 0,
           updated_at: new Date().toISOString()
         };
         return { success: true, data: pointBalance };

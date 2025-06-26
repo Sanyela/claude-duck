@@ -17,6 +17,7 @@ type User struct {
 	DegradationSource     string         `gorm:"default:'system'" json:"degradation_source"` // system/admin/subscription
 	DegradationLocked     bool           `gorm:"default:false" json:"degradation_locked"`    // 是否锁定，不被套餐覆盖
 	DegradationCounter    int64          `gorm:"default:0" json:"degradation_counter"`       // 当前计数器
+	FreeModelUsageCount   int64          `gorm:"default:0" json:"free_model_usage_count"`    // 免费模型使用次数
 	CreatedAt             time.Time      `json:"created_at"`
 	UpdatedAt             time.Time      `json:"updated_at"`
 	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
@@ -175,7 +176,6 @@ type APITransaction struct {
 	OutputMultiplier float64 `gorm:"not null" json:"output_multiplier"`   // 输出token倍率 (原completion_multiplier)
 	CacheMultiplier  float64 `gorm:"default:1.0" json:"cache_multiplier"` // 缓存token倍率
 	PointsUsed       int64   `gorm:"not null" json:"points_used"`         // 消耗的积分
-	IsRoundUp        bool    `gorm:"default:false" json:"is_round_up"`    // 是否向上取整
 
 	// 请求详情
 	IP          string `gorm:"type:varchar(45)" json:"ip"`             // 用户IP

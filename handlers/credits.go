@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -23,6 +24,7 @@ type CreditBalanceData struct {
 	Used                  int  `json:"used"`                    // 实际已使用积分
 	Expired               int  `json:"expired"`                 // 已过期积分
 	IsCurrentSubscription bool `json:"is_current_subscription"` // 是否为当前活跃订阅
+	FreeModelUsageCount   int  `json:"free_model_usage_count"`  // 免费模型使用次数
 }
 
 type ModelCostsResponse struct {
@@ -44,12 +46,35 @@ type CreditUsageHistoryResponse struct {
 }
 
 type CreditUsageData struct {
-	ID           string `json:"id"`
-	Amount       int    `json:"amount"`
-	Timestamp    string `json:"timestamp"`
-	RelatedModel string `json:"relatedModel,omitempty"`
-	InputTokens  int    `json:"input_tokens"`
-	OutputTokens int    `json:"output_tokens"`
+	ID                  string          `json:"id"`
+	Amount              int             `json:"amount"`
+	Timestamp           string          `json:"timestamp"`
+	RelatedModel        string          `json:"relatedModel,omitempty"`
+	InputTokens         int             `json:"input_tokens"`
+	OutputTokens        int             `json:"output_tokens"`
+	CacheCreationTokens int             `json:"cache_creation_tokens,omitempty"`
+	CacheReadTokens     int             `json:"cache_read_tokens,omitempty"`
+	TotalCacheTokens    int             `json:"total_cache_tokens,omitempty"`
+	BillingDetails      *BillingDetails `json:"billing_details,omitempty"`
+}
+
+// BillingDetails 计费详情
+type BillingDetails struct {
+	InputMultiplier      float64 `json:"input_multiplier"`       // 输入token倍率
+	OutputMultiplier     float64 `json:"output_multiplier"`      // 输出token倍率
+	CacheMultiplier      float64 `json:"cache_multiplier"`       // 缓存token倍率
+	WeightedInputTokens  float64 `json:"weighted_input_tokens"`  // 加权后的输入tokens
+	WeightedOutputTokens float64 `json:"weighted_output_tokens"` // 加权后的输出tokens
+	WeightedCacheTokens  float64 `json:"weighted_cache_tokens"`  // 加权后的缓存tokens
+	TotalWeightedTokens  float64 `json:"total_weighted_tokens"`  // 总加权tokens
+	FinalPoints          int64   `json:"final_points"`           // 最终扣除积分
+	PricingTableUsed     bool    `json:"pricing_table_used"`     // 是否使用了阶梯计费表
+}
+
+// PricingTable 计费表响应结构
+type PricingTableResponse struct {
+	PricingTable map[string]int `json:"pricing_table"` // token阈值 -> 积分的映射
+	Description  string         `json:"description"`   // 说明
 }
 
 // HandleGetCreditBalance 获取积分余额
@@ -94,66 +119,123 @@ func HandleGetCreditBalance(c *gin.Context) {
 	// 为了避免毫秒级时间差导致的问题，统计时间稍微向前推一点
 	queryStartTime := subscriptionStartTime.Add(-time.Second)
 
-	// 额外调试信息：查看所有积分池和API交易
-	var allPools []models.PointPool
-	database.DB.Where("user_id = ?", userID).Find(&allPools)
-
 	var allTransactions []models.APITransaction
 	database.DB.Where("user_id = ? AND status = 'success'", userID).Order("created_at DESC").Limit(10).Find(&allTransactions)
+	var validPoints, expiredPoints, totalPoints, usedPoints int64
 
-	// 只统计当前订阅周期内的积分池
-	var validPoints int64
-	err = database.DB.Model(&models.PointPool{}).
-		Where("user_id = ? AND points_remaining > 0 AND expires_at > ? AND created_at >= ?",
-			userID, time.Now(), queryStartTime).
-		Select("COALESCE(SUM(points_remaining), 0)").
-		Scan(&validPoints).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate valid points"})
-		return
+	if isCurrentSubscription {
+		// 如果有当前有效订阅，只统计未过期的积分池相关数据
+		// 先获取所有未过期的积分池，用于确定统计范围
+		var validPools []models.PointPool
+		err = database.DB.Where("user_id = ? AND expires_at > ? AND created_at >= ?",
+			userID, time.Now(), queryStartTime).Find(&validPools).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get valid pools"})
+			return
+		}
+
+		// 如果有有效的积分池，找到最早的创建时间作为统计起始时间
+		var validPoolStartTime time.Time
+		if len(validPools) > 0 {
+			validPoolStartTime = validPools[0].CreatedAt
+			for _, pool := range validPools {
+				if pool.CreatedAt.Before(validPoolStartTime) {
+					validPoolStartTime = pool.CreatedAt
+				}
+			}
+			// 统计时间稍微向前推一点，避免毫秒级时间差
+			validPoolStartTime = validPoolStartTime.Add(-time.Second)
+		} else {
+			// 如果没有有效积分池，使用当前时间，这样所有统计都为0
+			validPoolStartTime = time.Now()
+		}
+
+		// 可用积分：只统计未过期的积分池
+		for _, pool := range validPools {
+			validPoints += pool.PointsRemaining
+		}
+
+		// 总积分：只统计未过期的积分池的总量
+		for _, pool := range validPools {
+			totalPoints += pool.PointsTotal
+		}
+
+		// 已使用积分：只统计有效积分池创建时间之后的使用量
+		err = database.DB.Model(&models.APITransaction{}).
+			Where("user_id = ? AND status = 'success' AND created_at >= ?", userID, validPoolStartTime).
+			Select("COALESCE(SUM(points_used), 0)").
+			Scan(&usedPoints).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate used points"})
+			return
+		}
+
+		// 已过期积分设为0，因为当前有活跃订阅时不显示过期积分
+		expiredPoints = 0
+
+	} else {
+		// 如果没有当前有效订阅，统计上一期订阅的积分（包括过期的）
+		// 可用积分：在查询时间之后创建的且未过期的积分池
+		err = database.DB.Model(&models.PointPool{}).
+			Where("user_id = ? AND points_remaining > 0 AND expires_at > ? AND created_at >= ?",
+				userID, time.Now(), queryStartTime).
+			Select("COALESCE(SUM(points_remaining), 0)").
+			Scan(&validPoints).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate valid points"})
+			return
+		}
+
+		// 已过期积分：在查询时间之后创建的但已过期的积分池
+		err = database.DB.Model(&models.PointPool{}).
+			Where("user_id = ? AND points_remaining > 0 AND expires_at <= ? AND created_at >= ?",
+				userID, time.Now(), queryStartTime).
+			Select("COALESCE(SUM(points_remaining), 0)").
+			Scan(&expiredPoints).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate expired points"})
+			return
+		}
+
+		// 总充值积分：在查询时间之后创建的所有积分池
+		err = database.DB.Model(&models.PointPool{}).
+			Where("user_id = ? AND created_at >= ?", userID, queryStartTime).
+			Select("COALESCE(SUM(points_total), 0)").
+			Scan(&totalPoints).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate total points"})
+			return
+		}
+
+		// 已使用积分：在查询时间之后的所有消费
+		err = database.DB.Model(&models.APITransaction{}).
+			Where("user_id = ? AND status = 'success' AND created_at >= ?", userID, queryStartTime).
+			Select("COALESCE(SUM(points_used), 0)").
+			Scan(&usedPoints).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate used points"})
+			return
+		}
 	}
 
-	// 计算当前订阅周期内的已过期积分
-	var expiredPoints int64
-	err = database.DB.Model(&models.PointPool{}).
-		Where("user_id = ? AND points_remaining > 0 AND expires_at <= ? AND created_at >= ?",
-			userID, time.Now(), queryStartTime).
-		Select("COALESCE(SUM(points_remaining), 0)").
-		Scan(&expiredPoints).Error
+	// 获取用户免费模型使用次数
+	var user models.User
+	var freeModelUsageCount int64
+	err = database.DB.Where("id = ?", userID).First(&user).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate expired points"})
-		return
+		freeModelUsageCount = 0 // 如果获取失败，默认为0
+	} else {
+		freeModelUsageCount = user.FreeModelUsageCount
 	}
 
-	// 计算当前订阅周期内的总充值积分
-	var totalPoints int64
-	err = database.DB.Model(&models.PointPool{}).
-		Where("user_id = ? AND created_at >= ?", userID, queryStartTime).
-		Select("COALESCE(SUM(points_total), 0)").
-		Scan(&totalPoints).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate total points"})
-		return
-	}
-
-	// 计算当前订阅周期内的已使用积分
-	var usedPoints int64
-	err = database.DB.Model(&models.APITransaction{}).
-		Where("user_id = ? AND status = 'success' AND created_at >= ?", userID, queryStartTime).
-		Select("COALESCE(SUM(points_used), 0)").
-		Scan(&usedPoints).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to calculate used points"})
-		return
-	}
-
-	// 转换为响应格式 - 只显示当前订阅周期的数据
+	// 转换为响应格式
 	balanceData := CreditBalanceData{
 		Available:             int(validPoints),   // 当前可用积分
-		Total:                 int(totalPoints),   // 当前订阅周期总充值积分
-		Used:                  int(usedPoints),    // 当前订阅周期已使用积分
-		Expired:               int(expiredPoints), // 当前订阅周期已过期积分
+		Total:                 int(totalPoints),   // 总充值积分
+		Used:                  int(usedPoints),    // 已使用积分
+		Expired:               int(expiredPoints), // 已过期积分
 		IsCurrentSubscription: isCurrentSubscription,
+		FreeModelUsageCount:   int(freeModelUsageCount), // 免费模型使用次数
 	}
 
 	c.JSON(http.StatusOK, CreditBalanceResponse{Balance: balanceData})
@@ -275,13 +357,39 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 	// 转换为响应格式
 	var historyData []CreditUsageData
 	for _, transaction := range apiTransactions {
+		// 计算总缓存token
+		totalCacheTokens := transaction.CacheCreationInputTokens + transaction.CacheReadInputTokens
+
+		// 计算加权后的tokens
+		weightedInputTokens := float64(transaction.InputTokens) * transaction.InputMultiplier
+		weightedOutputTokens := float64(transaction.OutputTokens) * transaction.OutputMultiplier
+		weightedCacheTokens := float64(totalCacheTokens) * transaction.CacheMultiplier
+		totalWeightedTokens := weightedInputTokens + weightedOutputTokens + weightedCacheTokens
+
+		// 构建计费详情
+		billingDetails := &BillingDetails{
+			InputMultiplier:      transaction.InputMultiplier,
+			OutputMultiplier:     transaction.OutputMultiplier,
+			CacheMultiplier:      transaction.CacheMultiplier,
+			WeightedInputTokens:  weightedInputTokens,
+			WeightedOutputTokens: weightedOutputTokens,
+			WeightedCacheTokens:  weightedCacheTokens,
+			TotalWeightedTokens:  totalWeightedTokens,
+			FinalPoints:          transaction.PointsUsed,
+			PricingTableUsed:     true, // 新系统都使用阶梯计费表
+		}
+
 		historyData = append(historyData, CreditUsageData{
-			ID:           fmt.Sprintf("%d", transaction.ID),
-			Amount:       -int(transaction.PointsUsed), // 负数表示消耗
-			Timestamp:    transaction.CreatedAt.Format(time.RFC3339),
-			RelatedModel: transaction.Model,
-			InputTokens:  int(transaction.InputTokens),
-			OutputTokens: int(transaction.OutputTokens),
+			ID:                  fmt.Sprintf("%d", transaction.ID),
+			Amount:              -int(transaction.PointsUsed), // 负数表示消耗
+			Timestamp:           transaction.CreatedAt.Format(time.RFC3339),
+			RelatedModel:        transaction.Model,
+			InputTokens:         int(transaction.InputTokens),
+			OutputTokens:        int(transaction.OutputTokens),
+			CacheCreationTokens: int(transaction.CacheCreationInputTokens),
+			CacheReadTokens:     int(transaction.CacheReadInputTokens),
+			TotalCacheTokens:    totalCacheTokens,
+			BillingDetails:      billingDetails,
 		})
 	}
 
@@ -292,6 +400,73 @@ func HandleGetCreditUsageHistory(c *gin.Context) {
 		TotalPages:  totalPages,
 		CurrentPage: page,
 	})
+}
+
+// HandleGetPricingTable 获取计费表配置
+func HandleGetPricingTable(c *gin.Context) {
+	_, err := getUserIDFromToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// 获取计费表配置
+	var config models.SystemConfig
+	err = database.DB.Where("config_key = ?", "token_pricing_table").First(&config).Error
+	if err != nil {
+		// 如果没有配置，返回默认计费表
+		defaultTable := map[string]int{
+			"0":      2,
+			"7680":   3,
+			"15360":  4,
+			"23040":  5,
+			"30720":  6,
+			"38400":  7,
+			"46080":  8,
+			"53760":  9,
+			"61440":  10,
+			"69120":  11,
+			"76800":  12,
+			"84480":  13,
+			"92160":  14,
+			"99840":  15,
+			"107520": 16,
+			"115200": 17,
+			"122880": 18,
+			"130560": 19,
+			"138240": 20,
+			"145920": 21,
+			"153600": 22,
+			"161280": 23,
+			"168960": 24,
+			"176640": 25,
+			"184320": 25,
+			"192000": 25,
+			"200000": 25,
+		}
+
+		response := PricingTableResponse{
+			PricingTable: defaultTable,
+			Description:  "基于加权Token总数的阶梯计费表",
+		}
+
+		c.JSON(http.StatusOK, response)
+		return
+	}
+
+	// 解析JSON配置
+	var pricingTable map[string]int
+	if err := json.Unmarshal([]byte(config.ConfigValue), &pricingTable); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to parse pricing table"})
+		return
+	}
+
+	response := PricingTableResponse{
+		PricingTable: pricingTable,
+		Description:  config.Description,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // 辅助函数

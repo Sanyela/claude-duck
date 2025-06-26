@@ -93,24 +93,29 @@ func initDefaultConfigs() {
 			Description: "补全token倍率",
 		},
 		{
-			ConfigKey:   "tokens_per_point",
-			ConfigValue: "10000",
-			Description: "多少token等于1积分",
+			ConfigKey:   "cache_multiplier",
+			ConfigValue: "0.2",
+			Description: "缓存token倍率",
 		},
 		{
-			ConfigKey:   "round_up_enabled",
-			ConfigValue: "false",
-			Description: "是否向上取整",
+			ConfigKey:   "token_pricing_table",
+			ConfigValue: `{"0":2,"7680":3,"15360":4,"23040":5,"30720":6,"38400":7,"46080":8,"53760":9,"61440":10,"69120":11,"76800":12,"84480":13,"92160":14,"99840":15,"107520":16,"115200":17,"122880":18,"130560":19,"138240":20,"145920":21,"153600":22,"161280":23,"168960":24,"176640":25,"184320":25,"192000":25,"200000":25}`,
+			Description: "基于总token的阶梯积分扣费表",
+		},
+		{
+			ConfigKey:   "free_models_list",
+			ConfigValue: `["claude-3-5-haiku-20241022"]`,
+			Description: "免费模型列表，JSON数组格式",
 		},
 		{
 			ConfigKey:   "new_api_endpoint",
 			ConfigValue: config.AppConfig.NewAPIEndpoint,
-			Description: "New API接入点",
+			Description: "New API 端点地址",
 		},
 		{
 			ConfigKey:   "new_api_key",
 			ConfigValue: config.AppConfig.NewAPIKey,
-			Description: "New API密钥",
+			Description: "New API 密钥",
 		},
 		{
 			ConfigKey:   "degradation_api_key",

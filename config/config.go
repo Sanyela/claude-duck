@@ -33,8 +33,6 @@ type Config struct {
 	// 积分系统默认配置
 	DefaultPromptMultiplier     float64
 	DefaultCompletionMultiplier float64
-	DefaultTokensPerPoint       int
-	DefaultRoundUpEnabled       bool
 
 	// 服务降级配置
 	DegradationAPIKey            string
@@ -88,8 +86,6 @@ func LoadConfig() {
 		// 积分系统默认配置
 		DefaultPromptMultiplier:     getEnvAsFloat("DEFAULT_PROMPT_MULTIPLIER", 5.0),
 		DefaultCompletionMultiplier: getEnvAsFloat("DEFAULT_COMPLETION_MULTIPLIER", 10.0),
-		DefaultTokensPerPoint:       getEnvAsInt("DEFAULT_TOKENS_PER_POINT", 10000),
-		DefaultRoundUpEnabled:       getEnvAsBool("DEFAULT_ROUND_UP_ENABLED", true),
 
 		// 服务降级配置
 		DegradationAPIKey:            getEnv("DEGRADATION_API_KEY", "sk-ijk47MsAmnmJ7sgb0I8Dx6OVXswFBm5Y760tvwpNv3Te0ptp"),

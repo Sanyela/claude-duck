@@ -35,11 +35,12 @@ import {
   CartesianGrid, 
   Tooltip as RechartsTooltip, 
   ResponsiveContainer,
-  ReferenceLine
 } from "recharts"
 import { creditsAPI, type CreditBalance, type CreditUsageHistory } from "@/api/credits"
+import { PricingTableModal } from "./pricing-table-modal"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import React from "react"
 
 // 图表数据接口
 interface ChartDataPoint {
@@ -54,6 +55,10 @@ export function CreditsContent() {
   const [usageHistory, setUsageHistory] = useState<CreditUsageHistory[]>([])
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
   const [selectedRecord, setSelectedRecord] = useState<string | null>(null)
+  
+  // 计费表弹窗状态
+  const [pricingTableOpen, setPricingTableOpen] = useState(false)
+  const [selectedTokenCount, setSelectedTokenCount] = useState<number | undefined>(undefined)
   
   // 日期状态使用Date对象
   const [startDate, setStartDate] = useState<Date>(() => {
@@ -319,6 +324,10 @@ export function CreditsContent() {
                   <span className="font-semibold">{uniqueModels}</span> 
                   <span className="ml-1 text-xs opacity-90">使用模型</span>
                 </Badge>
+                <Badge className="bg-purple-500 text-white hover:bg-purple-600 px-2.5 py-1.5 shadow-sm">
+                  <span className="font-semibold">{creditBalance?.free_model_usage_count?.toLocaleString() || 0}</span> 
+                  <span className="ml-1 text-xs opacity-90">免费调用</span>
+                </Badge>
                 {(creditBalance?.expired_points || 0) > 0 && (
                   <Badge className="bg-orange-500 text-white hover:bg-orange-600 px-2.5 py-1.5 shadow-sm">
                     <span className="font-semibold">{(creditBalance?.expired_points || 0).toLocaleString()}</span> 
@@ -412,6 +421,7 @@ export function CreditsContent() {
                   <div className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
+                        key="credits-chart"
                         data={chartData}
                         margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                       >
@@ -456,15 +466,8 @@ export function CreditsContent() {
                           strokeWidth={2}
                           dot={{ r: 4 }}
                           activeDot={{ r: 6, fill: '#0ea5e9' }}
+                          isAnimationActive={false}
                         />
-                        {selectedRecord && (
-                          <ReferenceLine 
-                            x={chartData.find(item => item.id === selectedRecord)?.date} 
-                            stroke="#0ea5e9" 
-                            strokeWidth={2}
-                            strokeDasharray="3 3" 
-                          />
-                        )}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -489,67 +492,101 @@ export function CreditsContent() {
                         </TableHeader>
                         <TableBody>
                           {usageHistory.map((item) => (
-                            <TableRow 
-                              key={item.id} 
-                              className={`border-border cursor-pointer transition-colors ${selectedRecord === item.id ? 'bg-sky-50 dark:bg-sky-900/20' : 'hover:bg-muted/50'}`}
-                              onClick={() => handleRecordClick(item.id)}
-                            >
-                              <TableCell className="font-medium">
-                                {new Date(item.timestamp).toLocaleString()}
-                              </TableCell>
-                              <TableCell>
-                                <TooltipProvider delayDuration={0}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge variant="outline" className="font-mono text-xs">
-                                        {item.relatedModel}
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>{item.relatedModel}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex gap-1 items-center">
-                                  <TooltipProvider delayDuration={0}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Badge 
-                                          variant="secondary" 
-                                          className="font-mono text-xs bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 transition-colors"
-                                        >
-                                          {item.input_tokens}
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>输入Token数量</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  
-                                  <TooltipProvider delayDuration={0}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Badge 
-                                          variant="secondary" 
-                                          className="font-mono text-xs bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 transition-colors text-red-600 dark:text-red-400"
-                                        >
-                                          {item.output_tokens}
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>输出Token数量</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right font-medium text-red-500 dark:text-red-400">
-                                {item.amount}
-                              </TableCell>
-                            </TableRow>
+                            <React.Fragment key={item.id}>
+                              <TableRow 
+                                className={`border-border cursor-pointer transition-colors ${selectedRecord === item.id ? 'bg-sky-50 dark:bg-sky-900/20' : 'hover:bg-muted/50'}`}
+                                onClick={() => handleRecordClick(item.id)}
+                              >
+                                <TableCell className="font-medium">
+                                  {new Date(item.timestamp).toLocaleString()}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center">
+                                    <Badge variant="outline" className="mr-2">
+                                      {item.relatedModel || "Unknown"}
+                                    </Badge>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <TooltipProvider delayDuration={0}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge className="bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 border-green-300">
+                                            {item.input_tokens.toLocaleString()}
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>输入Token</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    
+                                    <TooltipProvider delayDuration={0}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge className="bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 border-red-300">
+                                            {item.output_tokens.toLocaleString()}
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>输出Token</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    
+                                    {(item.total_cache_tokens || 0) > 0 && (
+                                      <TooltipProvider delayDuration={0}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 border-blue-300">
+                                              {(item.total_cache_tokens || 0).toLocaleString()}
+                                            </Badge>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>缓存Token</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end">
+                                    <span className="font-medium text-red-600">{Math.abs(item.amount)}</span>
+                                    <span className="ml-1 text-sm text-muted-foreground">积分</span>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                              
+                              {/* 详细信息展开区域 */}
+                              {selectedRecord === item.id && item.billing_details && (
+                                <TableRow className="bg-sky-50/50 dark:bg-sky-900/10">
+                                  <TableCell colSpan={4} className="py-4">
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                                      <h5 className="text-sm font-medium mb-3 text-blue-900 dark:text-blue-100">💰 计费公式详情</h5>
+                                      <div className="space-y-2 text-sm">
+                                        <div className="font-mono bg-white dark:bg-gray-800 p-3 rounded border">
+                                          <div className="text-gray-600 dark:text-gray-300 mb-1">计算步骤:</div>
+                                          <div>
+                                            <span className="underline decoration-green-500 decoration-2">{item.input_tokens.toLocaleString()}(输入) × {item.billing_details.input_multiplier}(输入倍率)</span> + {(item.total_cache_tokens || 0) > 0 && <span><span className="underline decoration-blue-500 decoration-2">{(item.total_cache_tokens || 0).toLocaleString()}(缓存) × {item.billing_details.cache_multiplier}(缓存倍率)</span> + </span>}<span className="underline decoration-red-500 decoration-2">{item.output_tokens.toLocaleString()}(输出) × {item.billing_details.output_multiplier}(输出倍率)</span> = {item.billing_details.total_weighted_tokens.toLocaleString()}(加权Token) → <button
+                                              className="text-blue-600 hover:text-blue-800 underline cursor-pointer mx-1"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                setSelectedTokenCount(Math.round(item.billing_details?.total_weighted_tokens || 0))
+                                                setPricingTableOpen(true)
+                                              }}
+                                            >
+                                              查阶梯表
+                                            </button> → <span className="font-bold text-red-600">{item.billing_details.final_points}(积分)</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
                           ))}
                         </TableBody>
                       </Table>
@@ -643,6 +680,13 @@ export function CreditsContent() {
           )}
         </CardContent>
       </Card>
+      
+      {/* 计费表悬浮窗 */}
+      <PricingTableModal 
+        open={pricingTableOpen}
+        onOpenChange={setPricingTableOpen}
+        tokenCount={selectedTokenCount}
+      />
     </div>
   )
 }
