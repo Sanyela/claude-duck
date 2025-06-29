@@ -4,7 +4,7 @@ import { request } from './request';
 export interface SubscriptionPlan {
   id: string;
   name: string;
-  currency: string;
+  currency?: string;
   features: string[];
 }
 
@@ -14,20 +14,27 @@ export interface ActiveSubscription {
   status: 'active' | 'canceled' | 'past_due';
   currentPeriodEnd: string; // ISO Date string
   cancelAtPeriodEnd: boolean;
+  availablePoints: number;
+  totalPoints: number;
+  usedPoints: number;
+  activatedAt: string;
+  detailedStatus: '有效' | '已用完' | '已过期';
+  isCurrentUsing: boolean;
 }
 
 export interface SubscriptionHistoryItem {
   id: string;
   planName: string;
-  amount: number;
-  currency: string;
+  amount?: number;
+  currency?: string;
   date: string; // ISO Date string
-  status: 'paid' | 'failed';
+  paymentStatus: 'paid' | 'failed';
+  subscriptionStatus: '有效' | '已用完' | '已过期';
   invoiceUrl?: string;
 }
 
 export interface GetActiveSubscriptionResponse {
-  subscription: ActiveSubscription | null;
+  subscriptions: ActiveSubscription[];
 }
 
 export interface GetSubscriptionHistoryResponse {

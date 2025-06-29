@@ -27,7 +27,7 @@ interface PaymentHistory {
 export default function SubscriptionPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [subscription, setSubscription] = useState<ActiveSubscription | null>(null)
+  const [subscriptions, setSubscriptions] = useState<ActiveSubscription[]>([])
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([])
   const [couponCode, setCouponCode] = useState("")
   const [redeemingCoupon, setRedeemingCoupon] = useState(false)
@@ -45,7 +45,7 @@ export default function SubscriptionPage() {
       ])
 
       if (subscriptionResult.success) {
-        setSubscription(subscriptionResult.data || null)
+        setSubscriptions(subscriptionResult.data || [])
       }
 
       if (historyResult.success) {
@@ -120,7 +120,7 @@ export default function SubscriptionPage() {
     loadSubscriptionData()
   }, [])
 
-  const isSubscriptionActive = subscription?.status === "active"
+  const isSubscriptionActive = subscriptions.length > 0 && subscriptions[0].status === "active"
 
   return (
     <DashboardLayout>
@@ -136,7 +136,7 @@ export default function SubscriptionPage() {
           <Card className="shadow-lg bg-card text-card-foreground border-border">
             <CardHeader>
               <CardTitle>当前订阅</CardTitle>
-              <CardDescription>查看您当前的订阅计划详情。</CardDescription>
+              <CardDescription>查看您当前有效的订阅计划详情。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {loading ? (
@@ -144,50 +144,75 @@ export default function SubscriptionPage() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                   <span className="ml-2">加载中...</span>
                 </div>
-              ) : subscription ? (
-                <>
-              <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-semibold text-sky-500 dark:text-sky-400">
-                      {subscription.plan.name}
-                    </h3>
-                <Badge
-                  variant={isSubscriptionActive ? "default" : "destructive"}
-                  className={
-                    isSubscriptionActive
-                      ? "bg-green-500 text-white dark:bg-green-600 dark:text-green-50"
-                      : "bg-red-500 text-white dark:bg-red-600 dark:text-red-50"
-                  }
-                >
-                      {isSubscriptionActive ? "有效" : subscription.status === "canceled" ? "已取消" : "已过期"}
-                </Badge>
-              </div>
-              <div>
-                <h4 className="font-medium mb-2">核心功能:</h4>
-                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                  <li>模型智能不降级，保证回答质量</li>
-                  <li>享受完整Claude 4 Sonnet能力</li>
-                  <li>优先处理请求，响应更快</li>
-                </ul>
-              </div>
-              {isSubscriptionActive && (
-                    <p className="text-sm text-muted-foreground border-t pt-3">
-                      下次账单日期: {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
-                    </p>
-              )}
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-lg font-medium text-muted-foreground">暂无套餐</p>
-                  <p className="text-sm text-muted-foreground">您可以使用激活码激活套餐</p>
-                </div>
-              )}
+              ) : (() => {
+                const validSubscriptions = subscriptions.filter(sub => sub.detailedStatus === "有效");
+                return validSubscriptions.length > 0 ? (
+                  <div className="space-y-4">
+                    {validSubscriptions.map((subscription, index) => (
+                      <div key={subscription.id} className={`p-4 rounded-lg border ${
+                        subscription.isCurrentUsing ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20' : 'border-border bg-card'
+                      }`}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="text-lg font-semibold text-sky-500 dark:text-sky-400">
+                              {subscription.plan.name}
+                            </h3>
+                            {subscription.isCurrentUsing && (
+                              <Badge className="bg-blue-500 text-white text-xs mt-1">
+                                当前消耗
+                              </Badge>
+                            )}
+                          </div>
+                          <Badge className="bg-green-500 text-white dark:bg-green-600 dark:text-green-50">
+                            有效
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">可用积分</p>
+                            <p className="font-semibold">{subscription.availablePoints.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">总积分</p>
+                            <p className="font-semibold">{subscription.totalPoints.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">已使用</p>
+                            <p className="font-semibold">{subscription.usedPoints.toLocaleString()}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-3 text-xs text-muted-foreground">
+                          <p>激活时间: {new Date(subscription.activatedAt).toLocaleDateString()}</p>
+                          <p>到期时间: {new Date(subscription.currentPeriodEnd).toLocaleDateString()}</p>
+                        </div>
+                        
+                        <div className="mt-3">
+                          <h4 className="font-medium mb-2 text-sm">核心功能:</h4>
+                          <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+                            <li>模型智能不降级，保证回答质量</li>
+                            <li>享受完整Claude 4 Sonnet能力</li>
+                            <li>优先处理请求，响应更快</li>
+                          </ul>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-lg font-medium text-muted-foreground">暂无有效套餐</p>
+                    <p className="text-sm text-muted-foreground">您可以使用激活码激活套餐</p>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
           <Card className="shadow-lg bg-card text-card-foreground border-border">
             <CardHeader>
               <CardTitle>订阅历史</CardTitle>
-              <CardDescription>查看您过去的订阅和付款记录。</CardDescription>
+              <CardDescription>查看您所有的订阅记录，包括已过期和已用完的订阅。</CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -195,58 +220,74 @@ export default function SubscriptionPage() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                   <span className="ml-2">加载中...</span>
                 </div>
-              ) : paymentHistory.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border">
-                    <TableHead>账单ID</TableHead>
-                    <TableHead>日期</TableHead>
-                    <TableHead>计划</TableHead>
-                    <TableHead>支付状态</TableHead>
-                    <TableHead className="text-right">订阅状态</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {paymentHistory.map((item) => (
-                    <TableRow key={item.id} className="border-border">
-                      <TableCell className="font-medium">{item.id}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(item.date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{item.planName}</TableCell>
-                      <TableCell>
-                        <Badge
-                            variant={item.paymentStatus === "paid" ? "default" : "destructive"}
-                          className={
-                              item.paymentStatus === "paid"
-                              ? "bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-300"
-                              : "bg-red-100 text-red-700 dark:bg-red-700/30 dark:text-red-300"
-                          }
-                        >
-                            {item.paymentStatus === "paid" ? "支付成功" : "支付失败"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge
-                            variant={item.subscriptionStatus === "active" ? "default" : "secondary"}
-                          className={
-                              item.subscriptionStatus === "active"
-                              ? "bg-blue-100 text-blue-700 dark:bg-blue-700/30 dark:text-blue-300"
-                              : "bg-gray-100 text-gray-700 dark:bg-gray-700/30 dark:text-gray-300"
-                          }
-                        >
-                            {item.subscriptionStatus === "active" ? "有效" : "已过期"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">暂无订阅历史</p>
-                </div>
-              )}
+              ) : (() => {
+                const allSubscriptionsHistory = subscriptions.length > 0 
+                  ? subscriptions.map(sub => ({
+                      id: sub.id,
+                      planName: sub.plan.name,
+                      date: sub.activatedAt,
+                      paymentStatus: "paid",
+                      subscriptionStatus: sub.detailedStatus,
+                      invoiceUrl: ""
+                    }))
+                  : paymentHistory;
+                
+                return allSubscriptionsHistory.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border">
+                        <TableHead>订阅ID</TableHead>
+                        <TableHead>日期</TableHead>
+                        <TableHead>计划</TableHead>
+                        <TableHead>支付状态</TableHead>
+                        <TableHead className="text-right">订阅状态</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allSubscriptionsHistory.map((item) => (
+                        <TableRow key={item.id} className="border-border">
+                          <TableCell className="font-medium">{item.id}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(item.date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{item.planName}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={item.paymentStatus === "paid" ? "default" : "destructive"}
+                              className={
+                                item.paymentStatus === "paid"
+                                  ? "bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-300"
+                                  : "bg-red-100 text-red-700 dark:bg-red-700/30 dark:text-red-300"
+                              }
+                            >
+                              {item.paymentStatus === "paid" ? "支付成功" : "支付失败"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Badge
+                              variant={item.subscriptionStatus === "有效" ? "default" : 
+                                       item.subscriptionStatus === "已用完" ? "secondary" : "outline"}
+                              className={
+                                item.subscriptionStatus === "有效"
+                                  ? "bg-blue-100 text-blue-700 dark:bg-blue-700/30 dark:text-blue-300"
+                                  : item.subscriptionStatus === "已用完"
+                                  ? "bg-orange-100 text-orange-700 dark:bg-orange-700/30 dark:text-orange-300"
+                                  : "bg-gray-100 text-gray-700 dark:bg-gray-700/30 dark:text-gray-300"
+                              }
+                            >
+                              {item.subscriptionStatus}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">暂无订阅历史</p>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </div>

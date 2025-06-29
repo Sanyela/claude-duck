@@ -75,6 +75,18 @@ func Migrate() error {
 	// 初始化默认系统配置
 	initDefaultConfigs()
 
+	// 检查是否需要执行订阅表架构重构迁移
+	if needsSubscriptionRefactor() {
+		log.Println("检测到需要执行订阅表架构重构迁移...")
+		if err := MigrateSubscriptionRefactor(); err != nil {
+			log.Printf("订阅表架构重构迁移失败: %v", err)
+			log.Println("如果这是首次运行，可以忽略此错误")
+		} else {
+			// 标记迁移已完成
+			markSubscriptionRefactorComplete()
+		}
+	}
+
 	log.Println("Database migration completed")
 	return nil
 }
@@ -136,6 +148,64 @@ func initDefaultConfigs() {
 			if err := DB.Create(&cfg).Error; err != nil {
 				log.Printf("Failed to create default config %s: %v", cfg.ConfigKey, err)
 			}
+		}
+	}
+}
+
+// needsSubscriptionRefactor 检查是否需要执行订阅表重构迁移
+func needsSubscriptionRefactor() bool {
+	// 检查是否存在迁移标记
+	var config models.SystemConfig
+	err := DB.Where("config_key = ?", "subscription_refactor_completed").First(&config).Error
+	if err == nil && config.ConfigValue == "true" {
+		return false // 迁移已完成
+	}
+
+	// 检查是否存在旧的积分池表
+	var tableExists bool
+	err = DB.Raw("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'point_pools')").Scan(&tableExists).Error
+	if err != nil || !tableExists {
+		return false // 表不存在，不需要迁移
+	}
+
+	// 检查积分池表是否有数据
+	var count int64
+	err = DB.Raw("SELECT COUNT(*) FROM point_pools").Scan(&count).Error
+	if err != nil || count == 0 {
+		return false // 没有数据需要迁移
+	}
+
+	// 检查订阅表是否已经有新字段
+	var columnExists bool
+	err = DB.Raw("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = 'subscriptions' AND column_name = 'activated_at')").Scan(&columnExists).Error
+	if err == nil && columnExists {
+		return false // 新字段已存在，可能已迁移
+	}
+
+	log.Printf("检测到 %d 条积分池数据需要迁移", count)
+	return true
+}
+
+// markSubscriptionRefactorComplete 标记订阅表重构迁移已完成
+func markSubscriptionRefactorComplete() {
+	config := models.SystemConfig{
+		ConfigKey:   "subscription_refactor_completed",
+		ConfigValue: "true",
+		Description: "订阅表架构重构迁移完成标记",
+	}
+
+	// 使用 UPSERT 语义，如果存在就更新，不存在就创建
+	var existingConfig models.SystemConfig
+	err := DB.Where("config_key = ?", config.ConfigKey).First(&existingConfig).Error
+	if err != nil {
+		// 记录不存在，创建新记录
+		if err := DB.Create(&config).Error; err != nil {
+			log.Printf("创建迁移完成标记失败: %v", err)
+		}
+	} else {
+		// 记录存在，更新现有记录
+		if err := DB.Model(&existingConfig).Updates(config).Error; err != nil {
+			log.Printf("更新迁移完成标记失败: %v", err)
 		}
 	}
 }

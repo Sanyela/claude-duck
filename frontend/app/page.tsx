@@ -76,21 +76,31 @@ export default function DashboardPage() {
 
   // 判断订阅状态和剩余时间
   const getSubscriptionInfo = () => {
-    if (!dashboardData?.subscription) return { status: "no_subscription", timeRemaining: "" };
+    if (!dashboardData?.subscriptions || dashboardData.subscriptions.length === 0) {
+      return { status: "no_subscription", timeRemaining: "", currentSubscription: null, otherSubscriptions: [] };
+    }
     
-    const currentPeriodEnd = new Date(dashboardData.subscription.currentPeriodEnd);
+    // 只考虑有效的订阅
+    const validSubscriptions = dashboardData.subscriptions.filter(sub => sub.detailedStatus === "有效");
+    
+    if (validSubscriptions.length === 0) {
+      return { status: "no_active", timeRemaining: "", currentSubscription: null, otherSubscriptions: [] };
+    }
+    
+    // 找到当前正在使用的有效订阅
+    const currentSubscription = validSubscriptions.find(sub => sub.isCurrentUsing) || validSubscriptions[0];
+    const otherSubscriptions = validSubscriptions.filter(sub => sub.id !== currentSubscription.id);
+    
+    const currentPeriodEnd = new Date(currentSubscription.currentPeriodEnd);
     const now = new Date();
     const daysUntilExpiry = Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     const timeRemaining = formatTimeRemaining(currentPeriodEnd);
     
-    // 首先检查订阅是否已过期
-    if (dashboardData.subscription.status === "active") {
-      if (daysUntilExpiry <= 0) return { status: "expired", timeRemaining };
-      if (daysUntilExpiry <= 3) return { status: "expiring_soon", timeRemaining };
-      return { status: "active", timeRemaining };
+    // 判断状态
+    if (daysUntilExpiry <= 3) {
+      return { status: "expiring_soon", timeRemaining, currentSubscription, otherSubscriptions };
     }
-    
-    return { status: "expired", timeRemaining };
+    return { status: "active", timeRemaining, currentSubscription, otherSubscriptions };
   };
 
   const subscriptionInfo = getSubscriptionInfo();
@@ -120,19 +130,19 @@ export default function DashboardPage() {
             </AlertDescription>
           </Alert>
         )}
-        {subscriptionInfo.status === "expired" && (
+        {subscriptionInfo.status === "no_active" && (
           <Alert
             variant="destructive"
             className="shadow-lg bg-card text-card-foreground border-red-400 dark:border-red-600"
           >
             <AlertTriangle className="h-5 w-5 text-red-500 dark:text-red-400" />
-            <AlertTitle className="text-red-700 dark:text-red-300">订阅已过期</AlertTitle>
+            <AlertTitle className="text-red-700 dark:text-red-300">暂无有效订阅</AlertTitle>
             <AlertDescription className="text-red-700 dark:text-red-400">
-              您的订阅已过期。部分功能可能受限。请{" "}
+              您当前没有有效的订阅。请{" "}
               <Link href="/subscription" className="font-semibold underline hover:text-red-600 dark:hover:text-red-200">
-                重新激活
+                激活订阅
               </Link>{" "}
-              您的订阅。
+              以享受完整服务。
             </AlertDescription>
           </Alert>
         )}
@@ -170,14 +180,14 @@ export default function DashboardPage() {
                         {(dashboardData.pointBalance.available_points || 0).toLocaleString()}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {dashboardData.pointBalance.is_current_subscription ? "本期积分" : "上期积分"}: {(dashboardData.pointBalance.total_points || 0).toLocaleString()} | 
+                        积分总数: {(dashboardData.pointBalance.total_points || 0).toLocaleString()} | 
                         已使用: {(dashboardData.pointBalance.used_points || 0).toLocaleString()}
                         {(dashboardData.pointBalance.expired_points || 0) > 0 && (
                           <> | <span className="text-orange-500">已过期: {(dashboardData.pointBalance.expired_points || 0).toLocaleString()}</span></>
                         )}
                       </p>
                       <p className="text-xs text-muted-foreground opacity-75 mt-1">
-                        * {dashboardData.pointBalance.is_current_subscription ? "仅显示当前订阅周期数据" : "显示最近订阅周期数据"}
+                        * 仅显示当前有效订阅数据
                       </p>
                 </div>
                 <Link 
@@ -219,27 +229,64 @@ export default function DashboardPage() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                   <span className="ml-2">加载中...</span>
                 </div>
-              ) : dashboardData?.subscription ? (
+              ) : subscriptionInfo.currentSubscription ? (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                <div>
-                      <p className="text-xl font-bold text-sky-500 dark:text-sky-400">{dashboardData.subscription.plan.name}</p>
-                </div>
-                <Badge 
+                    <div>
+                      <p className="text-xl font-bold text-sky-500 dark:text-sky-400">
+                        {subscriptionInfo.currentSubscription.plan.name}
+                      </p>
+                      {subscriptionInfo.currentSubscription.isCurrentUsing && (
+                        <Badge className="bg-blue-500 text-white text-xs mt-1">
+                          当前消耗
+                        </Badge>
+                      )}
+                    </div>
+                    <Badge 
                       className={
                         subscriptionInfo.status === "active" ? "bg-green-500 text-white dark:bg-green-600" :
-                        subscriptionInfo.status === "expiring_soon" ? "bg-yellow-500 text-white dark:bg-yellow-600" :
-                        "bg-red-500 text-white dark:bg-red-600"
+                        "bg-yellow-500 text-white dark:bg-yellow-600"
                       }
                     >
-                      {subscriptionInfo.status === "active" ? "有效" : 
-                       subscriptionInfo.status === "expiring_soon" ? "即将到期" : "已过期"}
-                </Badge>
-              </div>
-              <p className="text-xs flex items-center text-muted-foreground">
-                    <Calendar className="h-3 w-3 mr-1 inline" /> 
-                    下次账单日期: {new Date(dashboardData.subscription.currentPeriodEnd).toLocaleDateString()}
-              </p>
+                      {subscriptionInfo.status === "expiring_soon" ? "即将到期" : "有效"}
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p className="flex items-center">
+                      <Calendar className="h-3 w-3 mr-1 inline" /> 
+                      下次账单日期: {new Date(subscriptionInfo.currentSubscription.currentPeriodEnd).toLocaleDateString()}
+                    </p>
+                    <p>
+                      积分: {subscriptionInfo.currentSubscription.availablePoints.toLocaleString()} / {subscriptionInfo.currentSubscription.totalPoints.toLocaleString()}
+                    </p>
+                  </div>
+                  
+                  {/* 显示其他订阅 */}
+                  {subscriptionInfo.otherSubscriptions.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <p className="text-xs text-muted-foreground mb-2">其他订阅:</p>
+                      <div className="space-y-1">
+                        {subscriptionInfo.otherSubscriptions.slice(0, 2).map((sub) => (
+                          <div key={sub.id} className="flex justify-between items-center text-xs">
+                            <span>{sub.plan.name}</span>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                {sub.detailedStatus}
+                              </Badge>
+                              <span className="text-muted-foreground">
+                                {sub.availablePoints.toLocaleString()}积分
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {subscriptionInfo.otherSubscriptions.length > 2 && (
+                          <p className="text-xs text-muted-foreground">
+                            还有 {subscriptionInfo.otherSubscriptions.length - 2} 个订阅...
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-4">
@@ -257,7 +304,7 @@ export default function DashboardPage() {
               >
                 <Link href="/subscription">
                   <CreditCard className="mr-2 h-4 w-4" /> 
-                  {dashboardData?.subscription ? "管理订阅" : "激活套餐"}
+                  {subscriptionInfo.currentSubscription ? "管理订阅" : "激活套餐"}
                 </Link>
               </Button>
             </CardFooter>

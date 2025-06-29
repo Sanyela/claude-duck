@@ -314,7 +314,7 @@ export function CreditsContent() {
               <div className="flex flex-wrap gap-2 mb-4">
                 <Badge className="bg-red-500 text-white hover:bg-red-600 px-2.5 py-1.5 shadow-sm">
                   <span className="font-semibold">{(creditBalance?.used_points || 0).toLocaleString()}</span> 
-                  <span className="ml-1 text-xs opacity-90">{creditBalance?.is_current_subscription ? "本期消耗" : "上期消耗"}</span>
+                  <span className="ml-1 text-xs opacity-90">已消耗</span>
                 </Badge>
                 <Badge className="bg-sky-500 text-white hover:bg-sky-600 px-2.5 py-1.5 shadow-sm">
                   <span className="font-semibold">{creditBalance?.available_points?.toLocaleString() || 0}</span> 
@@ -331,15 +331,13 @@ export function CreditsContent() {
                 {(creditBalance?.expired_points || 0) > 0 && (
                   <Badge className="bg-orange-500 text-white hover:bg-orange-600 px-2.5 py-1.5 shadow-sm">
                     <span className="font-semibold">{(creditBalance?.expired_points || 0).toLocaleString()}</span> 
-                    <span className="ml-1 text-xs opacity-90">{creditBalance?.is_current_subscription ? "本期过期" : "上期过期"}</span>
+                    <span className="ml-1 text-xs opacity-90">已过期</span>
                   </Badge>
                 )}
               </div>
               
               <div className="text-xs text-muted-foreground mb-4 px-1">
-                {creditBalance?.is_current_subscription 
-                  ? "当前显示的是本订阅周期内的积分数据，历史订阅数据不包含在内"
-                  : "当前显示的是最近一个订阅周期的积分数据（订阅已过期）"}
+                仅显示当前有效订阅的积分数据
               </div>
               
               <Separator className="my-4" />

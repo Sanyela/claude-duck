@@ -24,12 +24,18 @@ export interface ActiveSubscription {
   status: string;
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
+  availablePoints: number;
+  totalPoints: number;
+  usedPoints: number;
+  activatedAt: string;
+  detailedStatus: '有效' | '已用完' | '已过期';
+  isCurrentUsing: boolean;
 }
 
 // API响应格式
 export interface DashboardData {
   pointBalance: PointBalance | null;
-  subscription: ActiveSubscription | null;
+  subscriptions: ActiveSubscription[];
 }
 
 // 获取仪表盘数据
@@ -67,13 +73,13 @@ export const dashboardAPI = {
     }
   },
 
-  // 获取用户当前订阅
-  async getActiveSubscription(): Promise<{ success: boolean; data?: ActiveSubscription; message?: string }> {
+  // 获取用户所有订阅
+  async getActiveSubscription(): Promise<{ success: boolean; data?: ActiveSubscription[]; message?: string }> {
     try {
       const response = await request.get("/api/subscription/active");
       return { 
         success: true, 
-        data: response.data.subscription 
+        data: response.data.subscriptions || []
       };
     } catch (error: any) {
       console.error("获取订阅信息失败:", error);
@@ -96,7 +102,7 @@ export const dashboardAPI = {
         success: true,
         data: {
           pointBalance: pointBalanceResult.success ? pointBalanceResult.data || null : null,
-          subscription: subscriptionResult.success ? subscriptionResult.data || null : null
+          subscriptions: subscriptionResult.success ? subscriptionResult.data || [] : []
         }
       };
     } catch (error: any) {

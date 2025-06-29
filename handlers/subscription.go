@@ -16,7 +16,7 @@ import (
 
 // 订阅相关响应结构
 type ActiveSubscriptionResponse struct {
-	Subscription *SubscriptionData `json:"subscription"`
+	Subscriptions []SubscriptionData `json:"subscriptions"`
 }
 
 type SubscriptionData struct {
@@ -25,6 +25,12 @@ type SubscriptionData struct {
 	Status            string               `json:"status"`
 	CurrentPeriodEnd  string               `json:"currentPeriodEnd"`
 	CancelAtPeriodEnd bool                 `json:"cancelAtPeriodEnd"`
+	AvailablePoints   int64                `json:"availablePoints"`
+	TotalPoints       int64                `json:"totalPoints"`
+	UsedPoints        int64                `json:"usedPoints"`
+	ActivatedAt       string               `json:"activatedAt"`
+	DetailedStatus    string               `json:"detailedStatus"` // 有效、已用完、已过期
+	IsCurrentUsing    bool                 `json:"isCurrentUsing"` // 是否当前正在使用
 }
 
 type SubscriptionPlanData struct {
@@ -56,7 +62,7 @@ type RedeemCouponResponse struct {
 	NewSubscription *SubscriptionData `json:"newSubscription,omitempty"`
 }
 
-// HandleGetActiveSubscription 获取用户活跃订阅
+// HandleGetActiveSubscription 获取用户所有已激活的订阅
 func HandleGetActiveSubscription(c *gin.Context) {
 	// 验证token并获取用户ID
 	userID, err := getUserIDFromToken(c)
@@ -65,34 +71,88 @@ func HandleGetActiveSubscription(c *gin.Context) {
 		return
 	}
 
-	// 查询用户活跃订阅（状态为active且未过期）
-	var subscription models.Subscription
-	err = database.DB.Preload("Plan").Where("user_id = ? AND status = 'active' AND current_period_end > ?", userID, time.Now()).First(&subscription).Error
+	// 查询用户所有已激活的订阅（包括过期的）
+	var subscriptions []models.Subscription
+	err = database.DB.Preload("Plan").Where("user_id = ?", userID).Order("activated_at ASC").Find(&subscriptions).Error
 	if err != nil {
-		// 没有找到活跃且未过期的订阅
-		c.JSON(http.StatusOK, ActiveSubscriptionResponse{Subscription: nil})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get subscriptions"})
 		return
 	}
 
-	// 解析features JSON
-	var features []string
-	if subscription.Plan.Features != "" {
-		json.Unmarshal([]byte(subscription.Plan.Features), &features)
+	if len(subscriptions) == 0 {
+		c.JSON(http.StatusOK, ActiveSubscriptionResponse{Subscriptions: []SubscriptionData{}})
+		return
 	}
 
-	subscriptionData := &SubscriptionData{
-		ID: subscription.ExternalID,
-		Plan: SubscriptionPlanData{
-			ID:       fmt.Sprintf("%d", subscription.Plan.ID),
-			Name:     subscription.Plan.Title,
-			Features: features,
-		},
-		Status:            subscription.Status,
-		CurrentPeriodEnd:  subscription.CurrentPeriodEnd.Format(time.RFC3339),
-		CancelAtPeriodEnd: subscription.CancelAtPeriodEnd,
+	// 找到当前正在使用的订阅（按到期时间排序：最早到期且仍有积分的订阅）
+	var currentUsingSubscription *models.Subscription
+	// 创建一个有效订阅的副本，按到期时间排序
+	var validSubscriptions []models.Subscription
+	for _, sub := range subscriptions {
+		if sub.AvailablePoints > 0 && sub.ExpiresAt.After(time.Now()) {
+			validSubscriptions = append(validSubscriptions, sub)
+		}
 	}
 
-	c.JSON(http.StatusOK, ActiveSubscriptionResponse{Subscription: subscriptionData})
+	// 如果有有效订阅，按到期时间排序，找到最早到期的
+	if len(validSubscriptions) > 0 {
+		// 找到最早到期的订阅
+		earliestExpiry := validSubscriptions[0]
+		for _, sub := range validSubscriptions {
+			if sub.ExpiresAt.Before(earliestExpiry.ExpiresAt) {
+				earliestExpiry = sub
+			}
+		}
+		currentUsingSubscription = &earliestExpiry
+	}
+
+	// 转换为响应格式
+	var subscriptionDataList []SubscriptionData
+	for _, subscription := range subscriptions {
+		// 解析features JSON
+		var features []string
+		if subscription.Plan.Features != "" {
+			json.Unmarshal([]byte(subscription.Plan.Features), &features)
+		}
+
+		// 判断详细状态
+		detailedStatus := "已过期"
+		if subscription.ExpiresAt.After(time.Now()) {
+			if subscription.AvailablePoints > 0 {
+				detailedStatus = "有效"
+			} else {
+				detailedStatus = "已用完"
+			}
+		}
+
+		// 判断是否当前正在使用
+		isCurrentUsing := false
+		if currentUsingSubscription != nil && currentUsingSubscription.ID == subscription.ID {
+			isCurrentUsing = true
+		}
+
+		subscriptionData := SubscriptionData{
+			ID: subscription.SourceID, // 使用SourceID作为外部ID
+			Plan: SubscriptionPlanData{
+				ID:       fmt.Sprintf("%d", subscription.Plan.ID),
+				Name:     subscription.Plan.Title,
+				Features: features,
+			},
+			Status:            subscription.Status,
+			CurrentPeriodEnd:  subscription.ExpiresAt.Format(time.RFC3339),
+			CancelAtPeriodEnd: subscription.CancelAtPeriodEnd,
+			AvailablePoints:   subscription.AvailablePoints,
+			TotalPoints:       subscription.TotalPoints,
+			UsedPoints:        subscription.UsedPoints,
+			ActivatedAt:       subscription.ActivatedAt.Format(time.RFC3339),
+			DetailedStatus:    detailedStatus,
+			IsCurrentUsing:    isCurrentUsing,
+		}
+
+		subscriptionDataList = append(subscriptionDataList, subscriptionData)
+	}
+
+	c.JSON(http.StatusOK, ActiveSubscriptionResponse{Subscriptions: subscriptionDataList})
 }
 
 // HandleGetSubscriptionHistory 获取订阅历史
@@ -104,9 +164,9 @@ func HandleGetSubscriptionHistory(c *gin.Context) {
 		return
 	}
 
-	// 查询支付历史
-	var paymentHistory []models.PaymentHistory
-	err = database.DB.Where("user_id = ?", userID).Order("payment_date DESC").Find(&paymentHistory).Error
+	// 直接查询用户的所有订阅记录
+	var subscriptions []models.Subscription
+	err = database.DB.Preload("Plan").Where("user_id = ?", userID).Order("activated_at DESC").Find(&subscriptions).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to fetch subscription history"})
 		return
@@ -114,35 +174,24 @@ func HandleGetSubscriptionHistory(c *gin.Context) {
 
 	// 转换为响应格式
 	var historyData []PaymentHistoryData
-	for _, payment := range paymentHistory {
-		// 查找对应的订阅记录来判断过期状态
-		var subscription models.Subscription
-		subscriptionStatus := "expired" // 默认为过期
-
-		// 通过用户ID和支付时间范围查找对应的订阅
-		err := database.DB.Where("user_id = ? AND created_at <= ? AND created_at >= ?",
-			userID,
-			payment.PaymentDate.Add(24*time.Hour),   // 支付后24小时内
-			payment.PaymentDate.Add(-24*time.Hour)). // 支付前24小时内
-			Order("created_at DESC").
-			First(&subscription).Error
-
-		if err == nil {
-			// 找到了对应的订阅，检查是否还有效
-			if subscription.Status == "active" && subscription.CurrentPeriodEnd.After(time.Now()) {
-				subscriptionStatus = "active"
+	for _, subscription := range subscriptions {
+		// 判断订阅状态：有效、已用完、已过期
+		subscriptionStatus := "已过期"
+		if subscription.ExpiresAt.After(time.Now()) {
+			if subscription.AvailablePoints > 0 {
+				subscriptionStatus = "有效"
 			} else {
-				subscriptionStatus = "expired"
+				subscriptionStatus = "已用完"
 			}
 		}
 
 		historyData = append(historyData, PaymentHistoryData{
-			ID:                 fmt.Sprintf("%d", payment.ID),
-			PlanName:           payment.PlanName,
-			Date:               payment.PaymentDate.Format(time.RFC3339),
-			PaymentStatus:      payment.Status,
+			ID:                 fmt.Sprintf("%d", subscription.ID),
+			PlanName:           subscription.Plan.Title,
+			Date:               subscription.ActivatedAt.Format(time.RFC3339),
+			PaymentStatus:      "paid", // 订阅记录默认都是已支付状态
 			SubscriptionStatus: subscriptionStatus,
-			InvoiceURL:         payment.InvoiceURL,
+			InvoiceURL:         subscription.InvoiceURL,
 		})
 	}
 
@@ -204,55 +253,31 @@ func HandleRedeemCoupon(c *gin.Context) {
 		return
 	}
 
-	// 创建积分池记录
-	pointPool := models.PointPool{
-		UserID:          userID,
-		SourceType:      "activation_code",
-		SourceID:        fmt.Sprintf("AC-%d", activationCode.ID),
-		PointsTotal:     activationCode.Plan.PointAmount,
-		PointsRemaining: activationCode.Plan.PointAmount,
-		ExpiresAt:       time.Now().AddDate(0, 0, activationCode.Plan.ValidityDays),
+	// 创建新的订阅记录
+	subscription := models.Subscription{
+		UserID:             userID,
+		SubscriptionPlanID: activationCode.Plan.ID,
+		Status:             "active",
+		ActivatedAt:        now,
+		ExpiresAt:          now.AddDate(0, 0, activationCode.Plan.ValidityDays),
+		TotalPoints:        activationCode.Plan.PointAmount,
+		UsedPoints:         0,
+		AvailablePoints:    activationCode.Plan.PointAmount,
+		SourceType:         "activation_code",
+		SourceID:           fmt.Sprintf("AC-%d", activationCode.ID),
+		InvoiceURL:         "", // 激活码兑换无发票
+		CancelAtPeriodEnd:  false,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
-	if err := tx.Create(&pointPool).Error; err != nil {
+
+	if err := tx.Create(&subscription).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
 			Success: false,
-			Message: "积分充值失败。",
+			Message: "创建订阅记录失败。",
 		})
 		return
-	}
-
-	// 更新用户积分余额汇总
-	var pointBalance models.PointBalance
-	err = tx.Where("user_id = ?", userID).First(&pointBalance).Error
-	if err != nil {
-		// 创建新的积分余额记录
-		pointBalance = models.PointBalance{
-			UserID:          userID,
-			TotalPoints:     activationCode.Plan.PointAmount,
-			UsedPoints:      0,
-			AvailablePoints: activationCode.Plan.PointAmount,
-		}
-		if err := tx.Create(&pointBalance).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-				Success: false,
-				Message: "更新积分余额失败。",
-			})
-			return
-		}
-	} else {
-		// 更新现有积分余额
-		pointBalance.TotalPoints += activationCode.Plan.PointAmount
-		pointBalance.AvailablePoints += activationCode.Plan.PointAmount
-		if err := tx.Save(&pointBalance).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-				Success: false,
-				Message: "更新积分余额失败。",
-			})
-			return
-		}
 	}
 
 	// 更新用户的服务降级配置（如果未锁定）
@@ -263,64 +288,6 @@ func HandleRedeemCoupon(c *gin.Context) {
 			user.DegradationSource = "subscription"
 			tx.Save(&user)
 		}
-	}
-
-	// 创建或更新订阅记录
-	var subscription models.Subscription
-	err = tx.Preload("Plan").Where("user_id = ? AND status = 'active'", userID).First(&subscription).Error
-	if err != nil {
-		// 创建新的订阅记录
-		subscription = models.Subscription{
-			UserID:             userID,
-			SubscriptionPlanID: activationCode.Plan.ID,
-			ExternalID:         fmt.Sprintf("AC-%d-%d", activationCode.ID, time.Now().Unix()),
-			Status:             "active",
-			CurrentPeriodEnd:   time.Now().AddDate(0, 0, activationCode.Plan.ValidityDays),
-			CancelAtPeriodEnd:  false,
-		}
-		if err := tx.Create(&subscription).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-				Success: false,
-				Message: "创建订阅记录失败。",
-			})
-			return
-		}
-	} else {
-		// 更新现有订阅记录，延长有效期
-		newEndDate := subscription.CurrentPeriodEnd.AddDate(0, 0, activationCode.Plan.ValidityDays)
-		subscription.CurrentPeriodEnd = newEndDate
-		subscription.CancelAtPeriodEnd = false
-		// 如果新计划的等级更高，则更新订阅计划
-		if activationCode.Plan.PointAmount > subscription.Plan.PointAmount {
-			subscription.SubscriptionPlanID = activationCode.Plan.ID
-		}
-		if err := tx.Save(&subscription).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-				Success: false,
-				Message: "更新订阅记录失败。",
-			})
-			return
-		}
-	}
-
-	// 记录支付历史
-	paymentHistory := models.PaymentHistory{
-		UserID:      userID,
-		PlanName:    activationCode.Plan.Title,
-		Amount:      0, // 激活码兑换，金额为0
-		Currency:    activationCode.Plan.Currency,
-		Status:      "paid",
-		PaymentDate: time.Now(),
-	}
-	if err := tx.Create(&paymentHistory).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-			Success: false,
-			Message: "记录支付历史失败。",
-		})
-		return
 	}
 
 	tx.Commit()

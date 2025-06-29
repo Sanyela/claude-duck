@@ -5,27 +5,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Package, CalendarClock, ArrowRight } from "lucide-react"
-import { getActiveSubscription } from "@/api/subscription"
+import { getActiveSubscription, type ActiveSubscription } from "@/api/subscription"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { format, formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 
-interface ActiveSubscription {
-  id: string
-  plan: {
-    id: string
-    name: string
-    currency: string
-    features: string[]
-  }
-  status: 'active' | 'canceled' | 'past_due'
-  currentPeriodEnd: string
-  cancelAtPeriodEnd: boolean
-}
-
 export function SubscriptionSummary() {
-  const [subscription, setSubscription] = useState<ActiveSubscription | null>(null)
+  const [subscriptions, setSubscriptions] = useState<ActiveSubscription[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -34,7 +21,9 @@ export function SubscriptionSummary() {
     const fetchSubscription = async () => {
       try {
         const response = await getActiveSubscription()
-        setSubscription(response.subscription)
+        // 只显示有效的订阅
+        const validSubscriptions = (response.subscriptions || []).filter(sub => sub.detailedStatus === "有效")
+        setSubscriptions(validSubscriptions)
       } catch (err) {
         console.error("获取订阅信息失败:", err)
         setError("无法加载订阅信息")
@@ -61,16 +50,15 @@ export function SubscriptionSummary() {
   
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'active':
+      case '有效':
         return <Badge className="bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">有效</Badge>
-      case 'canceled':
-        return <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400">已取消</Badge>
-      case 'past_due':
-        return <Badge variant="destructive">已过期</Badge>
       default:
         return null
     }
   }
+  
+  // 找到当前正在使用的订阅或第一个有效订阅
+  const currentSubscription = subscriptions.find(sub => sub.isCurrentUsing) || subscriptions[0]
   
   return (
     <Card className="overflow-hidden border border-slate-200 dark:border-slate-700">
@@ -90,10 +78,10 @@ export function SubscriptionSummary() {
           </div>
         ) : error ? (
           <div className="text-red-500">{error}</div>
-        ) : !subscription ? (
+        ) : !currentSubscription ? (
           <div className="space-y-4">
             <div className="text-center py-2">
-              <div className="text-slate-500 dark:text-slate-400 mb-2">当前无活跃订阅</div>
+              <div className="text-slate-500 dark:text-slate-400 mb-2">当前无有效订阅</div>
               <Button 
                 onClick={handleViewSubscription}
                 variant="default"
@@ -107,20 +95,30 @@ export function SubscriptionSummary() {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="text-xl font-bold">{subscription.plan.name}</div>
-              {getStatusBadge(subscription.status)}
+              <div className="text-xl font-bold">{currentSubscription.plan.name}</div>
+              {getStatusBadge(currentSubscription.detailedStatus)}
             </div>
+            
+            {currentSubscription.isCurrentUsing && (
+              <Badge className="bg-blue-500 text-white text-xs">
+                当前消耗
+              </Badge>
+            )}
             
             <div className="flex items-center text-sm text-slate-500 dark:text-slate-400 space-x-1">
               <CalendarClock className="h-4 w-4" />
               <span>
-                到期{getRemainingTime(subscription.currentPeriodEnd)}
+                到期{getRemainingTime(currentSubscription.currentPeriodEnd)}
               </span>
             </div>
             
-            {subscription.cancelAtPeriodEnd && (
-              <div className="text-xs text-amber-600 dark:text-amber-400">
-                此订阅将在周期结束后自动取消
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              积分: {currentSubscription.availablePoints.toLocaleString()} / {currentSubscription.totalPoints.toLocaleString()}
+            </div>
+            
+            {subscriptions.length > 1 && (
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                还有 {subscriptions.length - 1} 个有效订阅
               </div>
             )}
             

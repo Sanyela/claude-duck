@@ -77,17 +77,31 @@ type SubscriptionPlan struct {
 // Subscription 用户订阅模型
 type Subscription struct {
 	ID                 uint             `gorm:"primarykey" json:"id"`
-	UserID             uint             `gorm:"not null" json:"user_id"`
+	UserID             uint             `gorm:"not null;index" json:"user_id"`
 	User               User             `gorm:"foreignKey:UserID;references:ID" json:"user,omitempty"`
 	SubscriptionPlanID uint             `gorm:"not null" json:"subscription_plan_id"`
 	Plan               SubscriptionPlan `gorm:"foreignKey:SubscriptionPlanID;references:ID" json:"plan,omitempty"`
-	ExternalID         string           `gorm:"type:varchar(191);uniqueIndex" json:"external_id"` // 外部支付系统ID
-	Status             string           `gorm:"not null" json:"status"`                           // active, canceled, past_due
-	CurrentPeriodEnd   time.Time        `gorm:"not null" json:"current_period_end"`
-	CancelAtPeriodEnd  bool             `gorm:"default:false" json:"cancel_at_period_end"`
-	CreatedAt          time.Time        `json:"created_at"`
-	UpdatedAt          time.Time        `json:"updated_at"`
-	DeletedAt          gorm.DeletedAt   `gorm:"index" json:"-"`
+
+	// 状态和时间
+	Status      string    `gorm:"not null;index" json:"status"`       // active, expired
+	ActivatedAt time.Time `gorm:"not null;index" json:"activated_at"` // 激活时间
+	ExpiresAt   time.Time `gorm:"not null;index" json:"expires_at"`   // 过期时间
+
+	// 积分统计
+	TotalPoints     int64 `gorm:"not null;default:0" json:"total_points"`     // 订阅总积分
+	UsedPoints      int64 `gorm:"not null;default:0" json:"used_points"`      // 已使用积分
+	AvailablePoints int64 `gorm:"not null;default:0" json:"available_points"` // 可用积分
+
+	// 来源和支付信息
+	SourceType string `gorm:"not null" json:"source_type"`          // activation_code, payment, admin_grant
+	SourceID   string `gorm:"type:varchar(191)" json:"source_id"`   // 来源ID（激活码ID/支付ID等）
+	InvoiceURL string `gorm:"type:varchar(500)" json:"invoice_url"` // 发票链接
+
+	// 其他信息
+	CancelAtPeriodEnd bool           `gorm:"default:false" json:"cancel_at_period_end"`
+	CreatedAt         time.Time      `gorm:"index" json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // PaymentHistory 支付历史模型

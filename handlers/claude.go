@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -122,22 +123,11 @@ func HandleClaudeProxy(c *gin.Context) {
 
 	// 如果不是免费模型，则需要检查积分
 	if !isFreeModel {
-		// 检查用户积分余额
-		var pointBalance models.PointBalance
-		err = database.DB.Where("user_id = ?", userID).First(&pointBalance).Error
-		if err != nil {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": "无积分余额信息，请先充值",
-				"code":  "INSUFFICIENT_CREDITS",
-			})
-			return
-		}
-
-		// 检查是否有可用积分（只计算未过期的积分）
+		// 检查用户是否有有效的订阅和可用积分
 		var availablePoints int64
-		err = database.DB.Model(&models.PointPool{}).
-			Where("user_id = ? AND points_remaining > 0 AND expires_at > ?", userID, time.Now()).
-			Select("COALESCE(SUM(points_remaining), 0)").
+		err = database.DB.Model(&models.Subscription{}).
+			Where("user_id = ? AND status = 'active' AND expires_at > ? AND available_points > 0", userID, time.Now()).
+			Select("COALESCE(SUM(available_points), 0)").
 			Scan(&availablePoints).Error
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -532,55 +522,60 @@ func deductUserPoints(tx *gorm.DB, userID uint, pointsToDeduct int64) error {
 		return nil // 不需要扣费
 	}
 
-	// 获取用户积分余额
-	var pointBalance models.PointBalance
-	err := tx.Where("user_id = ?", userID).First(&pointBalance).Error
+	// 获取用户的活跃订阅，按到期时间排序（先到期先使用原则）
+	var activeSubscriptions []models.Subscription
+	err := tx.Where("user_id = ? AND status = 'active' AND expires_at > ?", userID, time.Now()).
+		Order("expires_at ASC").
+		Find(&activeSubscriptions).Error
 	if err != nil {
-		return fmt.Errorf("获取用户积分余额失败: %v", err)
+		return fmt.Errorf("获取用户活跃订阅失败: %v", err)
+	}
+
+	// 计算总可用积分
+	var totalAvailable int64
+	for _, sub := range activeSubscriptions {
+		totalAvailable += sub.AvailablePoints
 	}
 
 	// 检查余额是否充足
-	if pointBalance.AvailablePoints < pointsToDeduct {
-		return fmt.Errorf("积分余额不足，需要 %d 积分，可用 %d 积分", pointsToDeduct, pointBalance.AvailablePoints)
+	if totalAvailable < pointsToDeduct {
+		return fmt.Errorf("积分余额不足，需要 %d 积分，可用 %d 积分", pointsToDeduct, totalAvailable)
 	}
 
-	// 按照FIFO原则从积分池中扣除积分
-	var pointPools []models.PointPool
-	err = tx.Where("user_id = ? AND points_remaining > 0 AND expires_at > ?", userID, time.Now()).
-		Order("created_at ASC").
-		Find(&pointPools).Error
-	if err != nil {
-		return fmt.Errorf("获取积分池失败: %v", err)
-	}
-
+	// 按照FIFO原则从订阅中扣除积分
 	remainingToDeduct := pointsToDeduct
-	for _, pool := range pointPools {
+	for _, subscription := range activeSubscriptions {
 		if remainingToDeduct <= 0 {
 			break
 		}
 
-		// 计算从当前池子扣除的积分
-		deductFromPool := remainingToDeduct
-		if deductFromPool > pool.PointsRemaining {
-			deductFromPool = pool.PointsRemaining
+		// 计算从当前订阅扣除的积分
+		deductFromSubscription := remainingToDeduct
+		if deductFromSubscription > subscription.AvailablePoints {
+			deductFromSubscription = subscription.AvailablePoints
 		}
 
-		// 更新积分池
-		pool.PointsRemaining -= deductFromPool
-		if err := tx.Save(&pool).Error; err != nil {
-			return fmt.Errorf("更新积分池失败: %v", err)
+		// 更新订阅的积分统计
+		newUsedPoints := subscription.UsedPoints + deductFromSubscription
+		newAvailablePoints := subscription.AvailablePoints - deductFromSubscription
+
+		if err := tx.Model(&subscription).Updates(map[string]interface{}{
+			"used_points":      newUsedPoints,
+			"available_points": newAvailablePoints,
+			"updated_at":       time.Now(),
+		}).Error; err != nil {
+			return fmt.Errorf("更新订阅积分失败: %v", err)
 		}
 
-		remainingToDeduct -= deductFromPool
+		remainingToDeduct -= deductFromSubscription
+
+		log.Printf("从订阅 ID: %d 扣除 %d 积分，剩余可用: %d",
+			subscription.ID, deductFromSubscription, newAvailablePoints)
 	}
 
-	// 更新用户积分余额汇总
-	pointBalance.UsedPoints += pointsToDeduct
-	pointBalance.AvailablePoints -= pointsToDeduct
-	pointBalance.UpdatedAt = time.Now()
-
-	if err := tx.Save(&pointBalance).Error; err != nil {
-		return fmt.Errorf("更新积分余额失败: %v", err)
+	// 检查是否完全扣除
+	if remainingToDeduct > 0 {
+		return fmt.Errorf("积分扣除不完整，还需扣除 %d 积分", remainingToDeduct)
 	}
 
 	return nil
