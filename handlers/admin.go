@@ -317,12 +317,20 @@ func HandleAdminCreateSubscriptionPlan(c *gin.Context) {
 		Currency              string  `json:"currency"`
 		ValidityDays          int     `json:"validity_days" binding:"required,min=1"`
 		DegradationGuaranteed int     `json:"degradation_guaranteed"`
+		DailyCheckinPoints    int64   `json:"daily_checkin_points"`
+		DailyCheckinPointsMax int64   `json:"daily_checkin_points_max"`
 		Features              string  `json:"features"`
 		Active                *bool   `json:"active"`
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 验证签到积分范围
+	if request.DailyCheckinPointsMax > 0 && request.DailyCheckinPointsMax < request.DailyCheckinPoints {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "签到积分最高值不能小于最低值"})
 		return
 	}
 
@@ -335,6 +343,8 @@ func HandleAdminCreateSubscriptionPlan(c *gin.Context) {
 		Currency:              request.Currency,
 		ValidityDays:          request.ValidityDays,
 		DegradationGuaranteed: request.DegradationGuaranteed,
+		DailyCheckinPoints:    request.DailyCheckinPoints,
+		DailyCheckinPointsMax: request.DailyCheckinPointsMax,
 		Features:              request.Features,
 	}
 
@@ -349,6 +359,11 @@ func HandleAdminCreateSubscriptionPlan(c *gin.Context) {
 		plan.Active = *request.Active
 	} else {
 		plan.Active = true
+	}
+
+	// 如果最高值为0，设置为与最低值相同
+	if plan.DailyCheckinPointsMax == 0 && plan.DailyCheckinPoints > 0 {
+		plan.DailyCheckinPointsMax = plan.DailyCheckinPoints
 	}
 
 	if err := database.DB.Create(&plan).Error; err != nil {

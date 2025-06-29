@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -568,9 +567,6 @@ func deductUserPoints(tx *gorm.DB, userID uint, pointsToDeduct int64) error {
 		}
 
 		remainingToDeduct -= deductFromSubscription
-
-		log.Printf("从订阅 ID: %d 扣除 %d 积分，剩余可用: %d",
-			subscription.ID, deductFromSubscription, newAvailablePoints)
 	}
 
 	// 检查是否完全扣除

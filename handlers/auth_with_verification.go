@@ -222,15 +222,6 @@ func HandleRegisterWithCode(c *gin.Context) {
 		return
 	}
 
-	// 为新用户创建默认积分余额
-	pointBalance := models.PointBalance{
-		UserID:          user.ID,
-		TotalPoints:     0,
-		UsedPoints:      0,
-		AvailablePoints: 0,
-	}
-	database.DB.Create(&pointBalance)
-
 	c.JSON(http.StatusOK, AuthResponse{
 		Success: true,
 		Message: "注册成功",

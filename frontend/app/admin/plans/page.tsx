@@ -104,6 +104,8 @@ export default function AdminPlansPage() {
                     currency: "CNY",
                     validity_days: 30,
                     degradation_guaranteed: 0,
+                    daily_checkin_points: 0,
+                    daily_checkin_points_max: 0,
                     features: "[]",
                     active: true
                   } as SubscriptionPlan)
@@ -260,6 +262,26 @@ export default function AdminPlansPage() {
                       placeholder="输入保证不降级的消息条数"
                     />
                     <p className="text-sm text-gray-500">设置10条消息内，保证使用多少条不会降级</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>每日签到积分（最低值）</Label>
+                    <Input
+                      type="number"
+                      value={editingPlan.daily_checkin_points}
+                      onChange={(e) => setEditingPlan({...editingPlan, daily_checkin_points: parseInt(e.target.value) || 0})}
+                      placeholder="输入每日签到奖励积分最低值"
+                    />
+                    <p className="text-sm text-gray-500">用户拥有此订阅时，每日签到可获得的积分奖励最低值（0表示不奖励）</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>每日签到积分（最高值）</Label>
+                    <Input
+                      type="number"
+                      value={editingPlan.daily_checkin_points_max}
+                      onChange={(e) => setEditingPlan({...editingPlan, daily_checkin_points_max: parseInt(e.target.value) || 0})}
+                      placeholder="输入每日签到奖励积分最高值"
+                    />
+                    <p className="text-sm text-gray-500">签到积分范围的最高值，0或小于最低值时将设为与最低值相同</p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Switch

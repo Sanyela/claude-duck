@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { BellRing, AlertTriangle, ArrowRight, CreditCard, DollarSign, BookOpen, Calendar, ChevronRight, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Greeting } from "@/components/dashboard/greeting"
+import { CheckinButton } from "@/components/dashboard/CheckinButton"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
@@ -157,7 +158,7 @@ export default function DashboardPage() {
         )}
 
         {/* 用户积分和订阅状态卡片 */}
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* 积分卡片 */}
           <Card className="shadow-lg bg-card text-card-foreground border-border">
             <CardHeader className="pb-3">
@@ -175,7 +176,7 @@ export default function DashboardPage() {
               ) : dashboardData?.pointBalance ? (
                 <>
                   <div className="flex items-end justify-between">
-                <div>
+                    <div>
                       <p className="text-3xl font-bold">
                         {(dashboardData.pointBalance.available_points || 0).toLocaleString()}
                       </p>
@@ -189,20 +190,20 @@ export default function DashboardPage() {
                       <p className="text-xs text-muted-foreground opacity-75 mt-1">
                         * 仅显示当前有效订阅数据
                       </p>
-                </div>
-                <Link 
-                  href="/credits"
-                  className="text-sm text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 flex items-center"
-                >
-                  详情 <ChevronRight className="h-4 w-4 ml-1" />
-                </Link>
-              </div>
+                    </div>
+                    <Link 
+                      href="/credits"
+                      className="text-sm text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 flex items-center"
+                    >
+                      详情 <ChevronRight className="h-4 w-4 ml-1" />
+                    </Link>
+                  </div>
                   {(dashboardData.pointBalance.total_points || 0) > 0 && (
                     <>
-              <Progress value={creditUsagePercentage} className="mt-3 h-2 [&>*]:bg-sky-500" />
-              <p className="text-xs text-muted-foreground mt-1 text-right">
-                使用率: {creditUsagePercentage.toFixed(1)}%
-              </p>
+                      <Progress value={creditUsagePercentage} className="mt-3 h-2 [&>*]:bg-sky-500" />
+                      <p className="text-xs text-muted-foreground mt-1 text-right">
+                        使用率: {creditUsagePercentage.toFixed(1)}%
+                      </p>
                     </>
                   )}
                 </>
@@ -309,6 +310,9 @@ export default function DashboardPage() {
               </Button>
             </CardFooter>
           </Card>
+
+          {/* 签到卡片 */}
+          <CheckinButton />
         </div>
         
         <Card className="shadow-lg bg-card text-card-foreground border-border">

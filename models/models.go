@@ -65,9 +65,11 @@ type SubscriptionPlan struct {
 	PointAmount           int64          `gorm:"not null" json:"point_amount"` // 套餐包含的积分数
 	Price                 float64        `gorm:"not null" json:"price"`        // 套餐价格
 	Currency              string         `gorm:"default:'USD'" json:"currency"`
-	ValidityDays          int            `gorm:"not null" json:"validity_days"`           // 有效期（天数）
-	DegradationGuaranteed int            `gorm:"default:0" json:"degradation_guaranteed"` // 10条内保证不降级的数量
-	Features              string         `gorm:"type:text" json:"features"`               // JSON string array
+	ValidityDays          int            `gorm:"not null" json:"validity_days"`             // 有效期（天数）
+	DegradationGuaranteed int            `gorm:"default:0" json:"degradation_guaranteed"`   // 10条内保证不降级的数量
+	DailyCheckinPoints    int64          `gorm:"default:0" json:"daily_checkin_points"`     // 每日签到奖励积分（最低值）
+	DailyCheckinPointsMax int64          `gorm:"default:0" json:"daily_checkin_points_max"` // 每日签到奖励积分（最高值）
+	Features              string         `gorm:"type:text" json:"features"`                 // JSON string array
 	Active                bool           `gorm:"default:true" json:"active"`
 	CreatedAt             time.Time      `json:"created_at"`
 	UpdatedAt             time.Time      `json:"updated_at"`
@@ -102,45 +104,6 @@ type Subscription struct {
 	CreatedAt         time.Time      `gorm:"index" json:"created_at"`
 	UpdatedAt         time.Time      `json:"updated_at"`
 	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
-}
-
-// PaymentHistory 支付历史模型
-type PaymentHistory struct {
-	ID          uint           `gorm:"primarykey" json:"id"`
-	UserID      uint           `gorm:"not null" json:"user_id"`
-	User        User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	PlanName    string         `gorm:"not null" json:"plan_name"`
-	Amount      float64        `gorm:"not null" json:"amount"`
-	Currency    string         `gorm:"not null" json:"currency"`
-	Status      string         `gorm:"not null" json:"status"` // paid, failed
-	InvoiceURL  string         `json:"invoice_url"`
-	PaymentDate time.Time      `gorm:"not null" json:"payment_date"`
-	CreatedAt   time.Time      `json:"created_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
-}
-
-// PointBalance 用户积分余额模型
-type PointBalance struct {
-	ID              uint      `gorm:"primarykey" json:"id"`
-	UserID          uint      `gorm:"uniqueIndex;not null" json:"user_id"`
-	User            User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	TotalPoints     int64     `gorm:"default:0" json:"total_points"`     // 总积分
-	UsedPoints      int64     `gorm:"default:0" json:"used_points"`      // 已使用积分
-	AvailablePoints int64     `gorm:"default:0" json:"available_points"` // 可用积分
-	UpdatedAt       time.Time `json:"updated_at"`
-}
-
-// PointPool 积分池模型
-type PointPool struct {
-	ID              uint      `gorm:"primarykey" json:"id"`
-	UserID          uint      `gorm:"not null;index:idx_user_expires" json:"user_id"`
-	User            User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	SourceType      string    `gorm:"not null" json:"source_type"`                       // activation_code/admin_grant/subscription
-	SourceID        string    `gorm:"type:varchar(191)" json:"source_id"`                // 来源ID（激活码ID/订阅ID等）
-	PointsTotal     int64     `gorm:"not null" json:"points_total"`                      // 充值积分总量
-	PointsRemaining int64     `gorm:"not null" json:"points_remaining"`                  // 剩余积分
-	ExpiresAt       time.Time `gorm:"not null;index:idx_user_expires" json:"expires_at"` // 过期时间
-	CreatedAt       time.Time `json:"created_at"`
 }
 
 // ActivationCode 激活码
@@ -192,14 +155,30 @@ type APITransaction struct {
 	PointsUsed       int64   `gorm:"not null" json:"points_used"`         // 消耗的积分
 
 	// 请求详情
-	IP          string `gorm:"type:varchar(45)" json:"ip"`             // 用户IP
-	UID         string `gorm:"type:varchar(191)" json:"uid"`           // 用户标识
-	Username    string `gorm:"type:varchar(191)" json:"username"`      // 用户名
-	Status      string `gorm:"not null;index" json:"status"`           // success, failed
-	Error       string `gorm:"type:text" json:"error"`                 // 错误信息
-	Duration    int    `json:"duration"`                               // 请求耗时（毫秒）
-	ServiceTier string `gorm:"default:'standard'" json:"service_tier"` // Claude服务等级
-	StopReason  string `json:"stop_reason"`                            // 停止原因
+	IP          string    `gorm:"type:varchar(45)" json:"ip"`             // 客户端IP
+	UID         string    `gorm:"type:varchar(191)" json:"uid"`           // 用户唯一标识
+	Username    string    `gorm:"type:varchar(191)" json:"username"`      // 用户名
+	Status      string    `gorm:"not null;index" json:"status"`           // success/failed/billing_failed
+	Error       string    `gorm:"type:text" json:"error,omitempty"`       // 错误信息（如果有）
+	Duration    int       `gorm:"not null" json:"duration"`               // 请求耗时（毫秒）
+	ServiceTier string    `gorm:"default:'standard'" json:"service_tier"` // 服务等级
+	CreatedAt   time.Time `gorm:"index" json:"created_at"`
+}
 
-	CreatedAt time.Time `gorm:"index" json:"created_at"`
+// DailyCheckin 每日签到记录
+type DailyCheckin struct {
+	ID          uint      `gorm:"primarykey" json:"id"`
+	UserID      uint      `gorm:"not null;index" json:"user_id"`
+	User        User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	CheckinDate string    `gorm:"type:varchar(10);not null;index" json:"checkin_date"` // 签到日期 YYYY-MM-DD
+	Points      int64     `gorm:"not null" json:"points"`                              // 获得的积分
+	CreatedAt   time.Time `gorm:"index" json:"created_at"`
+
+	// 复合唯一索引：一个用户每天只能签到一次
+	// GORM会自动创建这个索引
+}
+
+// 添加表名方法
+func (DailyCheckin) TableName() string {
+	return "daily_checkins"
 }

@@ -31,6 +31,8 @@ export interface SubscriptionPlan {
   currency: string;
   validity_days: number;
   degradation_guaranteed: number;
+  daily_checkin_points: number;
+  daily_checkin_points_max: number;
   features: string;
   active: boolean;
   created_at: string;

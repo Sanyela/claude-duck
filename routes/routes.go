@@ -65,6 +65,10 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/credits/history", handlers.HandleGetCreditUsageHistory)
 		api.GET("/credits/pricing-table", handlers.HandleGetPricingTable)
 
+		// 签到相关路由
+		api.GET("/checkin/status", handlers.HandleGetCheckinStatus)
+		api.POST("/checkin", handlers.HandleDailyCheckin)
+
 		// Claude API 代理路由
 		api.POST("/claude", handlers.HandleClaudeProxy)
 		api.Any("/claude/*path", handlers.HandleClaudeProxy) // 支持所有方法和子路径
