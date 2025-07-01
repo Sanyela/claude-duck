@@ -64,6 +64,7 @@ func SetupRoutes(r *gin.Engine) {
 		api.GET("/credits/model-costs", handlers.HandleGetModelCosts)
 		api.GET("/credits/history", handlers.HandleGetCreditUsageHistory)
 		api.GET("/credits/pricing-table", handlers.HandleGetPricingTable)
+		api.GET("/credits/daily-usage", handlers.HandleGetDailyUsage)
 
 		// 签到相关路由
 		api.GET("/checkin/status", handlers.HandleGetCheckinStatus)
@@ -83,6 +84,9 @@ func SetupRoutes(r *gin.Engine) {
 		admin.GET("/users", handlers.HandleAdminGetUsers)
 		admin.PUT("/users/:id", handlers.HandleAdminUpdateUser)
 		admin.DELETE("/users/:id", handlers.HandleAdminDeleteUser)
+		admin.PUT("/users/:id/status", handlers.HandleAdminToggleUserStatus)
+		admin.GET("/users/:id/subscriptions", handlers.HandleAdminGetUserSubscriptions)
+		admin.PUT("/users/:id/subscriptions/:subscription_id/limit", handlers.HandleAdminUpdateUserSubscriptionLimit)
 
 		// 系统配置管理
 		admin.GET("/system-configs", handlers.HandleAdminGetSystemConfigs)
@@ -98,6 +102,8 @@ func SetupRoutes(r *gin.Engine) {
 		admin.GET("/activation-codes", handlers.HandleAdminGetActivationCodes)
 		admin.POST("/activation-codes", handlers.HandleAdminCreateActivationCodes)
 		admin.DELETE("/activation-codes/:id", handlers.HandleAdminDeleteActivationCode)
+		admin.GET("/activation-codes/:id/daily-limit", handlers.HandleGetActivationCodeDailyLimit)
+		admin.PUT("/activation-codes/:id/daily-limit", handlers.HandleUpdateActivationCodeDailyLimit)
 
 		// 公告管理
 		admin.GET("/announcements", handlers.HandleAdminGetAnnouncements)

@@ -6,6 +6,7 @@ export interface AdminUser {
   username: string;
   email: string;
   is_admin: boolean;
+  is_disabled: boolean;
   degradation_guaranteed: number;
   degradation_source: string;
   degradation_locked: boolean;
@@ -140,6 +141,23 @@ export const adminAPI = {
     }
   },
 
+  // 切换用户禁用状态
+  toggleUserStatus: async (id: number, isDisabled: boolean): Promise<{ success: boolean; message?: string; user?: any }> => {
+    try {
+      const response = await request.put(`/api/admin/users/${id}/status`, { is_disabled: isDisabled });
+      return { 
+        success: true, 
+        message: response.data?.message,
+        user: response.data?.user
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "切换用户状态失败"
+      };
+    }
+  },
+
   // 获取系统配置
   getSystemConfigs: async (): Promise<{ success: boolean; configs?: SystemConfig[]; message?: string }> => {
     try {
@@ -234,8 +252,10 @@ export const adminAPI = {
   getActivationCodes: async (params?: {
     page?: number;
     page_size?: number;
-    status?: 'unused' | 'used' | 'expired';
+    status?: 'unused' | 'used' | 'expired' | 'depleted';
     batch_number?: string;
+    code?: string;
+    username?: string;
   }): Promise<{ 
     success: boolean; 
     codes?: ActivationCode[]; 
@@ -252,6 +272,8 @@ export const adminAPI = {
       if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
       if (params?.status) queryParams.append('status', params.status);
       if (params?.batch_number) queryParams.append('batch_number', params.batch_number);
+      if (params?.code) queryParams.append('code', params.code);
+      if (params?.username) queryParams.append('username', params.username);
       
       const url = `/api/admin/activation-codes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await request.get(url);
@@ -300,6 +322,34 @@ export const adminAPI = {
       return { 
         success: false, 
         message: error.response?.data?.error || "删除激活码失败" 
+      };
+    }
+  },
+
+  // 获取订阅每日限制
+  async getSubscriptionDailyLimit(activationCodeId: number): Promise<{ success: boolean; daily_limit?: number; message?: string }> {
+    try {
+      const response = await request.get(`/api/admin/activation-codes/${activationCodeId}/daily-limit`);
+      return { success: true, daily_limit: response.data.daily_limit };
+    } catch (error: any) {
+      console.error("获取每日限制失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "获取每日限制失败" 
+      };
+    }
+  },
+
+  // 更新订阅每日限制
+  async updateSubscriptionDailyLimit(activationCodeId: number, dailyLimit: number): Promise<{ success: boolean; message?: string }> {
+    try {
+      await request.put(`/api/admin/activation-codes/${activationCodeId}/daily-limit`, { daily_limit: dailyLimit });
+      return { success: true };
+    } catch (error: any) {
+      console.error("更新每日限制失败:", error);
+      return { 
+        success: false, 
+        message: error.response?.data?.error || "更新每日限制失败" 
       };
     }
   },
@@ -358,5 +408,21 @@ export const adminAPI = {
         message: error.response?.data?.error || "删除公告失败" 
       };
     }
-  }
+  },
+
+  // 获取用户订阅列表
+  getUserSubscriptions: async (userId: number): Promise<{ success: boolean; subscriptions?: any[]; message?: string }> => {
+    try {
+      const response = await request.get(`/api/admin/users/${userId}/subscriptions`);
+      return {
+        success: true,
+        subscriptions: response.data?.subscriptions || []
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "获取用户订阅失败"
+      };
+    }
+  },
 }; 

@@ -9,6 +9,7 @@ import (
 
 	"claude/database"
 	"claude/models"
+	"claude/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -85,6 +86,18 @@ func HandleGetCreditBalance(c *gin.Context) {
 		return
 	}
 
+	// 检查用户是否被禁用
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取用户信息失败"})
+		return
+	}
+
+	if user.IsDisabled {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "您的账户已被管理员禁用，无法查看积分信息"})
+		return
+	}
+
 	// 获取用户当前活跃订阅
 	var activeSubscriptions []models.Subscription
 	err = database.DB.Where("user_id = ? AND status = 'active' AND expires_at > ?", userID, time.Now()).Find(&activeSubscriptions).Error
@@ -107,7 +120,6 @@ func HandleGetCreditBalance(c *gin.Context) {
 	// 如果没有活跃订阅，所有积分都应该是0
 
 	// 获取用户免费模型使用次数
-	var user models.User
 	var freeModelUsageCount int64
 	err = database.DB.Where("id = ?", userID).First(&user).Error
 	if err != nil {
@@ -327,6 +339,81 @@ func HandleGetPricingTable(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// HandleGetDailyUsage 获取用户今日积分使用情况
+func HandleGetDailyUsage(c *gin.Context) {
+	userID, err := getUserIDFromToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// 获取用户今日使用情况
+	usages, err := utils.GetUserDailyPointsUsage(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取每日使用情况失败"})
+		return
+	}
+
+	// 获取用户的活跃订阅信息
+	var activeSubscriptions []models.Subscription
+	err = database.DB.Preload("Plan").
+		Where("user_id = ? AND status = 'active' AND expires_at > ?", userID, time.Now()).
+		Find(&activeSubscriptions).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取订阅信息失败"})
+		return
+	}
+
+	// 构建响应数据
+	type DailyUsageInfo struct {
+		SubscriptionID   uint   `json:"subscription_id"`
+		SubscriptionName string `json:"subscription_name"`
+		PointsUsed       int64  `json:"points_used"`
+		DailyLimit       int64  `json:"daily_limit"`
+		RemainingPoints  int64  `json:"remaining_points"`
+		HasLimit         bool   `json:"has_limit"`
+	}
+
+	today := time.Now().Format("2006-01-02")
+	usageMap := make(map[uint]int64)
+	for _, usage := range usages {
+		usageMap[usage.SubscriptionID] = usage.PointsUsed
+	}
+
+	var dailyUsageList []DailyUsageInfo
+	for _, sub := range activeSubscriptions {
+		dailyLimit := sub.DailyMaxPoints
+		if dailyLimit == 0 {
+			dailyLimit = sub.Plan.DailyMaxPoints
+		}
+
+		pointsUsed := usageMap[sub.ID]
+		hasLimit := dailyLimit > 0
+		var remainingPoints int64
+
+		if hasLimit {
+			remainingPoints = dailyLimit - pointsUsed
+			if remainingPoints < 0 {
+				remainingPoints = 0
+			}
+		}
+
+		dailyUsageList = append(dailyUsageList, DailyUsageInfo{
+			SubscriptionID:   sub.ID,
+			SubscriptionName: sub.Plan.Title,
+			PointsUsed:       pointsUsed,
+			DailyLimit:       dailyLimit,
+			RemainingPoints:  remainingPoints,
+			HasLimit:         hasLimit,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"usage_date": today,
+		"usage_list": dailyUsageList,
+	})
 }
 
 // 辅助函数

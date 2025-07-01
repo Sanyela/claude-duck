@@ -13,6 +13,7 @@ type User struct {
 	Username              string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"username"`
 	Password              string         `gorm:"not null" json:"-"`                          // 密码不在JSON中返回
 	IsAdmin               bool           `gorm:"default:false" json:"is_admin"`              // 是否是管理员
+	IsDisabled            bool           `gorm:"default:false" json:"is_disabled"`           // 是否被禁用
 	DegradationGuaranteed int            `gorm:"default:0" json:"degradation_guaranteed"`    // 10条内保证不降级的数量
 	DegradationSource     string         `gorm:"default:'system'" json:"degradation_source"` // system/admin/subscription
 	DegradationLocked     bool           `gorm:"default:false" json:"degradation_locked"`    // 是否锁定，不被套餐覆盖
@@ -69,6 +70,7 @@ type SubscriptionPlan struct {
 	DegradationGuaranteed int            `gorm:"default:0" json:"degradation_guaranteed"`   // 10条内保证不降级的数量
 	DailyCheckinPoints    int64          `gorm:"default:0" json:"daily_checkin_points"`     // 每日签到奖励积分（最低值）
 	DailyCheckinPointsMax int64          `gorm:"default:0" json:"daily_checkin_points_max"` // 每日签到奖励积分（最高值）
+	DailyMaxPoints        int64          `gorm:"default:0" json:"daily_max_points"`         // 每日最大使用积分数量，0表示无限制
 	Features              string         `gorm:"type:text" json:"features"`                 // JSON string array
 	Active                bool           `gorm:"default:true" json:"active"`
 	CreatedAt             time.Time      `json:"created_at"`
@@ -93,6 +95,9 @@ type Subscription struct {
 	TotalPoints     int64 `gorm:"not null;default:0" json:"total_points"`     // 订阅总积分
 	UsedPoints      int64 `gorm:"not null;default:0" json:"used_points"`      // 已使用积分
 	AvailablePoints int64 `gorm:"not null;default:0" json:"available_points"` // 可用积分
+
+	// 每日积分限制
+	DailyMaxPoints int64 `gorm:"default:0" json:"daily_max_points"` // 每日最大使用积分数量，0表示无限制
 
 	// 来源和支付信息
 	SourceType string `gorm:"not null" json:"source_type"`          // activation_code, payment, admin_grant
@@ -175,10 +180,29 @@ type DailyCheckin struct {
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
 
 	// 复合唯一索引：一个用户每天只能签到一次
-	// GORM会自动创建这个索引
 }
 
 // 添加表名方法
 func (DailyCheckin) TableName() string {
 	return "daily_checkins"
+}
+
+// DailyPointsUsage 每日积分使用记录
+type DailyPointsUsage struct {
+	ID             uint         `gorm:"primarykey" json:"id"`
+	UserID         uint         `gorm:"not null;index" json:"user_id"`
+	User           User         `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	SubscriptionID uint         `gorm:"not null;index" json:"subscription_id"`
+	Subscription   Subscription `gorm:"foreignKey:SubscriptionID" json:"subscription,omitempty"`
+	UsageDate      string       `gorm:"type:varchar(10);not null;index" json:"usage_date"` // 使用日期 YYYY-MM-DD
+	PointsUsed     int64        `gorm:"not null;default:0" json:"points_used"`             // 当日已使用积分
+	CreatedAt      time.Time    `gorm:"index" json:"created_at"`
+	UpdatedAt      time.Time    `json:"updated_at"`
+
+	// 复合唯一索引：一个用户的一个订阅每天一条记录
+}
+
+// 添加表名方法
+func (DailyPointsUsage) TableName() string {
+	return "daily_points_usage"
 }

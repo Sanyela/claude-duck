@@ -64,6 +64,7 @@ func Migrate() error {
 		&models.ActivationCode{},
 		&models.SystemConfig{},
 		&models.DailyCheckin{},
+		&models.DailyPointsUsage{},
 	)
 
 	if err != nil {
@@ -75,6 +76,9 @@ func Migrate() error {
 
 	// 确保签到表的唯一索引
 	ensureCheckinTableIndexes()
+
+	// 确保每日积分使用表的唯一索引
+	ensureDailyPointsUsageIndexes()
 
 	log.Println("Database migration completed")
 	return nil
@@ -185,5 +189,32 @@ func ensureCheckinTableIndexes() {
 		}
 	} else {
 		log.Println("✅ 签到表唯一索引已存在")
+	}
+}
+
+// ensureDailyPointsUsageIndexes 确保每日积分使用表的唯一索引
+func ensureDailyPointsUsageIndexes() {
+	// 先检查索引是否存在
+	var indexCount int64
+	checkSQL := `SELECT COUNT(*) FROM information_schema.statistics 
+		WHERE table_schema = DATABASE() 
+		AND table_name = 'daily_points_usage' 
+		AND index_name = 'idx_daily_points_usage_user_date'`
+
+	if err := DB.Raw(checkSQL).Scan(&indexCount).Error; err != nil {
+		log.Printf("检查每日积分使用表索引失败: %v", err)
+		return
+	}
+
+	if indexCount == 0 {
+		// 创建复合唯一索引：一个用户每天只能使用一次积分
+		indexSQL := `CREATE UNIQUE INDEX idx_daily_points_usage_user_date ON daily_points_usage (user_id, usage_date)`
+		if err := DB.Exec(indexSQL).Error; err != nil {
+			log.Printf("创建每日积分使用表唯一索引失败: %v", err)
+		} else {
+			log.Println("✅ 每日积分使用表唯一索引创建完成")
+		}
+	} else {
+		log.Println("✅ 每日积分使用表唯一索引已存在")
 	}
 }

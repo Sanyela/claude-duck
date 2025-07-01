@@ -8,7 +8,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal, Users, Edit, Download, Search, Trash2 } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Users, Edit, Download, Search, Trash2, UserX, UserCheck } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -45,9 +45,11 @@ type UserRow = {
   username: string
   email: string
   is_admin: boolean
+  is_disabled: boolean  // 新增禁用状态字段
   degradation_guaranteed: number
   created_at: string
 }
+
 
 export default function AdminUsersPage() {
   const { toast } = useToast()
@@ -68,6 +70,7 @@ export default function AdminUsersPage() {
   // 对话框状态
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
+  
 
   // 列定义
   const columns: ColumnDef<UserRow>[] = [
@@ -151,6 +154,18 @@ export default function AdminUsersPage() {
       },
     },
     {
+      accessorKey: "is_disabled",
+      header: "用户状态",
+      cell: ({ row }) => {
+        const isDisabled = row.getValue("is_disabled") as boolean
+        return (
+          <Badge variant={isDisabled ? "destructive" : "default"}>
+            {isDisabled ? "已禁用" : "正常"}
+          </Badge>
+        )
+      },
+    },
+    {
       accessorKey: "degradation_guaranteed",
       header: ({ column }) => {
         return (
@@ -212,6 +227,21 @@ export default function AdminUsersPage() {
                 编辑用户
               </DropdownMenuItem>
               <DropdownMenuItem
+                onClick={() => handleToggleUserStatus(user)}
+              >
+                {user.is_disabled ? (
+                  <>
+                    <UserCheck className="mr-2 h-4 w-4" />
+                    解禁用户
+                  </>
+                ) : (
+                  <>
+                    <UserX className="mr-2 h-4 w-4" />
+                    禁用用户
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 onClick={() => handleDeleteUser(user.id)}
                 className="text-red-600"
               >
@@ -263,6 +293,7 @@ export default function AdminUsersPage() {
         username: user.username,
         email: user.email,
         is_admin: user.is_admin,
+        is_disabled: user.is_disabled,
         degradation_guaranteed: user.degradation_guaranteed,
         created_at: user.created_at,
       }))
@@ -301,6 +332,7 @@ export default function AdminUsersPage() {
         username: fullUser.username,
         email: fullUser.email,
         is_admin: fullUser.is_admin,
+        is_disabled: fullUser.is_disabled,
         degradation_guaranteed: fullUser.degradation_guaranteed,
         degradation_source: "system",
         degradation_locked: false,
@@ -345,6 +377,31 @@ export default function AdminUsersPage() {
     }
   }
 
+  // 处理切换用户状态
+  const handleToggleUserStatus = async (user: UserRow) => {
+    const newDisabledStatus = !user.is_disabled
+    const actionText = newDisabledStatus ? "禁用" : "解禁"
+    
+    if (!confirm(`确定要${actionText}用户 "${user.username}" 吗？`)) return
+    
+    const result = await adminAPI.toggleUserStatus(user.id, newDisabledStatus)
+    if (result.success) {
+      toast({ 
+        title: `${actionText}成功`, 
+        description: result.message,
+        variant: "default" 
+      })
+      loadUsers()
+    } else {
+      toast({
+        title: `${actionText}失败`,
+        description: result.message,
+        variant: "destructive"
+      })
+    }
+  }
+
+
   // 导出CSV
   const exportToCSV = () => {
     const selectedRows = table.getSelectedRowModel().rows
@@ -354,13 +411,14 @@ export default function AdminUsersPage() {
 
     const csvContent = [
       // CSV 头部
-      ['ID', '用户名', '邮箱', '管理员', '保证不降级数量', '注册时间'].join(','),
+      ['ID', '用户名', '邮箱', '管理员', '用户状态', '保证不降级数量', '注册时间'].join(','),
       // CSV 数据
       ...dataToExport.map(row => [
         row.id,
         `"${row.username}"`,
         `"${row.email}"`,
         row.is_admin ? "是" : "否",
+        row.is_disabled ? "已禁用" : "正常",
         row.degradation_guaranteed,
         `"${new Date(row.created_at).toLocaleString()}"`
       ].join(','))
@@ -439,6 +497,7 @@ export default function AdminUsersPage() {
                             {column.id === "username" && "用户名"}
                             {column.id === "email" && "邮箱"}
                             {column.id === "is_admin" && "管理员"}
+                            {column.id === "is_disabled" && "用户状态"}
                             {column.id === "degradation_guaranteed" && "保证不降级数量"}
                             {column.id === "created_at" && "注册时间"}
                           </DropdownMenuCheckboxItem>
@@ -612,6 +671,13 @@ export default function AdminUsersPage() {
                     />
                     <Label>管理员权限</Label>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={editingUser.is_disabled}
+                      onCheckedChange={(checked) => setEditingUser({...editingUser, is_disabled: checked})}
+                    />
+                    <Label>禁用用户</Label>
+                  </div>
                   <div className="space-y-2">
                     <Label>10条保证不降级的数量</Label>
                     <Input
@@ -628,8 +694,9 @@ export default function AdminUsersPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
         </CardContent>
       </Card>
     </DashboardLayout>
   )
-} 
+}

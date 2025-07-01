@@ -221,6 +221,24 @@ func HandleRedeemCoupon(c *gin.Context) {
 		return
 	}
 
+	// 检查用户是否被禁用
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
+			Success: false,
+			Message: "获取用户信息失败",
+		})
+		return
+	}
+
+	if user.IsDisabled {
+		c.JSON(http.StatusForbidden, RedeemCouponResponse{
+			Success: false,
+			Message: "您的账户已被管理员禁用，无法兑换激活码",
+		})
+		return
+	}
+
 	var req RedeemCouponRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, RedeemCouponResponse{
@@ -277,6 +295,7 @@ func HandleRedeemCoupon(c *gin.Context) {
 		TotalPoints:        activationCode.Plan.PointAmount,
 		UsedPoints:         0,
 		AvailablePoints:    activationCode.Plan.PointAmount,
+		DailyMaxPoints:     activationCode.Plan.DailyMaxPoints, // 继承计划的每日积分限制
 		SourceType:         "activation_code",
 		SourceID:           fmt.Sprintf("AC-%d", activationCode.ID),
 		InvoiceURL:         "", // 激活码兑换无发票
@@ -295,7 +314,6 @@ func HandleRedeemCoupon(c *gin.Context) {
 	}
 
 	// 更新用户的服务降级配置（如果未锁定）
-	var user models.User
 	if err := tx.Where("id = ?", userID).First(&user).Error; err == nil {
 		if !user.DegradationLocked && activationCode.Plan.DegradationGuaranteed > user.DegradationGuaranteed {
 			user.DegradationGuaranteed = activationCode.Plan.DegradationGuaranteed
@@ -398,6 +416,26 @@ func HandleDailyCheckin(c *gin.Context) {
 	userID, err := getUserIDFromToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// 检查用户是否被禁用
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, CheckinResponse{
+			Success:      false,
+			Message:      "获取用户信息失败",
+			RewardPoints: 0,
+		})
+		return
+	}
+
+	if user.IsDisabled {
+		c.JSON(http.StatusForbidden, CheckinResponse{
+			Success:      false,
+			Message:      "您的账户已被管理员禁用，无法签到",
+			RewardPoints: 0,
+		})
 		return
 	}
 

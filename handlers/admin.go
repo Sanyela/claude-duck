@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -75,6 +76,7 @@ func HandleAdminUpdateUser(c *gin.Context) {
 		Username              *string `json:"username"`
 		Email                 *string `json:"email"`
 		IsAdmin               *bool   `json:"is_admin"`
+		IsDisabled            *bool   `json:"is_disabled"` // 新增禁用状态字段
 		DegradationGuaranteed *int    `json:"degradation_guaranteed"`
 		DegradationSource     *string `json:"degradation_source"`
 		DegradationLocked     *bool   `json:"degradation_locked"`
@@ -96,6 +98,9 @@ func HandleAdminUpdateUser(c *gin.Context) {
 	}
 	if updateData.IsAdmin != nil {
 		updates["is_admin"] = *updateData.IsAdmin
+	}
+	if updateData.IsDisabled != nil {
+		updates["is_disabled"] = *updateData.IsDisabled
 	}
 	if updateData.DegradationGuaranteed != nil {
 		updates["degradation_guaranteed"] = *updateData.DegradationGuaranteed
@@ -142,6 +147,16 @@ func HandleAdminDeleteUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
 }
 
+// ActivationCodeWithSubscription 包含订阅信息的激活码
+type ActivationCodeWithSubscription struct {
+	models.ActivationCode
+	Subscription *struct {
+		TotalPoints     int64 `json:"total_points"`
+		UsedPoints      int64 `json:"used_points"`
+		AvailablePoints int64 `json:"available_points"`
+	} `json:"subscription,omitempty"`
+}
+
 // HandleAdminGetActivationCodes 获取激活码列表
 func HandleAdminGetActivationCodes(c *gin.Context) {
 	pagination := getPagination(c)
@@ -152,10 +167,26 @@ func HandleAdminGetActivationCodes(c *gin.Context) {
 
 	// 可选过滤参数
 	if status := c.Query("status"); status != "" {
-		query = query.Where("status = ?", status)
+		if status == "depleted" {
+			// 对于"已用完"状态，我们需要特殊处理
+			// 查找状态为used且积分已用完的激活码
+			query = query.Where("status = ? AND used_by_user_id IS NOT NULL", "used").
+				Joins("LEFT JOIN subscriptions ON activation_codes.used_by_user_id = subscriptions.user_id AND activation_codes.subscription_plan_id = subscriptions.subscription_plan_id").
+				Where("subscriptions.available_points = 0 AND subscriptions.total_points > 0")
+		} else {
+			query = query.Where("status = ?", status)
+		}
 	}
 	if batchNumber := c.Query("batch_number"); batchNumber != "" {
-		query = query.Where("batch_number = ?", batchNumber)
+		query = query.Where("batch_number LIKE ?", "%"+batchNumber+"%")
+	}
+	if code := c.Query("code"); code != "" {
+		query = query.Where("code LIKE ?", "%"+code+"%")
+	}
+	if username := c.Query("username"); username != "" {
+		// 通过用户名搜索，需要join users表
+		query = query.Joins("LEFT JOIN users ON activation_codes.used_by_user_id = users.id").
+			Where("users.username LIKE ?", "%"+username+"%")
 	}
 
 	query.Count(&total)
@@ -163,8 +194,48 @@ func HandleAdminGetActivationCodes(c *gin.Context) {
 	offset := (pagination.Page - 1) * pagination.PageSize
 	query.Preload("Plan").Preload("UsedBy").Offset(offset).Limit(pagination.PageSize).Find(&codes)
 
+	// 转换为包含订阅信息的结构
+	var result []ActivationCodeWithSubscription
+	for _, code := range codes {
+		item := ActivationCodeWithSubscription{
+			ActivationCode: code,
+		}
+
+		// 为已使用的激活码加载订阅信息
+		if code.UsedByUserID != nil && code.Status == "used" {
+			var subscription models.Subscription
+			if err := database.DB.Where("user_id = ? AND subscription_plan_id = ?", 
+				*code.UsedByUserID, code.SubscriptionPlanID).
+				Order("created_at DESC").First(&subscription).Error; err == nil {
+				
+				// 动态计算状态
+				var dynamicStatus string
+				if subscription.AvailablePoints == 0 && subscription.TotalPoints > 0 {
+					dynamicStatus = "depleted" // 已用完
+				} else {
+					dynamicStatus = code.Status // 保持原状态
+				}
+				
+				// 更新激活码状态
+				item.ActivationCode.Status = dynamicStatus
+				
+				item.Subscription = &struct {
+					TotalPoints     int64 `json:"total_points"`
+					UsedPoints      int64 `json:"used_points"`
+					AvailablePoints int64 `json:"available_points"`
+				}{
+					TotalPoints:     subscription.TotalPoints,
+					UsedPoints:      subscription.UsedPoints,
+					AvailablePoints: subscription.AvailablePoints,
+				}
+			}
+		}
+
+		result = append(result, item)
+	}
+
 	c.JSON(http.StatusOK, PaginatedResponse{
-		Data:       codes,
+		Data:       result,
 		Total:      total,
 		Page:       pagination.Page,
 		PageSize:   pagination.PageSize,
@@ -246,6 +317,97 @@ func HandleAdminDeleteActivationCode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Activation code deleted successfully"})
 }
 
+// HandleGetActivationCodeDailyLimit 获取激活码对应订阅的每日限制
+func HandleGetActivationCodeDailyLimit(c *gin.Context) {
+	codeID := c.Param("id")
+
+	// 查找激活码
+	var activationCode models.ActivationCode
+	if err := database.DB.First(&activationCode, codeID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Activation code not found"})
+		return
+	}
+
+	// 检查激活码是否已被使用
+	if activationCode.UsedByUserID == nil || activationCode.Status != "used" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Activation code has not been used yet"})
+		return
+	}
+
+	// 查找对应的订阅，增加debug信息
+	var subscription models.Subscription
+	query := database.DB.Where("user_id = ? AND subscription_plan_id = ?", 
+		*activationCode.UsedByUserID, activationCode.SubscriptionPlanID)
+	
+	// 首先尝试查找活跃订阅
+	err := query.Where("status = ?", "active").First(&subscription).Error
+	if err != nil {
+		// 如果没有活跃订阅，查找最新的订阅（可能是过期的）
+		err = query.Order("created_at DESC").First(&subscription).Error
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "No subscription found for this activation code",
+				"debug": fmt.Sprintf("UserID: %d, PlanID: %d", *activationCode.UsedByUserID, activationCode.SubscriptionPlanID),
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"daily_limit": subscription.DailyMaxPoints,
+		"subscription_status": subscription.Status,
+		"subscription_id": subscription.ID,
+	})
+}
+
+// HandleUpdateActivationCodeDailyLimit 更新激活码对应订阅的每日限制
+func HandleUpdateActivationCodeDailyLimit(c *gin.Context) {
+	codeID := c.Param("id")
+
+	// 解析请求体
+	var request struct {
+		DailyLimit int64 `json:"daily_limit"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	// 查找激活码
+	var activationCode models.ActivationCode
+	if err := database.DB.First(&activationCode, codeID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Activation code not found"})
+		return
+	}
+
+	// 检查激活码是否已被使用
+	if activationCode.UsedByUserID == nil || activationCode.Status != "used" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Activation code has not been used yet"})
+		return
+	}
+
+	// 更新对应的订阅，不限制status为active
+	result := database.DB.Model(&models.Subscription{}).
+		Where("user_id = ? AND subscription_plan_id = ?", 
+			*activationCode.UsedByUserID, activationCode.SubscriptionPlanID).
+		Update("daily_max_points", request.DailyLimit)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No subscription found for this activation code"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Daily limit updated successfully", 
+		"updated_rows": result.RowsAffected,
+	})
+}
+
 // HandleAdminGetSystemConfigs 获取系统配置
 func HandleAdminGetSystemConfigs(c *gin.Context) {
 	var configs []models.SystemConfig
@@ -319,6 +481,7 @@ func HandleAdminCreateSubscriptionPlan(c *gin.Context) {
 		DegradationGuaranteed int     `json:"degradation_guaranteed"`
 		DailyCheckinPoints    int64   `json:"daily_checkin_points"`
 		DailyCheckinPointsMax int64   `json:"daily_checkin_points_max"`
+		DailyMaxPoints        int64   `json:"daily_max_points"` // 新增每日最大使用积分数量
 		Features              string  `json:"features"`
 		Active                *bool   `json:"active"`
 	}
@@ -334,6 +497,12 @@ func HandleAdminCreateSubscriptionPlan(c *gin.Context) {
 		return
 	}
 
+	// 验证每日最大积分数量
+	if request.DailyMaxPoints < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "每日最大积分数量不能为负数"})
+		return
+	}
+
 	// 创建订阅计划模型
 	plan := models.SubscriptionPlan{
 		Title:                 request.Title,
@@ -345,6 +514,7 @@ func HandleAdminCreateSubscriptionPlan(c *gin.Context) {
 		DegradationGuaranteed: request.DegradationGuaranteed,
 		DailyCheckinPoints:    request.DailyCheckinPoints,
 		DailyCheckinPointsMax: request.DailyCheckinPointsMax,
+		DailyMaxPoints:        request.DailyMaxPoints,
 		Features:              request.Features,
 	}
 
@@ -530,4 +700,108 @@ func HandleAdminDeleteAnnouncement(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Announcement deleted successfully"})
+}
+
+// HandleAdminToggleUserStatus 切换用户禁用/启用状态
+func HandleAdminToggleUserStatus(c *gin.Context) {
+	userID := c.Param("id")
+
+	var requestData struct {
+		IsDisabled bool `json:"is_disabled"` // 移除required标签
+	}
+
+	if err := c.ShouldBindJSON(&requestData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 查找用户
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// 更新用户状态
+	result := database.DB.Model(&user).Update("is_disabled", requestData.IsDisabled)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	statusText := "启用"
+	if requestData.IsDisabled {
+		statusText = "禁用"
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("用户 %s 已成功%s", user.Username, statusText),
+		"user": gin.H{
+			"id":          user.ID,
+			"username":    user.Username,
+			"email":       user.Email,
+			"is_disabled": requestData.IsDisabled,
+		},
+	})
+}
+
+// HandleAdminGetUserSubscriptions 获取用户的订阅列表
+func HandleAdminGetUserSubscriptions(c *gin.Context) {
+	userID := c.Param("id")
+
+	var subscriptions []models.Subscription
+	err := database.DB.Preload("Plan").
+		Where("user_id = ? AND status = 'active'", userID).
+		Find(&subscriptions).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户订阅失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"subscriptions": subscriptions,
+	})
+}
+
+// HandleAdminUpdateUserSubscriptionLimit 更新用户订阅的每日积分限制
+func HandleAdminUpdateUserSubscriptionLimit(c *gin.Context) {
+	userID := c.Param("id")
+	subscriptionID := c.Param("subscription_id")
+
+	var requestData struct {
+		DailyMaxPoints int64 `json:"daily_max_points"`
+	}
+
+	if err := c.ShouldBindJSON(&requestData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 验证订阅是否属于该用户
+	var subscription models.Subscription
+	err := database.DB.Where("id = ? AND user_id = ?", subscriptionID, userID).First(&subscription).Error
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "找不到该订阅"})
+		return
+	}
+
+	// 更新订阅的每日积分限制
+	result := database.DB.Model(&subscription).Update("daily_max_points", requestData.DailyMaxPoints)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	limitText := "无限制"
+	if requestData.DailyMaxPoints > 0 {
+		limitText = fmt.Sprintf("%d积分", requestData.DailyMaxPoints)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("订阅每日积分限制已更新为: %s", limitText),
+		"subscription": gin.H{
+			"id":               subscription.ID,
+			"daily_max_points": requestData.DailyMaxPoints,
+		},
+	})
 }

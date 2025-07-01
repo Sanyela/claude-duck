@@ -8,7 +8,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal, Key, Plus, Download, Search, Copy } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Key, Plus, Download, Search, Copy, Settings } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -43,12 +43,16 @@ import { getUserInfo, type User } from "@/api/auth"
 type ActivationCodeRow = {
   id: number
   code: string
-  status: "unused" | "used" | "expired"
+  status: "unused" | "used" | "expired" | "depleted"
   plan_title: string
   used_by_username: string | null
   batch_number: string
   created_at: string
   used_at: string | null
+  // 积分信息
+  total_points: number
+  used_points: number
+  available_points: number
 }
 
 export default function AdminCodesPage() {
@@ -67,19 +71,28 @@ export default function AdminCodesPage() {
     total: 0,
     totalPages: 0
   })
+  // 搜索类型定义
+  type SearchType = "batch_number" | "code" | "username"
+  
   const [searchParams, setSearchParams] = useState({
-    batch_number: "",
-    status: "all" as "all" | "unused" | "used" | "expired"
+    query: "",
+    type: "batch_number" as SearchType,
+    status: "all" as "all" | "unused" | "used" | "expired" | "depleted"
   })
   
   // 对话框状态
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false)
   const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false)
+  const [isDailyLimitDialogOpen, setIsDailyLimitDialogOpen] = useState(false)
   const [generatedBatchNumber, setGeneratedBatchNumber] = useState("")
   const [newCodeData, setNewCodeData] = useState({
     subscription_plan_id: 0,
     count: 1,
     batch_number: ""
+  })
+  const [editingCode, setEditingCode] = useState<ActivationCodeRow | null>(null)
+  const [dailyLimitData, setDailyLimitData] = useState({
+    daily_limit: 0
   })
 
   // 列定义
@@ -127,16 +140,35 @@ export default function AdminCodesPage() {
       accessorKey: "status",
       header: "状态",
       cell: ({ row }) => {
-        const status = row.getValue("status") as string
+        const code = row.original
+        let status = code.status
+        let displayText = ""
+        let variant: "default" | "secondary" | "destructive" | "outline" = "secondary"
+
+        // 动态判断状态
+        if (status === "unused") {
+          displayText = "未使用"
+          variant = "secondary"
+        } else if (status === "expired") {
+          displayText = "已过期"
+          variant = "destructive"
+        } else if (status === "used") {
+          // 进一步检查是否已用完
+          if (code.available_points === 0 && code.total_points > 0) {
+            displayText = "已用完"
+            variant = "outline"
+          } else {
+            displayText = "已使用"
+            variant = "default"
+          }
+        } else if (status === "depleted") {
+          displayText = "已用完"
+          variant = "outline"
+        }
+
         return (
-          <Badge 
-            variant={
-              status === "used" ? "default" : 
-              status === "expired" ? "destructive" : "secondary"
-            }
-          >
-            {status === "used" ? "已使用" : 
-             status === "expired" ? "已过期" : "未使用"}
+          <Badge variant={variant}>
+            {displayText}
           </Badge>
         )
       },
@@ -180,6 +212,42 @@ export default function AdminCodesPage() {
       cell: ({ row }) => <div>{row.getValue("batch_number")}</div>,
     },
     {
+      accessorKey: "points_info",
+      header: "积分信息",
+      cell: ({ row }) => {
+        const code = row.original
+        if (code.status === "unused") {
+          return <div className="text-muted-foreground">-</div>
+        }
+        
+        const usagePercentage = code.total_points > 0 ? (code.used_points / code.total_points) * 100 : 0
+        const isHighUsage = usagePercentage > 80
+        const isMediumUsage = usagePercentage > 50
+        
+        return (
+          <div className="space-y-1">
+            <div className="text-sm">
+              <span className={isHighUsage ? "text-red-600" : isMediumUsage ? "text-yellow-600" : "text-green-600"}>
+                {code.used_points.toLocaleString()}
+              </span>
+              <span className="text-muted-foreground"> / {code.total_points.toLocaleString()}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div 
+                className={`h-1.5 rounded-full ${
+                  isHighUsage ? "bg-red-500" : isMediumUsage ? "bg-yellow-500" : "bg-green-500"
+                }`}
+                style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+              ></div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {usagePercentage.toFixed(1)}% 已使用
+            </div>
+          </div>
+        )
+      },
+    },
+    {
       accessorKey: "created_at",
       header: ({ column }) => {
         return (
@@ -220,6 +288,13 @@ export default function AdminCodesPage() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                onClick={() => handleEditDailyLimit(code)}
+                disabled={code.status !== "used"}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                编辑每日最大使用量
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 onClick={() => handleDeleteCode(code.id)}
                 disabled={code.status === "used"}
                 className="text-red-600"
@@ -253,7 +328,9 @@ export default function AdminCodesPage() {
     const params = {
       page: pagination.page,
       page_size: pagination.pageSize,
-      ...(searchParams.batch_number && { batch_number: searchParams.batch_number }),
+      ...(searchParams.query && { 
+        [searchParams.type]: searchParams.query 
+      }),
       ...(searchParams.status !== "all" && { status: searchParams.status }),
     }
     
@@ -263,12 +340,16 @@ export default function AdminCodesPage() {
       const transformedData: ActivationCodeRow[] = codes.map((code: ActivationCode) => ({
         id: code.id,
         code: code.code,
-        status: code.status as "unused" | "used" | "expired",
+        status: code.status as "unused" | "used" | "expired" | "depleted",
         plan_title: code.plan?.title || "未知计划",
         used_by_username: code.used_by?.username || null,
         batch_number: code.batch_number || "",
         created_at: code.created_at,
         used_at: code.used_at || null,
+        // 积分信息 - 如果后端返回了subscription信息则使用，否则使用默认值
+        total_points: (code as any).subscription?.total_points || code.plan?.point_amount || 0,
+        used_points: (code as any).subscription?.used_points || 0,
+        available_points: (code as any).subscription?.available_points || 0,
       }))
       setData(transformedData)
       
@@ -306,6 +387,14 @@ export default function AdminCodesPage() {
     }
   }
 
+  // 初始化时从本地存储读取搜索类型偏好
+  useEffect(() => {
+    const savedSearchType = localStorage.getItem('activationCode_searchType') as SearchType | null
+    if (savedSearchType && ['batch_number', 'code', 'username'].includes(savedSearchType)) {
+      setSearchParams(prev => ({ ...prev, type: savedSearchType }))
+    }
+  }, [])
+
   useEffect(() => {
     loadPlans()
     loadCurrentUser()
@@ -323,7 +412,7 @@ export default function AdminCodesPage() {
     } else {
       setPagination(prev => ({ ...prev, page: 1 }))
     }
-  }, [searchParams.batch_number, searchParams.status])
+  }, [searchParams.query, searchParams.type, searchParams.status])
 
   // 搜索处理
   const handleSearch = () => {
@@ -333,7 +422,14 @@ export default function AdminCodesPage() {
 
   // 重置搜索
   const handleResetSearch = () => {
-    setSearchParams({ batch_number: "", status: "all" })
+    setSearchParams({ query: "", type: searchParams.type, status: "all" })
+  }
+
+  // 处理搜索类型变化
+  const handleSearchTypeChange = (newType: SearchType) => {
+    setSearchParams(prev => ({ ...prev, type: newType, query: "" }))
+    // 保存到本地存储
+    localStorage.setItem('activationCode_searchType', newType)
   }
 
   // 处理创建激活码
@@ -394,6 +490,45 @@ export default function AdminCodesPage() {
     }
   }
 
+  // 处理编辑每日限制
+  const handleEditDailyLimit = async (code: ActivationCodeRow) => {
+    setEditingCode(code)
+    // 获取当前每日限制
+    try {
+      const result = await adminAPI.getSubscriptionDailyLimit(code.id)
+      if (result.success && result.daily_limit !== undefined) {
+        setDailyLimitData({ daily_limit: result.daily_limit })
+      } else {
+        setDailyLimitData({ daily_limit: 0 })
+      }
+    } catch (error) {
+      setDailyLimitData({ daily_limit: 0 })
+    }
+    setIsDailyLimitDialogOpen(true)
+  }
+
+  // 处理更新每日限制
+  const handleUpdateDailyLimit = async () => {
+    if (!editingCode) return
+    
+    const result = await adminAPI.updateSubscriptionDailyLimit(editingCode.id, dailyLimitData.daily_limit)
+    if (result.success) {
+      toast({ 
+        title: "更新成功", 
+        description: "每日使用量限制已更新",
+        variant: "default" 
+      })
+      setIsDailyLimitDialogOpen(false)
+      loadCodes()
+    } else {
+      toast({
+        title: "更新失败",
+        description: result.message,
+        variant: "destructive"
+      })
+    }
+  }
+
   // 导出CSV
   const exportToCSV = () => {
     const selectedRows = table.getSelectedRowModel().rows
@@ -403,17 +538,38 @@ export default function AdminCodesPage() {
 
     const csvContent = [
       // CSV 头部
-      ['激活码', '状态', '关联计划', '使用者', '批次号', '创建时间', '使用时间'].join(','),
+      ['激活码', '状态', '关联计划', '使用者', '批次号', '总积分', '已使用积分', '剩余积分', '创建时间', '使用时间'].join(','),
       // CSV 数据
-      ...dataToExport.map(row => [
-        `"${row.code}"`,
-        row.status === "used" ? "已使用" : row.status === "expired" ? "已过期" : "未使用",
-        `"${row.plan_title}"`,
-        `"${row.used_by_username || "-"}"`,
-        `"${row.batch_number}"`,
-        `"${new Date(row.created_at).toLocaleString()}"`,
-        `"${row.used_at ? new Date(row.used_at).toLocaleString() : "-"}"`
-      ].join(','))
+      ...dataToExport.map(row => {
+        let statusText = ""
+        if (row.status === "unused") {
+          statusText = "未使用"
+        } else if (row.status === "expired") {
+          statusText = "已过期"
+        } else if (row.status === "used") {
+          // 检查是否已用完
+          if (row.available_points === 0 && row.total_points > 0) {
+            statusText = "已用完"
+          } else {
+            statusText = "已使用"
+          }
+        } else if (row.status === "depleted") {
+          statusText = "已用完"
+        }
+        
+        return [
+          `"${row.code}"`,
+          statusText,
+          `"${row.plan_title}"`,
+          `"${row.used_by_username || "-"}"`,
+          `"${row.batch_number}"`,
+          row.total_points || "-",
+          row.used_points || "-",
+          row.available_points || "-",
+          `"${new Date(row.created_at).toLocaleString()}"`,
+          `"${row.used_at ? new Date(row.used_at).toLocaleString() : "-"}"`
+        ].join(',')
+      })
     ].join('\n')
 
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -482,19 +638,36 @@ export default function AdminCodesPage() {
             {/* 顶部控制栏 */}
             <div className="flex items-center justify-between py-4">
               <div className="flex items-center space-x-2">
+                <Select
+                  value={searchParams.type}
+                  onValueChange={handleSearchTypeChange}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="搜索类型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="batch_number">批次号</SelectItem>
+                    <SelectItem value="code">激活码</SelectItem>
+                    <SelectItem value="username">用户名</SelectItem>
+                  </SelectContent>
+                </Select>
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="输入批次号搜索..."
-                    value={searchParams.batch_number}
-                    onChange={(e) => setSearchParams({...searchParams, batch_number: e.target.value})}
+                    placeholder={
+                      searchParams.type === "batch_number" ? "输入批次号搜索..." :
+                      searchParams.type === "code" ? "输入激活码搜索..." :
+                      "输入用户名搜索..."
+                    }
+                    value={searchParams.query}
+                    onChange={(e) => setSearchParams({...searchParams, query: e.target.value})}
                     onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                     className="pl-8 max-w-sm"
                   />
                 </div>
                 <Select
                   value={searchParams.status}
-                  onValueChange={(value: "all" | "unused" | "used" | "expired") => 
+                  onValueChange={(value: "all" | "unused" | "used" | "expired" | "depleted") => 
                     setSearchParams({...searchParams, status: value})
                   }
                 >
@@ -505,6 +678,7 @@ export default function AdminCodesPage() {
                     <SelectItem value="all">全部状态</SelectItem>
                     <SelectItem value="unused">未使用</SelectItem>
                     <SelectItem value="used">已使用</SelectItem>
+                    <SelectItem value="depleted">已用完</SelectItem>
                     <SelectItem value="expired">已过期</SelectItem>
                   </SelectContent>
                 </Select>
@@ -550,6 +724,7 @@ export default function AdminCodesPage() {
                             {column.id === "plan_title" && "关联计划"}
                             {column.id === "used_by_username" && "使用者"}
                             {column.id === "batch_number" && "批次号"}
+                            {column.id === "points_info" && "积分信息"}
                             {column.id === "created_at" && "创建时间"}
                           </DropdownMenuCheckboxItem>
                         )
@@ -575,18 +750,20 @@ export default function AdminCodesPage() {
             </div>
 
             {/* 当前搜索条件显示 */}
-            {(searchParams.batch_number || searchParams.status !== "all") && (
+            {(searchParams.query || searchParams.status !== "all") && (
               <div className="flex items-center space-x-2 pb-4">
                 <span className="text-sm text-muted-foreground">当前筛选:</span>
-                {searchParams.batch_number && (
+                {searchParams.query && (
                   <Badge variant="secondary">
-                    批次号: {searchParams.batch_number}
+                    {searchParams.type === "batch_number" ? "批次号" :
+                     searchParams.type === "code" ? "激活码" : "用户名"}: {searchParams.query}
                   </Badge>
                 )}
                 {searchParams.status !== "all" && (
                   <Badge variant="secondary">
                     状态: {searchParams.status === "used" ? "已使用" : 
-                           searchParams.status === "unused" ? "未使用" : "已过期"}
+                           searchParams.status === "unused" ? "未使用" : 
+                           searchParams.status === "depleted" ? "已用完" : "已过期"}
                   </Badge>
                 )}
               </div>
@@ -791,6 +968,43 @@ export default function AdminCodesPage() {
                   <Copy className="mr-2 h-4 w-4" />
                   复制批次号
                 </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* 编辑每日限制对话框 */}
+          <Dialog open={isDailyLimitDialogOpen} onOpenChange={setIsDailyLimitDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>编辑每日最大使用量</DialogTitle>
+                <DialogDescription>
+                  为激活码 "{editingCode?.code}" 对应的订阅设置每日最大积分使用量
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>每日最大使用量 (积分)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={dailyLimitData.daily_limit}
+                    onChange={(e) => setDailyLimitData({...dailyLimitData, daily_limit: parseInt(e.target.value) || 0})}
+                    placeholder="0表示无限制"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    设置为0表示无限制，大于0的数值表示每日最大积分使用量
+                  </p>
+                </div>
+                <div className="bg-muted p-3 rounded text-sm">
+                  <p className="font-medium mb-1">激活码信息：</p>
+                  <p>激活码: {editingCode?.code}</p>
+                  <p>关联计划: {editingCode?.plan_title}</p>
+                  <p>使用者: {editingCode?.used_by_username || "未使用"}</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDailyLimitDialogOpen(false)}>取消</Button>
+                <Button onClick={handleUpdateDailyLimit}>保存</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

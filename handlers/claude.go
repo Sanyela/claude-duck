@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,6 +68,15 @@ func HandleClaudeProxy(c *gin.Context) {
 	var user models.User
 	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get user info"})
+		return
+	}
+
+	// 检查用户是否被禁用
+	if user.IsDisabled {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "您的账户已被管理员禁用，无法使用API服务",
+			"code":  "USER_DISABLED",
+		})
 		return
 	}
 
@@ -450,8 +460,8 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	// 开始数据库事务
 	tx := database.DB.Begin()
 
-	// 扣除用户积分
-	err := deductUserPoints(tx, userID, pointsUsed)
+	// 扣除用户积分并更新每日使用记录
+	err := deductUserPointsWithDailyLimit(tx, userID, pointsUsed)
 	if err != nil {
 		tx.Rollback()
 		// 如果扣费失败，仍然记录API调用，但标记为失败
@@ -515,19 +525,23 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	tx.Commit()
 }
 
-// deductUserPoints 扣除用户积分
-func deductUserPoints(tx *gorm.DB, userID uint, pointsToDeduct int64) error {
+// deductUserPointsWithDailyLimit 扣除用户积分并检查每日限制
+func deductUserPointsWithDailyLimit(tx *gorm.DB, userID uint, pointsToDeduct int64) error {
 	if pointsToDeduct <= 0 {
 		return nil // 不需要扣费
 	}
 
 	// 获取用户的活跃订阅，按到期时间排序（先到期先使用原则）
 	var activeSubscriptions []models.Subscription
-	err := tx.Where("user_id = ? AND status = 'active' AND expires_at > ?", userID, time.Now()).
+	err := tx.Preload("Plan").Where("user_id = ? AND status = 'active' AND expires_at > ?", userID, time.Now()).
 		Order("expires_at ASC").
 		Find(&activeSubscriptions).Error
 	if err != nil {
 		return fmt.Errorf("获取用户活跃订阅失败: %v", err)
+	}
+
+	if len(activeSubscriptions) == 0 {
+		return fmt.Errorf("没有可用的活跃订阅")
 	}
 
 	// 计算总可用积分
@@ -541,17 +555,66 @@ func deductUserPoints(tx *gorm.DB, userID uint, pointsToDeduct int64) error {
 		return fmt.Errorf("积分余额不足，需要 %d 积分，可用 %d 积分", pointsToDeduct, totalAvailable)
 	}
 
-	// 按照FIFO原则从订阅中扣除积分
+	// 按照FIFO原则从订阅中扣除积分，同时检查每日限制
 	remainingToDeduct := pointsToDeduct
 	for _, subscription := range activeSubscriptions {
 		if remainingToDeduct <= 0 {
 			break
 		}
 
-		// 计算从当前订阅扣除的积分
-		deductFromSubscription := remainingToDeduct
-		if deductFromSubscription > subscription.AvailablePoints {
-			deductFromSubscription = subscription.AvailablePoints
+		// 检查当前订阅的每日积分限制
+		dailyLimit := subscription.DailyMaxPoints
+		if dailyLimit == 0 {
+			dailyLimit = subscription.Plan.DailyMaxPoints
+		}
+
+		// 如果有每日限制，检查今日使用情况
+		var deductFromSubscription int64
+		if dailyLimit > 0 {
+			today := time.Now().Format("2006-01-02")
+
+			// 查询今日已使用积分
+			var dailyUsage models.DailyPointsUsage
+			err := tx.Where("user_id = ? AND subscription_id = ? AND usage_date = ?",
+				userID, subscription.ID, today).First(&dailyUsage).Error
+
+			var usedToday int64 = 0
+			if err == nil {
+				usedToday = dailyUsage.PointsUsed
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("查询每日使用记录失败: %v", err)
+			}
+
+			// 计算今日还可以使用的积分
+			remainingDailyLimit := dailyLimit - usedToday
+			if remainingDailyLimit <= 0 {
+				// 当前订阅今日已达限制，跳到下一个订阅
+				continue
+			}
+
+			// 取较小值：剩余需扣除、订阅可用积分、今日剩余限制
+			deductFromSubscription = remainingToDeduct
+			if deductFromSubscription > subscription.AvailablePoints {
+				deductFromSubscription = subscription.AvailablePoints
+			}
+			if deductFromSubscription > remainingDailyLimit {
+				deductFromSubscription = remainingDailyLimit
+			}
+
+			// 更新每日使用记录
+			if err := utils.UpdateDailyPointsUsage(userID, subscription.ID, deductFromSubscription); err != nil {
+				return fmt.Errorf("更新每日积分使用记录失败: %v", err)
+			}
+		} else {
+			// 没有每日限制，按正常逻辑扣除
+			deductFromSubscription = remainingToDeduct
+			if deductFromSubscription > subscription.AvailablePoints {
+				deductFromSubscription = subscription.AvailablePoints
+			}
+		}
+
+		if deductFromSubscription <= 0 {
+			continue
 		}
 
 		// 更新订阅的积分统计
@@ -571,7 +634,7 @@ func deductUserPoints(tx *gorm.DB, userID uint, pointsToDeduct int64) error {
 
 	// 检查是否完全扣除
 	if remainingToDeduct > 0 {
-		return fmt.Errorf("积分扣除不完整，还需扣除 %d 积分", remainingToDeduct)
+		return fmt.Errorf("由于每日积分限制，无法完成此次请求。还需要 %d 积分，请明天再试或升级订阅", remainingToDeduct)
 	}
 
 	return nil
