@@ -183,6 +183,12 @@ export default function DashboardPage() {
                       <p className="text-xs text-muted-foreground">
                         积分总数: {(dashboardData.pointBalance.total_points || 0).toLocaleString()} | 
                         已使用: {(dashboardData.pointBalance.used_points || 0).toLocaleString()}
+                        {(dashboardData.pointBalance.checkin_points || 0) > 0 && (
+                          <> | <span className="text-purple-600 dark:text-purple-400">签到积分: {(dashboardData.pointBalance.checkin_points || 0).toLocaleString()}</span></>
+                        )}
+                        {(dashboardData.pointBalance.admin_gift_points || 0) > 0 && (
+                          <> | <span className="text-amber-600 dark:text-amber-400">管理员赠送: {(dashboardData.pointBalance.admin_gift_points || 0).toLocaleString()}</span></>
+                        )}
                         {(dashboardData.pointBalance.expired_points || 0) > 0 && (
                           <> | <span className="text-orange-500">已过期: {(dashboardData.pointBalance.expired_points || 0).toLocaleString()}</span></>
                         )}

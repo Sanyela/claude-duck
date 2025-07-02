@@ -204,10 +204,10 @@ func HandleAdminGetActivationCodes(c *gin.Context) {
 		// 为已使用的激活码加载订阅信息
 		if code.UsedByUserID != nil && code.Status == "used" {
 			var subscription models.Subscription
-			if err := database.DB.Where("user_id = ? AND subscription_plan_id = ?", 
+			if err := database.DB.Where("user_id = ? AND subscription_plan_id = ?",
 				*code.UsedByUserID, code.SubscriptionPlanID).
 				Order("created_at DESC").First(&subscription).Error; err == nil {
-				
+
 				// 动态计算状态
 				var dynamicStatus string
 				if subscription.AvailablePoints == 0 && subscription.TotalPoints > 0 {
@@ -215,10 +215,10 @@ func HandleAdminGetActivationCodes(c *gin.Context) {
 				} else {
 					dynamicStatus = code.Status // 保持原状态
 				}
-				
+
 				// 更新激活码状态
 				item.ActivationCode.Status = dynamicStatus
-				
+
 				item.Subscription = &struct {
 					TotalPoints     int64 `json:"total_points"`
 					UsedPoints      int64 `json:"used_points"`
@@ -336,9 +336,9 @@ func HandleGetActivationCodeDailyLimit(c *gin.Context) {
 
 	// 查找对应的订阅，增加debug信息
 	var subscription models.Subscription
-	query := database.DB.Where("user_id = ? AND subscription_plan_id = ?", 
+	query := database.DB.Where("user_id = ? AND subscription_plan_id = ?",
 		*activationCode.UsedByUserID, activationCode.SubscriptionPlanID)
-	
+
 	// 首先尝试查找活跃订阅
 	err := query.Where("status = ?", "active").First(&subscription).Error
 	if err != nil {
@@ -354,9 +354,9 @@ func HandleGetActivationCodeDailyLimit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"daily_limit": subscription.DailyMaxPoints,
+		"daily_limit":         subscription.DailyMaxPoints,
 		"subscription_status": subscription.Status,
-		"subscription_id": subscription.ID,
+		"subscription_id":     subscription.ID,
 	})
 }
 
@@ -388,7 +388,7 @@ func HandleUpdateActivationCodeDailyLimit(c *gin.Context) {
 
 	// 更新对应的订阅，不限制status为active
 	result := database.DB.Model(&models.Subscription{}).
-		Where("user_id = ? AND subscription_plan_id = ?", 
+		Where("user_id = ? AND subscription_plan_id = ?",
 			*activationCode.UsedByUserID, activationCode.SubscriptionPlanID).
 		Update("daily_max_points", request.DailyLimit)
 
@@ -403,7 +403,7 @@ func HandleUpdateActivationCodeDailyLimit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Daily limit updated successfully", 
+		"message":      "Daily limit updated successfully",
 		"updated_rows": result.RowsAffected,
 	})
 }
@@ -809,7 +809,7 @@ func HandleAdminUpdateUserSubscriptionLimit(c *gin.Context) {
 // HandleAdminGiftSubscription 管理员赠送订阅
 func HandleAdminGiftSubscription(c *gin.Context) {
 	userID := c.Param("id")
-	
+
 	// 获取当前管理员信息
 	adminInterface, exists := c.Get("user")
 	if !exists {
@@ -817,51 +817,51 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 		return
 	}
 	admin := adminInterface.(models.User)
-	
+
 	// 解析请求数据
 	var requestData struct {
 		SubscriptionPlanID uint   `json:"subscription_plan_id" binding:"required"`
-		PointsAmount       *int64 `json:"points_amount"`        // 可选：自定义积分数量
-		ValidityDays       *int   `json:"validity_days"`        // 可选：自定义有效期
-		DailyMaxPoints     *int64 `json:"daily_max_points"`     // 可选：自定义每日限制
-		Reason             string `json:"reason"`               // 赠送原因
+		PointsAmount       *int64 `json:"points_amount"`    // 可选：自定义积分数量
+		ValidityDays       *int   `json:"validity_days"`    // 可选：自定义有效期
+		DailyMaxPoints     *int64 `json:"daily_max_points"` // 可选：自定义每日限制
+		Reason             string `json:"reason"`           // 赠送原因
 	}
-	
+
 	if err := c.ShouldBindJSON(&requestData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效: " + err.Error()})
 		return
 	}
-	
+
 	// 验证目标用户是否存在
 	var targetUser models.User
 	if err := database.DB.Where("id = ?", userID).First(&targetUser).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "目标用户不存在"})
 		return
 	}
-	
+
 	// 验证订阅计划是否存在
 	var plan models.SubscriptionPlan
 	if err := database.DB.Where("id = ?", requestData.SubscriptionPlanID).First(&plan).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "订阅计划不存在"})
 		return
 	}
-	
+
 	// 使用计划默认值或自定义值
 	pointsAmount := plan.PointAmount
 	if requestData.PointsAmount != nil && *requestData.PointsAmount > 0 {
 		pointsAmount = *requestData.PointsAmount
 	}
-	
+
 	validityDays := plan.ValidityDays
 	if requestData.ValidityDays != nil && *requestData.ValidityDays > 0 {
 		validityDays = *requestData.ValidityDays
 	}
-	
+
 	dailyMaxPoints := plan.DailyMaxPoints
 	if requestData.DailyMaxPoints != nil {
 		dailyMaxPoints = *requestData.DailyMaxPoints
 	}
-	
+
 	// 开始数据库事务
 	tx := database.DB.Begin()
 	defer func() {
@@ -869,7 +869,7 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 			tx.Rollback()
 		}
 	}()
-	
+
 	// 创建赠送记录
 	giftRecord := models.GiftRecord{
 		FromAdminID:        admin.ID,
@@ -881,17 +881,17 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 		Reason:             requestData.Reason,
 		Status:             "pending",
 	}
-	
+
 	if err := tx.Create(&giftRecord).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建赠送记录失败: " + err.Error()})
 		return
 	}
-	
+
 	// 直接创建订阅记录
 	now := time.Now()
 	expiresAt := now.AddDate(0, 0, validityDays)
-	
+
 	subscription := models.Subscription{
 		UserID:             targetUser.ID,
 		SubscriptionPlanID: requestData.SubscriptionPlanID,
@@ -905,30 +905,30 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 		SourceType:         "admin_gift",
 		SourceID:           fmt.Sprintf("gift_%d", giftRecord.ID),
 	}
-	
+
 	if err := tx.Create(&subscription).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建订阅失败: " + err.Error()})
 		return
 	}
-	
+
 	// 更新赠送记录状态
 	subscriptionID := subscription.ID
 	giftRecord.SubscriptionID = &subscriptionID
 	giftRecord.Status = "completed"
-	
+
 	if err := tx.Save(&giftRecord).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新赠送记录失败: " + err.Error()})
 		return
 	}
-	
+
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "提交事务失败: " + err.Error()})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("成功为用户 %s 赠送 %s 订阅", targetUser.Username, plan.Title),
 		"gift_record": gin.H{
@@ -938,9 +938,9 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 			"daily_max_points": dailyMaxPoints,
 		},
 		"subscription": gin.H{
-			"id":          subscription.ID,
-			"expires_at":  subscription.ExpiresAt,
-			"status":      subscription.Status,
+			"id":         subscription.ID,
+			"expires_at": subscription.ExpiresAt,
+			"status":     subscription.Status,
 		},
 	})
 }
@@ -979,4 +979,171 @@ func HandleAdminGetGiftRecords(c *gin.Context) {
 		PageSize:   pagination.PageSize,
 		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
 	})
+}
+
+// HandleAdminDashboard 获取管理员数据看板统计信息
+func HandleAdminDashboard(c *gin.Context) {
+	now := time.Now()
+
+	// 获取总用户数
+	var totalUsers int64
+	database.DB.Model(&models.User{}).Count(&totalUsers)
+
+	// 获取总有效订阅人数（去重用户）
+	var activeSubscriptionUsers int64
+	database.DB.Model(&models.Subscription{}).
+		Where("status = 'active' AND expires_at > ?", now).
+		Distinct("user_id").
+		Count(&activeSubscriptionUsers)
+
+	// 获取总订阅数量
+	var totalSubscriptions int64
+	database.DB.Model(&models.Subscription{}).
+		Where("status = 'active' AND expires_at > ?", now).
+		Count(&totalSubscriptions)
+
+	// 获取总积分统计
+	type PointsStats struct {
+		TotalPoints     int64 `json:"total_points"`
+		UsedPoints      int64 `json:"used_points"`
+		AvailablePoints int64 `json:"available_points"`
+	}
+
+	var pointsStats PointsStats
+	database.DB.Model(&models.Subscription{}).
+		Where("status = 'active' AND expires_at > ?", now).
+		Select("SUM(total_points) as total_points, SUM(used_points) as used_points, SUM(available_points) as available_points").
+		Scan(&pointsStats)
+
+	// 获取今日新增用户数
+	today := now.Format("2006-01-02")
+	var todayNewUsers int64
+	database.DB.Model(&models.User{}).
+		Where("DATE(created_at) = ?", today).
+		Count(&todayNewUsers)
+
+	// 获取昨日新增用户数（用于计算环比）
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	var yesterdayNewUsers int64
+	database.DB.Model(&models.User{}).
+		Where("DATE(created_at) = ?", yesterday).
+		Count(&yesterdayNewUsers)
+
+	// 计算用户注册环比增长率
+	var userGrowthRate float64
+	if yesterdayNewUsers > 0 {
+		userGrowthRate = float64(todayNewUsers-yesterdayNewUsers) / float64(yesterdayNewUsers) * 100
+	} else if todayNewUsers > 0 {
+		userGrowthRate = 100 // 昨日0人，今日有人，增长100%
+	}
+
+	// 获取今日积分消耗
+	var todayPointsUsed int64
+	database.DB.Model(&models.APITransaction{}).
+		Where("DATE(created_at) = ?", today).
+		Select("SUM(points_used)").
+		Scan(&todayPointsUsed)
+
+	// 获取昨日积分消耗（用于计算环比）
+	var yesterdayPointsUsed int64
+	database.DB.Model(&models.APITransaction{}).
+		Where("DATE(created_at) = ?", yesterday).
+		Select("SUM(points_used)").
+		Scan(&yesterdayPointsUsed)
+
+	// 计算积分使用环比增长率
+	var pointsGrowthRate float64
+	if yesterdayPointsUsed > 0 {
+		pointsGrowthRate = float64(todayPointsUsed-yesterdayPointsUsed) / float64(yesterdayPointsUsed) * 100
+	} else if todayPointsUsed > 0 {
+		pointsGrowthRate = 100
+	}
+
+	// 获取最近7天的用户注册趋势
+	type DailyStats struct {
+		Date  string `json:"date"`
+		Count int64  `json:"count"`
+	}
+
+	var userTrend []DailyStats
+	for i := 6; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+		var count int64
+		database.DB.Model(&models.User{}).
+			Where("DATE(created_at) = ?", date).
+			Count(&count)
+		userTrend = append(userTrend, DailyStats{
+			Date:  date,
+			Count: count,
+		})
+	}
+
+	// 获取最近7天的积分使用趋势
+	var pointsTrend []DailyStats
+	for i := 6; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+		var points int64
+		database.DB.Model(&models.APITransaction{}).
+			Where("DATE(created_at) = ?", date).
+			Select("SUM(points_used)").
+			Scan(&points)
+		pointsTrend = append(pointsTrend, DailyStats{
+			Date:  date,
+			Count: points,
+		})
+	}
+
+	// 获取订阅计划分布
+	type PlanStats struct {
+		PlanName string `json:"plan_name"`
+		Count    int64  `json:"count"`
+	}
+
+	var planStats []PlanStats
+	database.DB.Model(&models.Subscription{}).
+		Joins("JOIN subscription_plans ON subscriptions.subscription_plan_id = subscription_plans.id").
+		Where("subscriptions.status = 'active' AND subscriptions.expires_at > ?", now).
+		Where("subscriptions.source_type IN ?", []string{"activation_code", "payment"}).
+		Group("subscription_plans.title").
+		Select("subscription_plans.title as plan_name, COUNT(*) as count").
+		Scan(&planStats)
+
+	// 获取积分来源分布
+	type SourceStats struct {
+		SourceType string `json:"source_type"`
+		Count      int64  `json:"count"`
+		Points     int64  `json:"points"`
+	}
+
+	var sourceStats []SourceStats
+	database.DB.Model(&models.Subscription{}).
+		Where("status = 'active' AND expires_at > ?", now).
+		Group("source_type").
+		Select("source_type, COUNT(*) as count, SUM(available_points) as points").
+		Scan(&sourceStats)
+
+	// 构建响应数据
+	dashboardData := gin.H{
+		"overview": gin.H{
+			"total_users":               totalUsers,
+			"active_subscription_users": activeSubscriptionUsers,
+			"total_subscriptions":       totalSubscriptions,
+			"today_new_users":           todayNewUsers,
+			"user_growth_rate":          userGrowthRate,
+			"today_points_used":         todayPointsUsed,
+			"points_growth_rate":        pointsGrowthRate,
+		},
+		"points_stats": pointsStats,
+		"trends": gin.H{
+			"user_registration": userTrend,
+			"points_usage":      pointsTrend,
+		},
+		"distributions": gin.H{
+			"subscription_plans": planStats,
+			"points_sources":     sourceStats,
+		},
+		"generated_at": now.Format(time.RFC3339),
+	}
+
+	c.JSON(http.StatusOK, dashboardData)
 }

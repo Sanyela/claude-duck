@@ -16,6 +16,7 @@ import {
   Settings,
   Key,
   Megaphone,
+  BarChart3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -53,10 +54,10 @@ const userNavItems = [
 // 管理员功能导航项
 const adminNavItems = [
   {
-    href: "/admin/oauth",
-    label: "OAuth 测试工具",
-    icon: Shield,
-    activeColor: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
+    href: "/admin/views",
+    label: "数据看板",
+    icon: BarChart3,
+    activeColor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
   },
   {
     href: "/admin/users",
@@ -87,6 +88,12 @@ const adminNavItems = [
     label: "公告管理",
     icon: Megaphone,
     activeColor: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  },
+  {
+    href: "/admin/oauth",
+    label: "OAuth 测试工具",
+    icon: Shield,
+    activeColor: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
   },
 ]
 

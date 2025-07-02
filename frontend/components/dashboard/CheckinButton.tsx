@@ -21,9 +21,7 @@ export function CheckinButton() {
     setFetching(true)
     setError(null)
     try {
-      console.log("正在获取签到状态...")
       const status = await checkinAPI.getStatus()
-      console.log("签到状态响应:", status)
       setCheckinStatus(status)
     } catch (error: any) {
       console.error("获取签到状态失败:", error)

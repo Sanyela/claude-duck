@@ -26,6 +26,8 @@ type CreditBalanceData struct {
 	Expired               int  `json:"expired"`                 // 已过期积分
 	IsCurrentSubscription bool `json:"is_current_subscription"` // 是否为当前活跃订阅
 	FreeModelUsageCount   int  `json:"free_model_usage_count"`  // 免费模型使用次数
+	CheckinPoints         int  `json:"checkin_points"`          // 签到积分
+	AdminGiftPoints       int  `json:"admin_gift_points"`       // 管理员赠送积分
 }
 
 type ModelCostsResponse struct {
@@ -98,15 +100,35 @@ func HandleGetCreditBalance(c *gin.Context) {
 		return
 	}
 
-	// 获取用户当前活跃订阅
+	// 获取用户当前活跃订阅（过滤掉签到和管理员赠送）
 	var activeSubscriptions []models.Subscription
-	err = database.DB.Where("user_id = ? AND status = 'active' AND expires_at > ?", userID, time.Now()).Find(&activeSubscriptions).Error
+	err = database.DB.Where("user_id = ? AND status = 'active' AND expires_at > ? AND source_type IN (?)",
+		userID, time.Now(), []string{"activation_code", "payment"}).Find(&activeSubscriptions).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get active subscriptions"})
 		return
 	}
 
+	// 获取签到积分（有效的签到订阅）
+	var checkinSubscriptions []models.Subscription
+	err = database.DB.Where("user_id = ? AND status = 'active' AND expires_at > ? AND source_type = ?",
+		userID, time.Now(), "daily_checkin").Find(&checkinSubscriptions).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get checkin subscriptions"})
+		return
+	}
+
+	// 获取管理员赠送积分（有效的管理员赠送订阅）
+	var adminGiftSubscriptions []models.Subscription
+	err = database.DB.Where("user_id = ? AND status = 'active' AND expires_at > ? AND source_type = ?",
+		userID, time.Now(), "admin_gift").Find(&adminGiftSubscriptions).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get admin gift subscriptions"})
+		return
+	}
+
 	var validPoints, totalPoints, usedPoints int64
+	var checkinPoints, adminGiftPoints int64
 	isCurrentSubscription := len(activeSubscriptions) > 0
 
 	if isCurrentSubscription {
@@ -117,6 +139,17 @@ func HandleGetCreditBalance(c *gin.Context) {
 			usedPoints += sub.UsedPoints
 		}
 	}
+
+	// 统计签到积分
+	for _, sub := range checkinSubscriptions {
+		checkinPoints += sub.AvailablePoints
+	}
+
+	// 统计管理员赠送积分
+	for _, sub := range adminGiftSubscriptions {
+		adminGiftPoints += sub.AvailablePoints
+	}
+
 	// 如果没有活跃订阅，所有积分都应该是0
 
 	// 获取用户免费模型使用次数
@@ -136,6 +169,8 @@ func HandleGetCreditBalance(c *gin.Context) {
 		Expired:               0,                // 不再显示过期积分
 		IsCurrentSubscription: isCurrentSubscription,
 		FreeModelUsageCount:   int(freeModelUsageCount), // 免费模型使用次数
+		CheckinPoints:         int(checkinPoints),       // 签到积分
+		AdminGiftPoints:       int(adminGiftPoints),     // 管理员赠送积分
 	}
 
 	c.JSON(http.StatusOK, CreditBalanceResponse{Balance: balanceData})

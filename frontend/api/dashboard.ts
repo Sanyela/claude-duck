@@ -10,6 +10,8 @@ export interface PointBalance {
   expired_points: number;
   is_current_subscription: boolean;
   free_model_usage_count: number;
+  checkin_points: number;          // 签到积分
+  admin_gift_points: number;       // 管理员赠送积分
   updated_at: string;
 }
 
@@ -58,6 +60,8 @@ export const dashboardAPI = {
           expired_points: balance.expired || 0,  // 使用后端返回的已过期积分
           is_current_subscription: balance.is_current_subscription || false,
           free_model_usage_count: balance.free_model_usage_count || 0,
+          checkin_points: balance.checkin_points || 0,
+          admin_gift_points: balance.admin_gift_points || 0,
           updated_at: new Date().toISOString()
         };
         return { success: true, data: pointBalance };

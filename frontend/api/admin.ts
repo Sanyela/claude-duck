@@ -74,6 +74,73 @@ export interface PaginatedResponse<T> {
   total_pages: number;
 }
 
+// 管理员赠送记录
+export interface GiftRecord {
+  id: number;
+  from_admin_id: number;
+  to_user_id: number;
+  subscription_plan_id: number;
+  points_amount: number;
+  validity_days: number;
+  daily_max_points: number;
+  reason: string;
+  status: string;
+  subscription_id?: number;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+  from_admin: AdminUser;
+  to_user: AdminUser;
+  plan: SubscriptionPlan;
+}
+
+// 数据看板类型定义
+export interface DashboardOverview {
+  total_users: number;
+  active_subscription_users: number;
+  total_subscriptions: number;
+  today_new_users: number;
+  user_growth_rate: number;
+  today_points_used: number;
+  points_growth_rate: number;
+}
+
+export interface PointsStats {
+  total_points: number;
+  used_points: number;
+  available_points: number;
+}
+
+export interface DailyStats {
+  date: string;
+  count: number;
+}
+
+export interface PlanStats {
+  plan_name: string;
+  count: number;
+}
+
+export interface SourceStats {
+  source_type: string;
+  count: number;
+  points: number;
+}
+
+export interface DashboardData {
+  overview: DashboardOverview;
+  points_stats: PointsStats;
+  trends: {
+    user_registration: DailyStats[];
+    points_usage: DailyStats[];
+  };
+  distributions: {
+    subscription_plans: PlanStats[];
+    points_sources: SourceStats[];
+  };
+  generated_at: string;
+}
+
 // 用户管理API
 export const adminAPI = {
   // 获取所有用户
@@ -449,4 +516,20 @@ export const adminAPI = {
       };
     }
   },
+
+  // 获取数据看板统计信息
+  getDashboard: async (): Promise<{ success: boolean; data?: DashboardData; message?: string }> => {
+    try {
+      const response = await request.get("/api/admin/dashboard");
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "获取数据看板失败"
+      };
+    }
+  }
 }; 

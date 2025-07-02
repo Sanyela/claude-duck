@@ -80,6 +80,9 @@ func SetupRoutes(r *gin.Engine) {
 	admin.Use(middleware.JWTAuth())
 	admin.Use(middleware.AdminAuth())
 	{
+		// 数据看板
+		admin.GET("/dashboard", handlers.HandleAdminDashboard)
+
 		// 用户管理
 		admin.GET("/users", handlers.HandleAdminGetUsers)
 		admin.PUT("/users/:id", handlers.HandleAdminUpdateUser)
@@ -88,7 +91,7 @@ func SetupRoutes(r *gin.Engine) {
 		admin.GET("/users/:id/subscriptions", handlers.HandleAdminGetUserSubscriptions)
 		admin.PUT("/users/:id/subscriptions/:subscription_id/limit", handlers.HandleAdminUpdateUserSubscriptionLimit)
 		admin.POST("/users/:id/gift", handlers.HandleAdminGiftSubscription)
-		
+
 		// 赠送记录管理
 		admin.GET("/gift-records", handlers.HandleAdminGetGiftRecords)
 
