@@ -805,3 +805,178 @@ func HandleAdminUpdateUserSubscriptionLimit(c *gin.Context) {
 		},
 	})
 }
+
+// HandleAdminGiftSubscription 管理员赠送订阅
+func HandleAdminGiftSubscription(c *gin.Context) {
+	userID := c.Param("id")
+	
+	// 获取当前管理员信息
+	adminInterface, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无法获取管理员信息"})
+		return
+	}
+	admin := adminInterface.(models.User)
+	
+	// 解析请求数据
+	var requestData struct {
+		SubscriptionPlanID uint   `json:"subscription_plan_id" binding:"required"`
+		PointsAmount       *int64 `json:"points_amount"`        // 可选：自定义积分数量
+		ValidityDays       *int   `json:"validity_days"`        // 可选：自定义有效期
+		DailyMaxPoints     *int64 `json:"daily_max_points"`     // 可选：自定义每日限制
+		Reason             string `json:"reason"`               // 赠送原因
+	}
+	
+	if err := c.ShouldBindJSON(&requestData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效: " + err.Error()})
+		return
+	}
+	
+	// 验证目标用户是否存在
+	var targetUser models.User
+	if err := database.DB.Where("id = ?", userID).First(&targetUser).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "目标用户不存在"})
+		return
+	}
+	
+	// 验证订阅计划是否存在
+	var plan models.SubscriptionPlan
+	if err := database.DB.Where("id = ?", requestData.SubscriptionPlanID).First(&plan).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "订阅计划不存在"})
+		return
+	}
+	
+	// 使用计划默认值或自定义值
+	pointsAmount := plan.PointAmount
+	if requestData.PointsAmount != nil && *requestData.PointsAmount > 0 {
+		pointsAmount = *requestData.PointsAmount
+	}
+	
+	validityDays := plan.ValidityDays
+	if requestData.ValidityDays != nil && *requestData.ValidityDays > 0 {
+		validityDays = *requestData.ValidityDays
+	}
+	
+	dailyMaxPoints := plan.DailyMaxPoints
+	if requestData.DailyMaxPoints != nil {
+		dailyMaxPoints = *requestData.DailyMaxPoints
+	}
+	
+	// 开始数据库事务
+	tx := database.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	
+	// 创建赠送记录
+	giftRecord := models.GiftRecord{
+		FromAdminID:        admin.ID,
+		ToUserID:           targetUser.ID,
+		SubscriptionPlanID: requestData.SubscriptionPlanID,
+		PointsAmount:       pointsAmount,
+		ValidityDays:       validityDays,
+		DailyMaxPoints:     dailyMaxPoints,
+		Reason:             requestData.Reason,
+		Status:             "pending",
+	}
+	
+	if err := tx.Create(&giftRecord).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建赠送记录失败: " + err.Error()})
+		return
+	}
+	
+	// 直接创建订阅记录
+	now := time.Now()
+	expiresAt := now.AddDate(0, 0, validityDays)
+	
+	subscription := models.Subscription{
+		UserID:             targetUser.ID,
+		SubscriptionPlanID: requestData.SubscriptionPlanID,
+		Status:             "active",
+		ActivatedAt:        now,
+		ExpiresAt:          expiresAt,
+		TotalPoints:        pointsAmount,
+		UsedPoints:         0,
+		AvailablePoints:    pointsAmount,
+		DailyMaxPoints:     dailyMaxPoints,
+		SourceType:         "admin_gift",
+		SourceID:           fmt.Sprintf("gift_%d", giftRecord.ID),
+	}
+	
+	if err := tx.Create(&subscription).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建订阅失败: " + err.Error()})
+		return
+	}
+	
+	// 更新赠送记录状态
+	subscriptionID := subscription.ID
+	giftRecord.SubscriptionID = &subscriptionID
+	giftRecord.Status = "completed"
+	
+	if err := tx.Save(&giftRecord).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新赠送记录失败: " + err.Error()})
+		return
+	}
+	
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "提交事务失败: " + err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("成功为用户 %s 赠送 %s 订阅", targetUser.Username, plan.Title),
+		"gift_record": gin.H{
+			"id":               giftRecord.ID,
+			"points_amount":    pointsAmount,
+			"validity_days":    validityDays,
+			"daily_max_points": dailyMaxPoints,
+		},
+		"subscription": gin.H{
+			"id":          subscription.ID,
+			"expires_at":  subscription.ExpiresAt,
+			"status":      subscription.Status,
+		},
+	})
+}
+
+// HandleAdminGetGiftRecords 获取赠送记录列表
+func HandleAdminGetGiftRecords(c *gin.Context) {
+	pagination := getPagination(c)
+	var records []models.GiftRecord
+	var total int64
+
+	query := database.DB.Model(&models.GiftRecord{}).
+		Preload("FromAdmin").
+		Preload("ToUser").
+		Preload("Plan")
+
+	// 可选过滤参数
+	if status := c.Query("status"); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if adminID := c.Query("admin_id"); adminID != "" {
+		query = query.Where("from_admin_id = ?", adminID)
+	}
+	if userID := c.Query("user_id"); userID != "" {
+		query = query.Where("to_user_id = ?", userID)
+	}
+
+	query.Count(&total)
+
+	offset := (pagination.Page - 1) * pagination.PageSize
+	query.Order("created_at DESC").Offset(offset).Limit(pagination.PageSize).Find(&records)
+
+	c.JSON(http.StatusOK, PaginatedResponse{
+		Data:       records,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	})
+}

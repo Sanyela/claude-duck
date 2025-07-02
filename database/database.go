@@ -65,6 +65,7 @@ func Migrate() error {
 		&models.SystemConfig{},
 		&models.DailyCheckin{},
 		&models.DailyPointsUsage{},
+		&models.GiftRecord{},
 	)
 
 	if err != nil {

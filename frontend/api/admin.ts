@@ -425,4 +425,28 @@ export const adminAPI = {
       };
     }
   },
+
+  // 赠送订阅给用户
+  giftSubscription: async (userId: number, data: {
+    subscription_plan_id: number;
+    points_amount?: number;
+    validity_days?: number;
+    daily_max_points?: number;
+    reason?: string;
+  }): Promise<{ success: boolean; message?: string; gift_record?: any; subscription?: any }> => {
+    try {
+      const response = await request.post(`/api/admin/users/${userId}/gift`, data);
+      return {
+        success: true,
+        message: response.data?.message,
+        gift_record: response.data?.gift_record,
+        subscription: response.data?.subscription
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "赠送订阅失败"
+      };
+    }
+  },
 }; 

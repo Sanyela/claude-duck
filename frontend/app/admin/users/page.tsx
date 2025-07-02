@@ -8,7 +8,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal, Users, Edit, Download, Search, Trash2, UserX, UserCheck } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Users, Edit, Download, Search, Trash2, UserX, UserCheck, Gift } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,7 +37,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
-import { adminAPI, type AdminUser } from "@/api/admin"
+import { adminAPI, type AdminUser, type SubscriptionPlan } from "@/api/admin"
 
 // 数据类型定义
 type UserRow = {
@@ -54,6 +54,7 @@ type UserRow = {
 export default function AdminUsersPage() {
   const { toast } = useToast()
   const [data, setData] = useState<UserRow[]>([])
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [loading, setLoading] = useState(false)
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = useState({})
@@ -70,6 +71,15 @@ export default function AdminUsersPage() {
   // 对话框状态
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
+  const [isGiftDialogOpen, setIsGiftDialogOpen] = useState(false)
+  const [giftingUser, setGiftingUser] = useState<UserRow | null>(null)
+  const [giftData, setGiftData] = useState({
+    subscription_plan_id: 0,
+    points_amount: "",
+    validity_days: "",
+    daily_max_points: "",
+    reason: ""
+  })
   
 
   // 列定义
@@ -227,6 +237,12 @@ export default function AdminUsersPage() {
                 编辑用户
               </DropdownMenuItem>
               <DropdownMenuItem
+                onClick={() => handleGiftSubscription(user)}
+              >
+                <Gift className="mr-2 h-4 w-4" />
+                赠送卡密
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 onClick={() => handleToggleUserStatus(user)}
               >
                 {user.is_disabled ? (
@@ -318,8 +334,17 @@ export default function AdminUsersPage() {
     setLoading(false)
   }
 
+  // 加载订阅计划
+  const loadPlans = async () => {
+    const result = await adminAPI.getSubscriptionPlans()
+    if (result.success && result.plans) {
+      setPlans(Array.isArray(result.plans) ? result.plans : [])
+    }
+  }
+
   useEffect(() => {
     loadUsers()
+    loadPlans()
   }, [pagination.page, pagination.pageSize])
 
   // 处理编辑用户
@@ -395,6 +420,63 @@ export default function AdminUsersPage() {
     } else {
       toast({
         title: `${actionText}失败`,
+        description: result.message,
+        variant: "destructive"
+      })
+    }
+  }
+
+  // 处理赠送订阅
+  const handleGiftSubscription = (user: UserRow) => {
+    setGiftingUser(user)
+    setGiftData({
+      subscription_plan_id: 0,
+      points_amount: "",
+      validity_days: "",
+      daily_max_points: "",
+      reason: ""
+    })
+    setIsGiftDialogOpen(true)
+  }
+
+  // 执行赠送订阅
+  const handleSubmitGift = async () => {
+    if (!giftingUser || giftData.subscription_plan_id === 0) {
+      toast({
+        title: "请选择订阅计划",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const requestData: any = {
+      subscription_plan_id: giftData.subscription_plan_id,
+      reason: giftData.reason
+    }
+
+    // 添加自定义值（如果有）
+    if (giftData.points_amount) {
+      requestData.points_amount = parseInt(giftData.points_amount)
+    }
+    if (giftData.validity_days) {
+      requestData.validity_days = parseInt(giftData.validity_days)
+    }
+    if (giftData.daily_max_points) {
+      requestData.daily_max_points = parseInt(giftData.daily_max_points)
+    }
+
+    const result = await adminAPI.giftSubscription(giftingUser.id, requestData)
+    if (result.success) {
+      toast({
+        title: "赠送成功",
+        description: result.message,
+        variant: "default"
+      })
+      setIsGiftDialogOpen(false)
+      loadUsers()
+    } else {
+      toast({
+        title: "赠送失败",
         description: result.message,
         variant: "destructive"
       })
@@ -691,6 +773,91 @@ export default function AdminUsersPage() {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>取消</Button>
                 <Button onClick={() => editingUser && handleUpdateUser(editingUser)}>保存</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* 赠送卡密对话框 */}
+          <Dialog open={isGiftDialogOpen} onOpenChange={setIsGiftDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>赠送卡密</DialogTitle>
+                <DialogDescription>
+                  为用户 "{giftingUser?.username}" 赠送订阅计划
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>订阅计划 *</Label>
+                  <Select
+                    value={giftData.subscription_plan_id.toString()}
+                    onValueChange={(value) => setGiftData({...giftData, subscription_plan_id: parseInt(value)})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择订阅计划" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.isArray(plans) && plans.map((plan) => (
+                        <SelectItem key={plan.id} value={plan.id.toString()}>
+                          {plan.title} ({plan.point_amount.toLocaleString()} 积分, {plan.validity_days}天)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>自定义积分数量 (可选)</Label>
+                  <Input
+                    type="number"
+                    placeholder="留空使用计划默认值"
+                    value={giftData.points_amount}
+                    onChange={(e) => setGiftData({...giftData, points_amount: e.target.value})}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>自定义有效期天数 (可选)</Label>
+                  <Input
+                    type="number"
+                    placeholder="留空使用计划默认值"
+                    value={giftData.validity_days}
+                    onChange={(e) => setGiftData({...giftData, validity_days: e.target.value})}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>每日最大使用积分 (可选)</Label>
+                  <Input
+                    type="number"
+                    placeholder="0表示无限制，留空使用计划默认值"
+                    value={giftData.daily_max_points}
+                    onChange={(e) => setGiftData({...giftData, daily_max_points: e.target.value})}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>赠送原因 (可选)</Label>
+                  <Input
+                    placeholder="例如：活动奖励、客服补偿等"
+                    value={giftData.reason}
+                    onChange={(e) => setGiftData({...giftData, reason: e.target.value})}
+                  />
+                </div>
+                
+                <div className="bg-muted p-3 rounded text-sm">
+                  <p className="font-medium mb-1">用户信息：</p>
+                  <p>用户名: {giftingUser?.username}</p>
+                  <p>邮箱: {giftingUser?.email}</p>
+                  <p>用户ID: {giftingUser?.id}</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsGiftDialogOpen(false)}>取消</Button>
+                <Button onClick={handleSubmitGift}>
+                  <Gift className="mr-2 h-4 w-4" />
+                  确认赠送
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

@@ -206,3 +206,34 @@ type DailyPointsUsage struct {
 func (DailyPointsUsage) TableName() string {
 	return "daily_points_usage"
 }
+
+// GiftRecord 卡密赠送记录
+type GiftRecord struct {
+	ID               uint             `gorm:"primarykey" json:"id"`
+	FromAdminID      uint             `gorm:"not null;index" json:"from_admin_id"`              // 赠送的管理员ID
+	FromAdmin        User             `gorm:"foreignKey:FromAdminID" json:"from_admin,omitempty"`
+	ToUserID         uint             `gorm:"not null;index" json:"to_user_id"`                 // 接收的用户ID
+	ToUser           User             `gorm:"foreignKey:ToUserID" json:"to_user,omitempty"`
+	SubscriptionPlanID uint           `gorm:"not null" json:"subscription_plan_id"`             // 赠送的订阅计划ID
+	Plan             SubscriptionPlan `gorm:"foreignKey:SubscriptionPlanID" json:"plan,omitempty"`
+	
+	// 赠送内容
+	PointsAmount     int64  `gorm:"not null" json:"points_amount"`     // 赠送的积分数量
+	ValidityDays     int    `gorm:"not null" json:"validity_days"`     // 有效天数
+	DailyMaxPoints   int64  `gorm:"default:0" json:"daily_max_points"` // 每日最大使用积分数量，0表示无限制
+	Reason           string `gorm:"type:varchar(500)" json:"reason"`   // 赠送原因
+	
+	// 状态和结果
+	Status           string `gorm:"default:'pending';index" json:"status"` // pending, completed, failed
+	SubscriptionID   *uint  `json:"subscription_id"`                       // 生成的订阅ID（成功时）
+	ErrorMessage     string `gorm:"type:text" json:"error_message"`         // 失败原因（失败时）
+	
+	CreatedAt        time.Time      `gorm:"index" json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// 添加表名方法
+func (GiftRecord) TableName() string {
+	return "gift_records"
+}

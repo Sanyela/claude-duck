@@ -8,7 +8,7 @@ const resources = [
     title: "安装 Claude Duck 🦆", 
     description: "安装Claude浏览器插件，获得更便捷的AI助手体验。", 
     icon: Download, 
-    href: "https://swjqc4r0111.feishu.cn/docx/SqnkdO9CKojJ33xCgc3ceYbLn7e"
+    href: "https://swjqc4r0111.feishu.cn/docx/CJT6dbdUBofDlrxfwpNcp1klnCg"
   }
 ]
 

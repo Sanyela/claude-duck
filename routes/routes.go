@@ -87,6 +87,10 @@ func SetupRoutes(r *gin.Engine) {
 		admin.PUT("/users/:id/status", handlers.HandleAdminToggleUserStatus)
 		admin.GET("/users/:id/subscriptions", handlers.HandleAdminGetUserSubscriptions)
 		admin.PUT("/users/:id/subscriptions/:subscription_id/limit", handlers.HandleAdminUpdateUserSubscriptionLimit)
+		admin.POST("/users/:id/gift", handlers.HandleAdminGiftSubscription)
+		
+		// 赠送记录管理
+		admin.GET("/gift-records", handlers.HandleAdminGetGiftRecords)
 
 		// 系统配置管理
 		admin.GET("/system-configs", handlers.HandleAdminGetSystemConfigs)
