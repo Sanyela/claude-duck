@@ -209,31 +209,133 @@ func (DailyPointsUsage) TableName() string {
 
 // GiftRecord 卡密赠送记录
 type GiftRecord struct {
-	ID               uint             `gorm:"primarykey" json:"id"`
-	FromAdminID      uint             `gorm:"not null;index" json:"from_admin_id"`              // 赠送的管理员ID
-	FromAdmin        User             `gorm:"foreignKey:FromAdminID" json:"from_admin,omitempty"`
-	ToUserID         uint             `gorm:"not null;index" json:"to_user_id"`                 // 接收的用户ID
-	ToUser           User             `gorm:"foreignKey:ToUserID" json:"to_user,omitempty"`
-	SubscriptionPlanID uint           `gorm:"not null" json:"subscription_plan_id"`             // 赠送的订阅计划ID
-	Plan             SubscriptionPlan `gorm:"foreignKey:SubscriptionPlanID" json:"plan,omitempty"`
-	
+	ID                 uint             `gorm:"primarykey" json:"id"`
+	FromAdminID        uint             `gorm:"not null;index" json:"from_admin_id"` // 赠送的管理员ID
+	FromAdmin          User             `gorm:"foreignKey:FromAdminID" json:"from_admin,omitempty"`
+	ToUserID           uint             `gorm:"not null;index" json:"to_user_id"` // 接收的用户ID
+	ToUser             User             `gorm:"foreignKey:ToUserID" json:"to_user,omitempty"`
+	SubscriptionPlanID uint             `gorm:"not null" json:"subscription_plan_id"` // 赠送的订阅计划ID
+	Plan               SubscriptionPlan `gorm:"foreignKey:SubscriptionPlanID" json:"plan,omitempty"`
+
 	// 赠送内容
-	PointsAmount     int64  `gorm:"not null" json:"points_amount"`     // 赠送的积分数量
-	ValidityDays     int    `gorm:"not null" json:"validity_days"`     // 有效天数
-	DailyMaxPoints   int64  `gorm:"default:0" json:"daily_max_points"` // 每日最大使用积分数量，0表示无限制
-	Reason           string `gorm:"type:varchar(500)" json:"reason"`   // 赠送原因
-	
+	PointsAmount   int64  `gorm:"not null" json:"points_amount"`     // 赠送的积分数量
+	ValidityDays   int    `gorm:"not null" json:"validity_days"`     // 有效天数
+	DailyMaxPoints int64  `gorm:"default:0" json:"daily_max_points"` // 每日最大使用积分数量，0表示无限制
+	Reason         string `gorm:"type:varchar(500)" json:"reason"`   // 赠送原因
+
 	// 状态和结果
-	Status           string `gorm:"default:'pending';index" json:"status"` // pending, completed, failed
-	SubscriptionID   *uint  `json:"subscription_id"`                       // 生成的订阅ID（成功时）
-	ErrorMessage     string `gorm:"type:text" json:"error_message"`         // 失败原因（失败时）
-	
-	CreatedAt        time.Time      `gorm:"index" json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+	Status         string `gorm:"default:'pending';index" json:"status"` // pending, completed, failed
+	SubscriptionID *uint  `json:"subscription_id"`                       // 生成的订阅ID（成功时）
+	ErrorMessage   string `gorm:"type:text" json:"error_message"`        // 失败原因（失败时）
+
+	CreatedAt time.Time      `gorm:"index" json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // 添加表名方法
 func (GiftRecord) TableName() string {
 	return "gift_records"
+}
+
+// UserWallet 用户钱包模型
+type UserWallet struct {
+	UserID uint `gorm:"primarykey" json:"user_id"` // 用户ID作为主键
+
+	// 积分相关
+	TotalPoints     int64 `gorm:"not null;default:0" json:"total_points"`     // 总积分 (历史累计充值)
+	AvailablePoints int64 `gorm:"not null;default:0" json:"available_points"` // 可用积分
+	UsedPoints      int64 `gorm:"not null;default:0" json:"used_points"`      // 已使用积分
+
+	// 当前生效的订阅属性 (来自最新激活的套餐)
+	DailyMaxPoints        int64 `gorm:"default:0" json:"daily_max_points"`       // 每日最大使用积分，0表示无限制
+	DegradationGuaranteed int   `gorm:"default:0" json:"degradation_guaranteed"` // 保证不降级数量
+
+	// 签到相关 (来自当前套餐)
+	DailyCheckinPoints    int64 `gorm:"default:0" json:"daily_checkin_points"`     // 每日签到积分(最低)
+	DailyCheckinPointsMax int64 `gorm:"default:0" json:"daily_checkin_points_max"` // 每日签到积分(最高)
+
+	// 钱包状态
+	WalletExpiresAt time.Time `gorm:"not null" json:"wallet_expires_at"`       // 钱包过期时间 (最晚的订阅过期时间)
+	Status          string    `gorm:"not null;default:'active'" json:"status"` // active, expired
+
+	// 统计信息
+	LastCheckinDate string `gorm:"type:varchar(10)" json:"last_checkin_date"` // 最后签到日期 YYYY-MM-DD
+
+	// 时间戳
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// 关联用户
+	User User `gorm:"foreignKey:UserID;references:ID" json:"user,omitempty"`
+}
+
+// 添加表名方法
+func (UserWallet) TableName() string {
+	return "user_wallets"
+}
+
+// RedemptionRecord 兑换记录表 - 替代原订阅表，记录所有兑换历史
+type RedemptionRecord struct {
+	ID     uint `gorm:"primarykey" json:"id"`
+	UserID uint `gorm:"not null;index" json:"user_id"` // 用户ID
+
+	// 兑换来源
+	SourceType string `gorm:"not null;index" json:"source_type"`  // activation_code, admin_gift, daily_checkin, payment
+	SourceID   string `gorm:"type:varchar(191)" json:"source_id"` // 来源标识
+
+	// 兑换内容
+	PointsAmount int64 `gorm:"not null" json:"points_amount"` // 兑换的积分数量 (可为负数，表示扣减)
+	ValidityDays int   `gorm:"not null" json:"validity_days"` // 有效期天数
+
+	// 套餐属性 (如果是套餐兑换)
+	SubscriptionPlanID    *uint `json:"subscription_plan_id"`                    // 关联的订阅计划ID (可为空)
+	DailyMaxPoints        int64 `gorm:"default:0" json:"daily_max_points"`       // 每日限制
+	DegradationGuaranteed int   `gorm:"default:0" json:"degradation_guaranteed"` // 降级保证
+	DailyCheckinPoints    int64 `gorm:"default:0" json:"daily_checkin_points"`   // 签到积分范围
+	DailyCheckinPointsMax int64 `gorm:"default:0" json:"daily_checkin_points_max"`
+
+	// 记录信息
+	ActivatedAt time.Time `gorm:"not null;index" json:"activated_at"` // 激活时间
+	ExpiresAt   time.Time `gorm:"not null;index" json:"expires_at"`   // 过期时间
+	Reason      string    `gorm:"type:varchar(500)" json:"reason"`    // 兑换原因/描述
+
+	// 关联信息
+	BatchNumber string `gorm:"type:varchar(191)" json:"batch_number"` // 批次号 (激活码相关)
+	InvoiceURL  string `gorm:"type:varchar(500)" json:"invoice_url"`  // 发票链接 (支付相关)
+	AdminUserID *uint  `json:"admin_user_id"`                         // 操作管理员ID (admin_gift相关)
+
+	// 时间戳
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// 关联关系
+	User             User              `gorm:"foreignKey:UserID;references:ID" json:"user,omitempty"`
+	SubscriptionPlan *SubscriptionPlan `gorm:"foreignKey:SubscriptionPlanID;references:ID" json:"plan,omitempty"`
+	AdminUser        *User             `gorm:"foreignKey:AdminUserID;references:ID" json:"admin_user,omitempty"`
+}
+
+// 添加表名方法
+func (RedemptionRecord) TableName() string {
+	return "redemption_records"
+}
+
+// UserDailyUsage 用户每日使用记录 - 简化版，不再按订阅分组
+type UserDailyUsage struct {
+	ID         uint   `gorm:"primarykey" json:"id"`
+	UserID     uint   `gorm:"not null;index" json:"user_id"`                     // 用户ID
+	UsageDate  string `gorm:"type:varchar(10);not null;index" json:"usage_date"` // 使用日期 YYYY-MM-DD
+	PointsUsed int64  `gorm:"not null;default:0" json:"points_used"`             // 当日已使用积分
+
+	// 时间戳
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// 关联用户
+	User User `gorm:"foreignKey:UserID;references:ID" json:"user,omitempty"`
+}
+
+// 添加表名方法
+func (UserDailyUsage) TableName() string {
+	return "user_daily_usage"
 }

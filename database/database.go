@@ -66,6 +66,9 @@ func Migrate() error {
 		&models.DailyCheckin{},
 		&models.DailyPointsUsage{},
 		&models.GiftRecord{},
+		&models.UserWallet{},
+		&models.RedemptionRecord{},
+		&models.UserDailyUsage{},
 	)
 
 	if err != nil {
@@ -80,6 +83,9 @@ func Migrate() error {
 
 	// 确保每日积分使用表的唯一索引
 	ensureDailyPointsUsageIndexes()
+
+	// 确保新架构表的索引
+	ensureNewArchitectureIndexes()
 
 	log.Println("Database migration completed")
 	return nil
@@ -217,5 +223,32 @@ func ensureDailyPointsUsageIndexes() {
 		}
 	} else {
 		log.Println("✅ 每日积分使用表唯一索引已存在")
+	}
+}
+
+// ensureNewArchitectureIndexes 确保新架构表的索引
+func ensureNewArchitectureIndexes() {
+	// 先检查索引是否存在
+	var indexCount int64
+	checkSQL := `SELECT COUNT(*) FROM information_schema.statistics 
+		WHERE table_schema = DATABASE() 
+		AND table_name = 'user_wallets' 
+		AND index_name = 'idx_user_wallets_user_id'`
+
+	if err := DB.Raw(checkSQL).Scan(&indexCount).Error; err != nil {
+		log.Printf("检查新架构表索引失败: %v", err)
+		return
+	}
+
+	if indexCount == 0 {
+		// 创建复合唯一索引：一个用户只能有一个钱包
+		indexSQL := `CREATE UNIQUE INDEX idx_user_wallets_user_id ON user_wallets (user_id)`
+		if err := DB.Exec(indexSQL).Error; err != nil {
+			log.Printf("创建新架构表唯一索引失败: %v", err)
+		} else {
+			log.Println("✅ 新架构表唯一索引创建完成")
+		}
+	} else {
+		log.Println("✅ 新架构表唯一索引已存在")
 	}
 }
