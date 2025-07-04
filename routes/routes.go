@@ -24,18 +24,20 @@ func SetupRoutes(r *gin.Engine) {
 		public.GET("/bing", handlers.GetBingDailyImage)
 	}
 
-	// 认证相关路由（无需token验证）
+	// 认证相关路由
 	auth := r.Group("/api/auth")
 	{
 		auth.POST("/register", handlers.HandleRegister)
 		auth.POST("/login", handlers.HandleLogin)
-		auth.POST("/logout", handlers.HandleLogout)
+		auth.POST("/logout", middleware.JWTAuth(), handlers.HandleLogout) // 登出需要token验证
 		auth.GET("/user", middleware.JWTAuth(), handlers.HandleGetUserInfo) // 需要token验证
 
 		// 邮箱验证码相关路由
+		auth.POST("/check-email", handlers.HandleCheckEmail) // 新增：检查邮箱是否已注册
 		auth.POST("/send-verification-code", handlers.HandleSendVerificationCode)
 		auth.POST("/register-with-code", handlers.HandleRegisterWithCode)
 		auth.POST("/login-with-code", handlers.HandleLoginWithCode)
+		auth.POST("/email-auth", handlers.HandleEmailOnlyAuth) // 邮箱验证码一键登录/注册
 	}
 
 	// SSO相关路由
@@ -57,6 +59,7 @@ func SetupRoutes(r *gin.Engine) {
 		// 订阅相关路由
 		api.GET("/subscription/active", handlers.HandleGetActiveSubscription)
 		api.GET("/subscription/history", handlers.HandleGetSubscriptionHistory)
+		api.POST("/subscription/redeem/preview", handlers.HandleRedeemCouponPreview) // 预检查接口
 		api.POST("/subscription/redeem", handlers.HandleRedeemCoupon)
 
 		// 积分相关路由
@@ -73,12 +76,21 @@ func SetupRoutes(r *gin.Engine) {
 		// Claude API 代理路由
 		api.POST("/claude", handlers.HandleClaudeProxy)
 		api.Any("/claude/*path", handlers.HandleClaudeProxy) // 支持所有方法和子路径
+
+		// 设备管理路由
+		devices := api.Group("/devices")
+		{
+			devices.GET("", handlers.GetDevices)                  // 获取设备列表
+			devices.DELETE("/:deviceId", handlers.RevokeDevice)   // 下线指定设备
+			devices.DELETE("", handlers.RevokeAllDevices)         // 下线其他设备
+			devices.DELETE("/force", handlers.RevokeAllDevicesForce) // 强制下线所有设备
+			devices.GET("/stats", handlers.GetDeviceStats)        // 获取设备统计
+		}
 	}
 
 	// 管理员路由（需要认证 + 管理员权限）
 	admin := r.Group("/api/admin")
-	admin.Use(middleware.JWTAuth())
-	admin.Use(middleware.AdminAuth())
+	admin.Use(middleware.AdminAuth()) // AdminAuth已经包含了JWT验证
 	{
 		// 数据看板
 		admin.GET("/dashboard", handlers.HandleAdminDashboard)
@@ -121,14 +133,26 @@ func SetupRoutes(r *gin.Engine) {
 
 	// 静态文件服务 - 提供前端构建的静态资源
 	r.Static("/assets", "./ui/dist/assets")
+	r.Static("/_next", "./ui/dist/_next")         // Next.js 静态文件
 	r.StaticFile("/favicon.ico", "./ui/dist/favicon.ico")
+	r.StaticFile("/icon.png", "./ui/dist/icon.png")
 
 	// SPA fallback - 所有未匹配的路由都返回前端应用
 	r.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		
 		// 如果请求的是API路径，返回404
-		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
+		if len(path) >= 4 && path[:4] == "/api" {
 			c.JSON(404, gin.H{
 				"error": "API endpoint not found",
+			})
+			return
+		}
+		
+		// 如果请求的是静态文件路径但文件不存在，返回404
+		if len(path) >= 6 && path[:6] == "/_next" {
+			c.JSON(404, gin.H{
+				"error": "Static file not found",
 			})
 			return
 		}

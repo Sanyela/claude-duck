@@ -83,10 +83,6 @@ func LoadConfig() {
 		// JWT配置
 		JWTSecret: getEnv("JWT_SECRET_KEY", ""),
 
-		// Token过期时间
-		AccessTokenExpireHours:  getEnvAsInt("ACCESS_TOKEN_EXPIRE_HOURS", 24),
-		DeviceCodeExpireMinutes: getEnvAsInt("DEVICE_CODE_EXPIRE_MINUTES", 15),
-
 		// New API配置
 		NewAPIEndpoint: getEnv("NEW_API_ENDPOINT", ""),
 		NewAPIKey:      getEnv("NEW_API_KEY", ""),

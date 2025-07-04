@@ -125,6 +125,22 @@ func HandleAuthorize(c *gin.Context) {
 			return
 		}
 
+		// 注册SSO设备到Redis
+		deviceManager := utils.NewDeviceManager(database.TokenRedisClient, database.UserRedisClient, database.DeviceRedisClient)
+		_, err = deviceManager.RegisterDevice(
+			user.ID,
+			token,
+			c.ClientIP(),
+			c.GetHeader("User-Agent"),
+			"sso",
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to register sso device",
+			})
+			return
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"token":       token,
 			"device_flow": false,
@@ -152,21 +168,39 @@ func HandleVerifyToken(c *gin.Context) {
 		return
 	}
 
-	// 验证JWT访问令牌
+	// 先验证JWT格式
 	claims, err := utils.ValidateAccessToken(req.Token)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, TokenVerifyResponse{
 			Authenticated: false,
-			Error:         "Token invalid or expired",
+			Error:         "Token format invalid",
 		})
 		return
 	}
 
-	userID := claims.UserID
+	// 通过Redis验证设备
+	deviceManager := utils.NewDeviceManager(database.TokenRedisClient, database.UserRedisClient, database.DeviceRedisClient)
+	device, err := deviceManager.ValidateToken(req.Token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, TokenVerifyResponse{
+			Authenticated: false,
+			Error:         "Token not found or device offline",
+		})
+		return
+	}
 
-	// 验证用户是否仍然存在
+	// 验证用户ID匹配
+	if device.UserID != claims.UserID {
+		c.JSON(http.StatusUnauthorized, TokenVerifyResponse{
+			Authenticated: false,
+			Error:         "Token user mismatch",
+		})
+		return
+	}
+
+	// 获取用户信息
 	var user models.User
-	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := database.DB.Where("id = ?", device.UserID).First(&user).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, TokenVerifyResponse{
 			Authenticated: false,
 			Error:         "User not found",
@@ -214,6 +248,22 @@ func HandleVerifyCode(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, CodeVerifyResponse{
 			Error: "Failed to generate access token",
+		})
+		return
+	}
+
+	// 注册SSO设备到Redis
+	deviceManager := utils.NewDeviceManager(database.TokenRedisClient, database.UserRedisClient, database.DeviceRedisClient)
+	_, err = deviceManager.RegisterDevice(
+		user.ID,
+		token,
+		c.ClientIP(),
+		c.GetHeader("User-Agent"),
+		"sso",
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, CodeVerifyResponse{
+			Error: "Failed to register sso device",
 		})
 		return
 	}

@@ -5,51 +5,83 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { BellRing, AlertTriangle, ArrowRight, CreditCard, DollarSign, BookOpen, Calendar, ChevronRight, Loader2 } from "lucide-react"
+import { BellRing, AlertTriangle, ArrowRight, CreditCard, DollarSign, BookOpen, Calendar, ChevronRight, Loader2, Zap, Clock, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { Greeting } from "@/components/dashboard/greeting"
 import { CheckinButton } from "@/components/dashboard/CheckinButton"
+import { AnimatedNumber, RollingNumber } from "@/components/ui/animated-number"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
 import { dashboardAPI, type DashboardData } from "@/api/dashboard"
+import { creditsAPI } from "@/api/credits"
 import { announcementsAPI, type PublicAnnouncement } from "@/api/announcements"
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [creditData, setCreditData] = useState<any>(null); // 积分数据包含自动补给信息
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // 刷新触发器
   
   // 加载仪表盘数据
+  const loadDashboardData = async () => {
+    setLoading(true);
+    setError(null);
+    
+    const [dashboardResult, creditResult, announcementsResult] = await Promise.all([
+      dashboardAPI.getDashboardData(),
+      creditsAPI.getBalance(),
+      announcementsAPI.getActiveAnnouncements("zh")
+    ]);
+
+    if (dashboardResult.success && dashboardResult.data) {
+      setDashboardData(dashboardResult.data);
+    } else {
+      setError(dashboardResult.message || "加载数据失败");
+    }
+
+    if (creditResult.success && creditResult.data) {
+      setCreditData(creditResult.data);
+    }
+
+    if (announcementsResult.success && announcementsResult.data) {
+      setAnnouncements(announcementsResult.data);
+    }
+    
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const loadDashboardData = async () => {
-      setLoading(true);
-      setError(null);
-      
-      const [dashboardResult, announcementsResult] = await Promise.all([
-        dashboardAPI.getDashboardData(),
-        announcementsAPI.getActiveAnnouncements("zh")
-      ]);
-
-      if (dashboardResult.success && dashboardResult.data) {
-        setDashboardData(dashboardResult.data);
-      } else {
-        setError(dashboardResult.message || "加载数据失败");
-      }
-
-      if (announcementsResult.success && announcementsResult.data) {
-        setAnnouncements(announcementsResult.data);
-      }
-      
-      setLoading(false);
-    };
-
     if (user) {
       loadDashboardData();
     }
   }, [user]);
+
+  // 刷新积分数据
+  const refreshCreditData = async () => {
+    try {
+      const [dashboardResult, creditResult] = await Promise.all([
+        dashboardAPI.getDashboardData(),
+        creditsAPI.getBalance()
+      ]);
+
+      if (dashboardResult.success && dashboardResult.data) {
+        setDashboardData(dashboardResult.data);
+      }
+
+      if (creditResult.success && creditResult.data) {
+        setCreditData(creditResult.data);
+      }
+
+      // 触发动画
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error) {
+      console.error("刷新积分数据失败:", error);
+    }
+  };
   
   // 计算积分使用率
   const creditUsagePercentage = dashboardData?.pointBalance 
@@ -99,12 +131,12 @@ export default function DashboardPage() {
     
     // 判断状态
     if (daysUntilExpiry <= 3) {
-      return { status: "expiring_soon", timeRemaining, currentSubscription, otherSubscriptions };
+      return { status: "expiring_soon", timeRemaining, currentSubscription, otherSubscriptions }
     }
-    return { status: "active", timeRemaining, currentSubscription, otherSubscriptions };
-  };
+    return { status: "active", timeRemaining, currentSubscription, otherSubscriptions }
+  }
 
-  const subscriptionInfo = getSubscriptionInfo();
+  const subscriptionInfo = getSubscriptionInfo()
 
   return (
     <DashboardLayout>
@@ -164,33 +196,72 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle>当前积分</CardTitle>
-                <DollarSign className="h-5 w-5 text-green-500 dark:text-green-400" />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={refreshCreditData}
+                    className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <RefreshCw className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pb-2">
-              {loading ? (
+              {loading || !dashboardData?.pointBalance ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin" />
                   <span className="ml-2">加载中...</span>
                 </div>
-              ) : dashboardData?.pointBalance ? (
+              ) : (dashboardData.pointBalance.total_points || 0) > 0 ? (
                 <>
                   <div className="flex items-end justify-between">
                     <div>
-                      <p className="text-3xl font-bold">
-                        {(dashboardData.pointBalance.available_points || 0).toLocaleString()}
-                      </p>
+                      <div className="text-3xl font-bold">
+                        <AnimatedNumber 
+                          value={dashboardData.pointBalance.available_points || 0}
+                          duration={800}
+                          className="text-3xl font-bold"
+                          refreshTrigger={refreshTrigger}
+                        />
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        积分总数: {(dashboardData.pointBalance.total_points || 0).toLocaleString()} | 
-                        已使用: {(dashboardData.pointBalance.used_points || 0).toLocaleString()}
+                        积分总数: <AnimatedNumber 
+                          value={dashboardData.pointBalance.total_points || 0} 
+                          duration={600} 
+                          className="font-medium"
+                          refreshTrigger={refreshTrigger}
+                        /> | 
+                        已使用: <AnimatedNumber 
+                          value={dashboardData.pointBalance.used_points || 0} 
+                          duration={600} 
+                          className="font-medium"
+                          refreshTrigger={refreshTrigger}
+                        />
                         {(dashboardData.pointBalance.checkin_points || 0) > 0 && (
-                          <> | <span className="text-purple-600 dark:text-purple-400">签到积分: {(dashboardData.pointBalance.checkin_points || 0).toLocaleString()}</span></>
+                          <> | <span className="text-purple-600 dark:text-purple-400">签到积分: <AnimatedNumber 
+                            value={dashboardData.pointBalance.checkin_points || 0} 
+                            duration={500} 
+                            className="font-medium"
+                            refreshTrigger={refreshTrigger}
+                          /></span></>
                         )}
                         {(dashboardData.pointBalance.admin_gift_points || 0) > 0 && (
-                          <> | <span className="text-amber-600 dark:text-amber-400">管理员赠送: {(dashboardData.pointBalance.admin_gift_points || 0).toLocaleString()}</span></>
+                          <> | <span className="text-amber-600 dark:text-amber-400">管理员赠送: <AnimatedNumber 
+                            value={dashboardData.pointBalance.admin_gift_points || 0} 
+                            duration={500} 
+                            className="font-medium"
+                            refreshTrigger={refreshTrigger}
+                          /></span></>
                         )}
                         {(dashboardData.pointBalance.expired_points || 0) > 0 && (
-                          <> | <span className="text-orange-500">已过期: {(dashboardData.pointBalance.expired_points || 0).toLocaleString()}</span></>
+                          <> | <span className="text-orange-500">已过期: <AnimatedNumber 
+                            value={dashboardData.pointBalance.expired_points || 0} 
+                            duration={500} 
+                            className="font-medium"
+                            refreshTrigger={refreshTrigger}
+                          /></span></>
                         )}
                       </p>
                       <p className="text-xs text-muted-foreground opacity-75 mt-1">
@@ -211,6 +282,71 @@ export default function DashboardPage() {
                         使用率: {creditUsagePercentage.toFixed(1)}%
                       </p>
                     </>
+                  )}
+                  
+                  {/* 自动补给信息 */}
+                  {creditData?.auto_refill?.enabled && (
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg p-3 border border-emerald-200 dark:border-emerald-800 mt-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Zap className="h-4 w-4 text-emerald-600" />
+                        <span className="text-sm font-medium text-emerald-800 dark:text-emerald-200">自动补给已启用</span>
+                        {creditData.auto_refill.needs_refill ? (
+                          <Badge className="bg-orange-500 text-white text-xs px-2 py-0.5">
+                            需要补给
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-green-500 text-white text-xs px-2 py-0.5">
+                            无需补给
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-1 text-xs text-emerald-700 dark:text-emerald-300">
+                        <div className="flex justify-between">
+                          <span>补给条件:</span>
+                          <span>积分 ≤ <AnimatedNumber 
+                            value={creditData.auto_refill.threshold} 
+                            duration={400} 
+                            className="font-medium"
+                            refreshTrigger={refreshTrigger}
+                          /></span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>补给数量:</span>
+                          <span>+<AnimatedNumber 
+                            value={creditData.auto_refill.amount} 
+                            duration={400} 
+                            className="font-medium"
+                            refreshTrigger={refreshTrigger}
+                          /> 积分</span>
+                        </div>
+                        
+                        {creditData.auto_refill.needs_refill && creditData.auto_refill.next_refill_time && (
+                          <div className="flex items-center gap-1 mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-700">
+                            <Clock className="h-3 w-3" />
+                            <span className="text-emerald-800 dark:text-emerald-200">
+                              下次补给: {new Date(creditData.auto_refill.next_refill_time).toLocaleString('zh-CN', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {creditData.auto_refill.last_refill_time && (
+                          <div className="text-emerald-600 dark:text-emerald-400">
+                            上次补给: {new Date(creditData.auto_refill.last_refill_time).toLocaleString('zh-CN', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </>
               ) : (
@@ -318,7 +454,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* 签到卡片 */}
-          <CheckinButton />
+          <CheckinButton onCheckinSuccess={loadDashboardData} />
         </div>
         
         <Card className="shadow-lg bg-card text-card-foreground border-border">

@@ -439,24 +439,11 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 
 	totalWeightedTokens := cacheTokensWeighted + inputTokensWeighted + outputTokensWeighted
 
-	// 使用阶梯计费表计算积分
-	tokenPricingTable := configMap["token_pricing_table"]
-	if tokenPricingTable == "" {
-		tokenPricingTable = `{"0":2,"7680":3,"15360":4,"23040":5,"30720":6,"38400":7,"46080":8,"53760":9,"61440":10,"69120":11,"76800":12,"84480":13,"92160":14,"99840":15,"107520":16,"115200":17,"122880":18,"130560":19,"138240":20,"145920":21,"153600":22,"161280":23,"168960":24,"176640":25,"184320":25,"192000":25,"200000":25}`
-	}
-
-	pointsUsed := utils.CalculatePointsByTokenTable(totalWeightedTokens, tokenPricingTable)
-
-	// 确保至少收取0积分
-	if pointsUsed < 0 {
-		pointsUsed = 0
-	}
+	// 使用新的累计token计费逻辑
+	err := utils.AccumulateTokensAndDeduct(userID, int64(totalWeightedTokens))
 
 	// 开始数据库事务
 	tx := database.DB.Begin()
-
-	// 使用新的钱包架构扣除积分
-	err := utils.DeductWalletPointsWithDailyLimit(userID, pointsUsed)
 	if err != nil {
 		tx.Rollback()
 		// 如果扣费失败，仍然记录API调用，但标记为失败
@@ -473,7 +460,7 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 			InputMultiplier:          inputMultiplier,
 			OutputMultiplier:         outputMultiplier,
 			CacheMultiplier:          cacheMultiplier,
-			PointsUsed:               pointsUsed,
+			PointsUsed:               0, // 扣费失败时记录为0
 			IP:                       ip,
 			UID:                      fmt.Sprintf("%d", userID),
 			Username:                 username,
@@ -501,7 +488,7 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 		InputMultiplier:          inputMultiplier,
 		OutputMultiplier:         outputMultiplier,
 		CacheMultiplier:          cacheMultiplier,
-		PointsUsed:               pointsUsed,
+		PointsUsed:               0, // 累计token计费模式下，这里记录为0，实际扣费由AccumulateTokensAndDeduct处理
 		IP:                       ip,
 		UID:                      fmt.Sprintf("%d", userID),
 		Username:                 username,
@@ -519,4 +506,3 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	// 提交事务
 	tx.Commit()
 }
-

@@ -52,6 +52,26 @@ export interface LoginWithCodeRequest {
   code: string;
 }
 
+// 邮箱验证码一键登录/注册请求
+export interface EmailOnlyAuthRequest {
+  email: string;
+  code: string;
+  username?: string; // 可选，仅在注册时需要
+}
+
+// 邮箱检查请求
+export interface CheckEmailRequest {
+  email: string;
+}
+
+// 邮箱检查响应
+export interface CheckEmailResponse {
+  success: boolean;
+  user_exists: boolean;
+  action_type: string; // "login" or "register"
+  message: string;
+}
+
 // 发送验证码
 export const sendVerificationCode = async (data: SendVerificationCodeRequest): Promise<{ success: boolean; message?: string }> => {
   try {
@@ -229,6 +249,36 @@ export const verifyCode = async (code: string): Promise<{
       success: false,
       valid: false,
       message: error.response?.data?.message || "授权码验证失败"
+    };
+  }
+};
+
+// 邮箱验证码一键登录/注册
+export const emailOnlyAuth = async (data: EmailOnlyAuthRequest): Promise<AuthResponse> => {
+  try {
+    const response = await request.post("/api/auth/email-auth", data);
+    return response.data;
+  } catch (error: any) {
+    console.error("邮箱验证码认证失败:", error);
+    return {
+      success: false,
+      message: error.response?.data?.message || "认证失败，请稍后再试"
+    };
+  }
+};
+
+// 检查邮箱是否已注册
+export const checkEmail = async (data: CheckEmailRequest): Promise<CheckEmailResponse> => {
+  try {
+    const response = await request.post("/api/auth/check-email", data);
+    return response.data;
+  } catch (error: any) {
+    console.error("检查邮箱失败:", error);
+    return {
+      success: false,
+      user_exists: false,
+      action_type: "register",
+      message: error.response?.data?.message || "检查邮箱失败，请稍后再试"
     };
   }
 };

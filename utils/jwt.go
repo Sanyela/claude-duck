@@ -18,15 +18,12 @@ type Claims struct {
 
 // GenerateAccessToken 生成访问令牌
 func GenerateAccessToken(userID uint, email string) (string, error) {
-	// 设置过期时间
-	expirationTime := time.Now().Add(time.Duration(config.AppConfig.AccessTokenExpireHours) * time.Hour)
-
-	// 创建claims
+	// 创建claims（不设置过期时间，永不过期）
 	claims := &Claims{
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			// ExpiresAt: nil, // 不设置过期时间，永不过期
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Subject:   fmt.Sprintf("%d", userID),
 		},
@@ -65,10 +62,10 @@ func ValidateAccessToken(tokenString string) (*Claims, error) {
 		return nil, fmt.Errorf("invalid token")
 	}
 
-	// 检查是否过期
-	if claims.ExpiresAt.Before(time.Now()) {
-		return nil, fmt.Errorf("token expired")
-	}
+	// 跳过过期检查，因为JWT设置为永不过期
+	// if claims.ExpiresAt.Before(time.Now()) {
+	//     return nil, fmt.Errorf("token expired")
+	// }
 
 	return claims, nil
 } 

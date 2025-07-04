@@ -77,10 +77,11 @@ func HandleRegister(c *gin.Context) {
 	}
 
 	// 创建用户
+	hashedPasswordStr := string(hashedPassword)
 	user := models.User{
 		Username:              req.Username,
 		Email:                 req.Email,
-		Password:              string(hashedPassword),
+		Password:              &hashedPasswordStr,
 		DegradationGuaranteed: config.AppConfig.DefaultDegradationGuaranteed,
 		DegradationSource:     "system",
 		DegradationLocked:     false,
@@ -104,6 +105,25 @@ func HandleRegister(c *gin.Context) {
 		})
 		return
 	}
+
+	// 注册设备到Redis
+	deviceManager := utils.NewDeviceManager(database.TokenRedisClient, database.UserRedisClient, database.DeviceRedisClient)
+	device, err := deviceManager.RegisterDevice(
+		user.ID,
+		token,
+		c.ClientIP(),
+		c.GetHeader("User-Agent"),
+		"web",
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, AuthResponse{
+			Success: false,
+			Message: "设备注册失败",
+		})
+		return
+	}
+
+	log.Printf("用户注册成功: user_id=%d, device_id=%s, ip=%s", user.ID, device.ID, device.IP)
 
 	c.JSON(http.StatusOK, AuthResponse{
 		Success: true,
@@ -140,7 +160,15 @@ func HandleLogin(c *gin.Context) {
 	}
 
 	// 验证密码
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	if user.Password == nil {
+		c.JSON(http.StatusUnauthorized, AuthResponse{
+			Success: false,
+			Message: "该账户未设置密码，请使用邮箱验证码登录",
+		})
+		return
+	}
+	
+	err = bcrypt.CompareHashAndPassword([]byte(*user.Password), []byte(req.Password))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, AuthResponse{
 			Success: false,
@@ -159,7 +187,24 @@ func HandleLogin(c *gin.Context) {
 		return
 	}
 
-	log.Printf("登录成功: user_id=%d", user.ID)
+	// 注册设备到Redis
+	deviceManager := utils.NewDeviceManager(database.TokenRedisClient, database.UserRedisClient, database.DeviceRedisClient)
+	device, err := deviceManager.RegisterDevice(
+		user.ID,
+		token,
+		c.ClientIP(),
+		c.GetHeader("User-Agent"),
+		"web",
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, AuthResponse{
+			Success: false,
+			Message: "设备注册失败",
+		})
+		return
+	}
+
+	log.Printf("用户登录成功: user_id=%d, device_id=%s, ip=%s", user.ID, device.ID, device.IP)
 
 	c.JSON(http.StatusOK, AuthResponse{
 		Success: true,
@@ -200,10 +245,23 @@ func HandleGetUserInfo(c *gin.Context) {
 	})
 }
 
-// HandleLogout 用户登出（可选，主要是客户端清除token）
+// HandleLogout 用户登出
 func HandleLogout(c *gin.Context) {
-	// 这里可以将token加入黑名单，或者其他登出逻辑
-	// 目前主要依赖客户端清除token
+	// 获取当前设备ID
+	deviceID, exists := c.Get("deviceID")
+	if exists {
+		userID := c.GetUint("userID")
+		deviceManager := utils.NewDeviceManager(database.TokenRedisClient, database.UserRedisClient, database.DeviceRedisClient)
+		
+		// 下线当前设备
+		err := deviceManager.RevokeDevice(userID, deviceID.(string))
+		if err != nil {
+			log.Printf("登出时下线设备失败: user_id=%d, device_id=%s, error=%v", userID, deviceID, err)
+		} else {
+			log.Printf("用户登出成功: user_id=%d, device_id=%s", userID, deviceID)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "登出成功",

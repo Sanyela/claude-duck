@@ -9,7 +9,11 @@ import { checkinAPI, CheckinStatusResponse, CheckinResponse } from "@/api/checki
 import { useToast } from "@/components/ui/use-toast"
 import confetti from "canvas-confetti"
 
-export function CheckinButton() {
+interface CheckinButtonProps {
+  onCheckinSuccess?: () => void; // 签到成功后的回调函数
+}
+
+export function CheckinButton({ onCheckinSuccess }: CheckinButtonProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
@@ -55,6 +59,11 @@ export function CheckinButton() {
         
         // 重新加载状态
         await loadCheckinStatus()
+        
+        // 通知父组件刷新数据
+        if (onCheckinSuccess) {
+          onCheckinSuccess()
+        }
       } else {
         toast({
           title: "签到失败",

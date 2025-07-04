@@ -49,7 +49,7 @@ func InitRedisClient() {
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", config.AppConfig.RedisHost, config.AppConfig.RedisPort),
 		Password: config.AppConfig.RedisPassword,
-		DB:       0,
+		DB:       2, // 使用DB 2避免与设备管理(DB 0)和认证(DB 1)冲突
 	})
 }
 

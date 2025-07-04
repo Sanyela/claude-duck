@@ -271,13 +271,8 @@ export default function AdminUsersPage() {
     },
   ]
 
-  // 搜索处理（客户端搜索）
-  const filteredData = searchQuery
-    ? data.filter(user =>
-        user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : data
+  // 搜索处理（移除客户端搜索，使用服务端搜索）
+  const filteredData = data
 
   const table = useReactTable({
     data: filteredData,
@@ -299,6 +294,7 @@ export default function AdminUsersPage() {
     const params = {
       page: pagination.page,
       page_size: pagination.pageSize,
+      ...(searchQuery && { search: searchQuery.trim() })
     }
     
     const result = await adminAPI.getUsers(params)
@@ -345,7 +341,7 @@ export default function AdminUsersPage() {
   useEffect(() => {
     loadUsers()
     loadPlans()
-  }, [pagination.page, pagination.pageSize])
+  }, [pagination.page, pagination.pageSize, searchQuery])
 
   // 处理编辑用户
   const handleEditUser = (user: UserRow) => {
@@ -540,7 +536,11 @@ export default function AdminUsersPage() {
                   <Input
                     placeholder="搜索用户名、邮箱..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      // 重置到第一页
+                      setPagination(prev => ({ ...prev, page: 1 }))
+                    }}
                     className="pl-8 max-w-sm"
                   />
                 </div>

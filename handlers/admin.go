@@ -54,12 +54,20 @@ func HandleAdminGetUsers(c *gin.Context) {
 	var users []models.User
 	var total int64
 
+	// 构建查询
+	query := database.DB.Model(&models.User{})
+
+	// 添加搜索功能
+	if search := c.Query("search"); search != "" {
+		query = query.Where("username LIKE ? OR email LIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
 	// 查询总数
-	database.DB.Model(&models.User{}).Count(&total)
+	query.Count(&total)
 
 	// 分页查询
 	offset := (pagination.Page - 1) * pagination.PageSize
-	database.DB.Offset(offset).Limit(pagination.PageSize).Find(&users)
+	query.Offset(offset).Limit(pagination.PageSize).Find(&users)
 
 	c.JSON(http.StatusOK, PaginatedResponse{
 		Data:       users,
@@ -671,7 +679,10 @@ func HandleAdminUpdateAnnouncement(c *gin.Context) {
 		return
 	}
 
-	result := database.DB.Model(&models.Announcement{}).Where("id = ?", announcementID).Updates(updateData)
+	// 使用 Select 方法明确指定要更新的字段，包括零值字段
+	result := database.DB.Model(&models.Announcement{}).Where("id = ?", announcementID).
+		Select("type", "title", "description", "language", "active").
+		Updates(updateData)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return

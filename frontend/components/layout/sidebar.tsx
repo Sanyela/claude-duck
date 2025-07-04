@@ -17,6 +17,7 @@ import {
   Key,
   Megaphone,
   BarChart3,
+  Smartphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -48,6 +49,12 @@ const userNavItems = [
     label: "资源中心",
     icon: BookOpen,
     activeColor: "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
+  },
+  {
+    href: "/devices",
+    label: "设备管理",
+    icon: Smartphone,
+    activeColor: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300",
   },
 ]
 

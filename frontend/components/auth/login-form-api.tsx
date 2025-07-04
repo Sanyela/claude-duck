@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { KeyRound, Mail, Timer, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { login, sendVerificationCode, registerWithCode } from "@/api/auth"
+import { login, sendVerificationCode, registerWithCode, emailOnlyAuth, checkEmail } from "@/api/auth"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { getEmailValidationError, getSupportedDomainsText } from "@/lib/email-validator"
@@ -24,7 +24,10 @@ export function LoginForm() {
   
   const [isLoading, setIsLoading] = useState(false)
   const [countdown, setCountdown] = useState(0)
+  const [showPasswordLogin, setShowPasswordLogin] = useState(false)
+  const [authType, setAuthType] = useState<'email_code' | 'password'>('email_code')
   const [errors, setErrors] = useState<{
+    email_auth?: string
     login?: string
     register?: string
     verification?: string
@@ -44,6 +47,21 @@ export function LoginForm() {
 
   // 验证码输入状态
   const [verificationCode, setVerificationCode] = useState('')
+  // 用户名输入状态（邮箱验证码注册时需要）
+  const [usernameForEmailAuth, setUsernameForEmailAuth] = useState('')
+  
+  // 邮箱检查状态
+  const [emailCheckResult, setEmailCheckResult] = useState<{
+    checked: boolean
+    userExists: boolean
+    actionType: 'login' | 'register'
+    showUsernameField: boolean
+  }>({
+    checked: false,
+    userExists: false,
+    actionType: 'register',
+    showUsernameField: false
+  })
 
   // 清除错误信息
   const clearErrors = () => {
@@ -127,6 +145,30 @@ export function LoginForm() {
     return isValid
   }
 
+  // 检查邮箱
+  const handleCheckEmail = async (email: string) => {
+    if (!validateEmail(email, 'login')) {
+      return
+    }
+
+    try {
+      const response = await checkEmail({ email })
+      if (response.success) {
+        const newState = {
+          checked: true,
+          userExists: response.user_exists,
+          actionType: response.action_type as 'login' | 'register',
+          showUsernameField: !response.user_exists  // 只在注册时显示用户名框
+        }
+        setEmailCheckResult(newState)
+        return newState
+      }
+    } catch (error) {
+      console.error("检查邮箱失败:", error)
+    }
+    return null
+  }
+
   // 倒计时功能
   const startCountdown = () => {
     setCountdown(60)
@@ -141,7 +183,63 @@ export function LoginForm() {
     }, 1000)
   }
 
-  // 发送验证码
+  // 发送验证码（优化后的逻辑，基于邮箱检查结果）
+  const handleSendCodeForEmailAuth = async (email: string) => {
+    if (!validateEmail(email, 'login')) {
+      return
+    }
+
+    let currentEmailState = emailCheckResult
+    
+    // 先检查邮箱，如果还没检查过
+    if (!emailCheckResult.checked) {
+      const checkResult = await handleCheckEmail(email)
+      if (!checkResult) {
+        return
+      }
+      currentEmailState = checkResult
+    }
+
+    setIsLoading(true)
+    clearErrors()
+    
+    try {
+      // 根据检查结果发送对应类型的验证码
+      const type = currentEmailState.actionType
+      const response = await sendVerificationCode({ email, type })
+      
+      if (response.success) {
+        toast({
+          title: "验证码已发送",
+          description: `请查收邮件，验证码10分钟内有效`,
+          variant: "default",
+        })
+        startCountdown()
+        setErrors(prev => ({ ...prev, verification: undefined }))
+      } else {
+        const errorMessage = getErrorMessage(response.message || "")
+        setErrors(prev => ({ ...prev, verification: errorMessage }))
+        toast({
+          title: "验证码发送失败",
+          description: errorMessage,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("发送验证码出错:", error)
+      const errorMessage = "网络错误，请检查网络连接后重试"
+      setErrors(prev => ({ ...prev, verification: errorMessage }))
+      toast({
+        title: "网络错误",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 发送验证码（原有功能，用于密码+验证码模式）
   const handleSendCode = async (email: string, type: 'register' | 'login') => {
     if (!validateEmail(email, type)) {
       return
@@ -184,7 +282,69 @@ export function LoginForm() {
     }
   }
 
-  // 处理登录
+  // 处理邮箱验证码登录/注册
+  const handleEmailAuth = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setIsLoading(true)
+    clearErrors()
+    
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get("email") as string
+    const code = formData.get("code") as string
+    const username = formData.get("username") as string
+    
+    if (!validateEmail(email, 'login')) {
+      setIsLoading(false)
+      return
+    }
+    
+    if (!validateVerificationCode(code)) {
+      setErrors(prev => ({ ...prev, email_auth: "请输入6位数字验证码" }))
+      setIsLoading(false)
+      return
+    }
+    
+    try {
+      const response = await emailOnlyAuth({ email, code, username })
+      
+      if (response.success) {
+        toast({
+          title: response.message?.includes("注册") ? "注册成功" : "登录成功",
+          description: "正在跳转到主页...",
+          variant: "default",
+        })
+        
+        if (response.token && response.user) {
+          authLogin(response.token, response.user)
+        }
+        
+        setTimeout(() => {
+          router.push("/")
+        }, 100)
+      } else {
+        const errorMessage = getErrorMessage(response.message || "")
+        setErrors(prev => ({ ...prev, email_auth: errorMessage }))
+        toast({
+          title: "认证失败",
+          description: errorMessage,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("邮箱验证码认证出错:", error)
+      const errorMessage = "网络错误，请检查网络连接后重试"
+      setErrors(prev => ({ ...prev, email_auth: errorMessage }))
+      toast({
+        title: "认证失败",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 处理登录（密码模式）
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
@@ -316,18 +476,252 @@ export function LoginForm() {
             </div>
           </div>
           <div className="space-y-2">
-            <CardTitle className="text-2xl font-bold tracking-tight">欢迎回来 👋</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">
+              {authType === 'email_code' ? '登录' : '欢迎回来 👋'}
+            </CardTitle>
             <CardDescription className="text-muted-foreground">
-              登录或注册以继续使用我们的服务
+              {authType === 'email_code' 
+                ? ''
+                : '登录或注册以继续使用我们的服务'}
             </CardDescription>
           </div>
         </CardHeader>
 
         <CardContent>
-          <Tabs defaultValue={initialTab} className="w-full" onValueChange={() => {
-            clearErrors()
-            setVerificationCode('')
-          }}>
+          {authType === 'email_code' ? (
+            <div className="space-y-4">
+              {errors.email_auth && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{errors.email_auth}</AlertDescription>
+                </Alert>
+              )}
+              
+              {errors.verification && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{errors.verification}</AlertDescription>
+                </Alert>
+              )}
+              
+              <form onSubmit={handleEmailAuth} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email-auth" className="text-sm font-medium">
+                    邮箱
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="email-auth"
+                      name="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      required
+                      className={`h-10 ${
+                        !emailValidation.login.isValid ? 'border-destructive focus-visible:ring-destructive' : ''
+                      }`}
+                      onChange={(e) => {
+                        validateEmail(e.target.value, 'login')
+                        clearErrors()
+                        // 重置邮箱检查状态，当邮箱改变时
+                        setEmailCheckResult({
+                          checked: false,
+                          userExists: false,
+                          actionType: 'register',
+                          showUsernameField: false
+                        })
+                      }}
+                      onBlur={(e) => {
+                        // 邮箱输入框失焦时检查邮箱
+                        if (e.target.value && emailValidation.login.isValid) {
+                          handleCheckEmail(e.target.value)
+                        }
+                      }}
+                    />
+                    {emailValidation.login.message && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        {emailValidation.login.isValid ? (
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-destructive" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {!emailValidation.login.isValid && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {emailValidation.login.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {getSupportedDomainsText()}
+                  </p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="code-auth" className="text-sm font-medium">
+                    验证码 <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        id="code-auth"
+                        name="code"
+                        type="text"
+                        placeholder="请输入6位验证码"
+                        maxLength={6}
+                        required
+                        className={`h-10 ${
+                          verificationCode && !validateVerificationCode(verificationCode) 
+                            ? 'border-destructive focus-visible:ring-destructive' 
+                            : ''
+                        }`}
+                        value={verificationCode}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '') // 只允许数字
+                          setVerificationCode(value)
+                          clearErrors()
+                        }}
+                      />
+                      {verificationCode && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          {validateVerificationCode(verificationCode) ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 text-destructive" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={countdown > 0 || isLoading || !emailValidation.login.isValid}
+                      onClick={() => {
+                        const emailInput = document.getElementById("email-auth") as HTMLInputElement
+                        handleSendCodeForEmailAuth(emailInput?.value)
+                      }}
+                      className="h-10 px-3 whitespace-nowrap"
+                    >
+                      {countdown > 0 ? (
+                        <>
+                          <Timer className="h-4 w-4 mr-1" />
+                          {countdown}s
+                        </>
+                      ) : isLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          发送中
+                        </>
+                      ) : (
+                        "获取验证码"
+                      )}
+                    </Button>
+                  </div>
+                  {verificationCode && !validateVerificationCode(verificationCode) && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      验证码必须是6位数字
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    输入邮箱后点击"获取验证码"，系统将自动识别登录或注册
+                  </p>
+                </div>
+                
+                {/* 动态显示用户名输入框（如果检测到是注册） */}
+                {emailCheckResult.showUsernameField && (
+                <div className="space-y-2">
+                  <Label htmlFor="username-auth" className="text-sm font-medium">
+                    用户名 <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="username-auth"
+                      name="username"
+                      type="text"
+                      placeholder="请输入用户名"
+                      minLength={5}
+                      maxLength={20}
+                      pattern="^[a-zA-Z0-9_-]+$"
+                      className={`h-10 ${
+                        !usernameValidation.isValid ? 'border-destructive focus-visible:ring-destructive' : ''
+                      }`}
+                      value={usernameForEmailAuth}
+                      onChange={(e) => {
+                        setUsernameForEmailAuth(e.target.value)
+                        validateUsername(e.target.value)
+                        clearErrors()
+                      }}
+                    />
+                    {usernameValidation.message && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        {usernameValidation.isValid ? (
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-destructive" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {!usernameValidation.isValid && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {usernameValidation.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    用户名长度为5-20个字符，只能包含字母、数字、下划线和连字符
+                  </p>
+                </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  className="w-full h-10"
+                  disabled={
+                    isLoading || 
+                    !emailValidation.login.isValid ||
+                    !validateVerificationCode(verificationCode) ||
+                    (emailCheckResult.showUsernameField && !usernameValidation.isValid)
+                  }
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      验证中...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="mr-2 h-4 w-4" /> 
+                      {emailCheckResult.checked 
+                        ? (emailCheckResult.actionType === 'login' ? '登录' : '注册')
+                        : '登录/注册'
+                      }
+                    </>
+                  )}
+                </Button>
+              </form>
+              
+              {/* 不起眼的密码登录选项 */}
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => setAuthType('password')}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  使用密码登录
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* 密码登录模式（不起眼的选项） */
+            <div>
+            <Tabs defaultValue={initialTab} className="w-full" onValueChange={() => {
+              clearErrors()
+              setVerificationCode('')
+            }}>
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">登录</TabsTrigger>
               <TabsTrigger value="register">注册</TabsTrigger>
@@ -635,6 +1029,18 @@ export function LoginForm() {
               </form>
             </TabsContent>
           </Tabs>
+          
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() => setAuthType('email_code')}
+              className="text-sm text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 underline"
+            >
+              ← 返回邮箱验证码登录
+            </button>
+          </div>
+          </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -7,6 +7,7 @@ export * from './credits';
 export * from './subscription';
 export * from './claude';
 export * from './announcements';
+export * from './devices';
 
 // 导出请求实例，以便可以直接使用
 export { request as apiClient };

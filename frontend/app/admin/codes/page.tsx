@@ -414,6 +414,13 @@ export default function AdminCodesPage() {
     }
   }, [searchParams.query, searchParams.type, searchParams.status])
 
+  // 监听搜索参数变化，重置到第一页
+  const handleSearchParamsChange = (newParams: Partial<typeof searchParams>) => {
+    setSearchParams(prev => ({ ...prev, ...newParams }))
+    // 重置到第一页
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }
+
   // 搜索处理
   const handleSearch = () => {
     setPagination(prev => ({ ...prev, page: 1 }))

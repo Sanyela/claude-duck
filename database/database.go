@@ -1,18 +1,23 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"log"
 
 	"claude/config"
 	"claude/models"
 
+	"github.com/go-redis/redis/v8"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
 var DB *gorm.DB
+var TokenRedisClient *redis.Client  // DB 0: Token映射
+var UserRedisClient *redis.Client   // DB 1: 用户设备集合
+var DeviceRedisClient *redis.Client // DB 2: 设备详情
 
 // InitDB 初始化数据库连接
 func InitDB() error {
@@ -110,9 +115,14 @@ func initDefaultConfigs() {
 			Description: "缓存token倍率",
 		},
 		{
-			ConfigKey:   "token_pricing_table",
-			ConfigValue: `{"0":2,"7680":3,"15360":4,"23040":5,"30720":6,"38400":7,"46080":8,"53760":9,"61440":10,"69120":11,"76800":12,"84480":13,"92160":14,"99840":15,"107520":16,"115200":17,"122880":18,"130560":19,"138240":20,"145920":21,"153600":22,"161280":23,"168960":24,"176640":25,"184320":25,"192000":25,"200000":25}`,
-			Description: "基于总token的阶梯积分扣费表",
+			ConfigKey:   "token_threshold",
+			ConfigValue: "5000",
+			Description: "累计token计费阈值",
+		},
+		{
+			ConfigKey:   "points_per_threshold",
+			ConfigValue: "1",
+			Description: "每阈值扣费积分数量",
 		},
 		{
 			ConfigKey:   "free_models_list",
@@ -251,4 +261,53 @@ func ensureNewArchitectureIndexes() {
 	} else {
 		log.Println("✅ 新架构表唯一索引已存在")
 	}
+}
+
+// InitRedis 初始化Redis连接
+func InitRedis() error {
+	cfg := config.AppConfig
+
+	// 初始化Token映射Redis客户端 (DB 0)
+	TokenRedisClient = redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort),
+		Password: cfg.RedisPassword,
+		DB:       0, // Token映射
+	})
+
+	// 初始化用户设备集合Redis客户端 (DB 3)
+	UserRedisClient = redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort),
+		Password: cfg.RedisPassword,
+		DB:       3, // 用户设备集合 (避开DB 1邮箱验证和DB 2 Bing缓存)
+	})
+
+	// 初始化设备详情Redis客户端 (DB 4)
+	DeviceRedisClient = redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort),
+		Password: cfg.RedisPassword,
+		DB:       4, // 设备详情
+	})
+
+	// 测试所有连接
+	ctx := context.Background()
+	
+	if _, err := TokenRedisClient.Ping(ctx).Result(); err != nil {
+		return fmt.Errorf("failed to connect to Token Redis (DB 0): %w", err)
+	}
+
+	if _, err := UserRedisClient.Ping(ctx).Result(); err != nil {
+		return fmt.Errorf("failed to connect to User Redis (DB 3): %w", err)
+	}
+
+	if _, err := DeviceRedisClient.Ping(ctx).Result(); err != nil {
+		return fmt.Errorf("failed to connect to Device Redis (DB 4): %w", err)
+	}
+
+	log.Println("All Redis clients connected successfully")
+	log.Println("- DB 0: Token映射")
+	log.Println("- DB 1: 邮箱验证码 (已存在)")
+	log.Println("- DB 2: Bing图片缓存 (已存在)")
+	log.Println("- DB 3: 用户设备集合")
+	log.Println("- DB 4: 设备详情")
+	return nil
 }

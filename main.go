@@ -8,6 +8,7 @@ import (
 	"claude/database"
 	"claude/handlers"
 	"claude/routes"
+	"claude/utils"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -28,8 +29,15 @@ func main() {
 	}
 
 	// 初始化Redis客户端
+	if err := database.InitRedis(); err != nil {
+		log.Fatal("Failed to connect to Redis:", err)
+	}
 	handlers.InitRedisClient()
 	handlers.InitAuthRedisClient()
+
+	// 启动自动补给定时器
+	log.Println("启动自动补给定时器...")
+	utils.StartAutoRefillScheduler()
 
 	// 设置Gin模式
 	if os.Getenv("GIN_MODE") == "" {

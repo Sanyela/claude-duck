@@ -17,7 +17,7 @@ export interface BillingDetails {
 export interface CreditUsageHistory {
   id: string;
   description?: string;
-  amount: number;
+  amount: number; // 在累计token计费模式下，这里显示的是进度积分（小数）
   timestamp: string;
   relatedModel: string;
   input_tokens: number;
@@ -40,6 +40,15 @@ export interface CreditBalance {
   free_model_usage_count: number;
   checkin_points: number;          // 签到积分
   admin_gift_points: number;       // 管理员赠送积分
+  accumulated_tokens: number;      // 累计token数量
+  auto_refill?: {                  // 自动补给信息
+    enabled: boolean;
+    threshold: number;
+    amount: number;
+    needs_refill: boolean;
+    next_refill_time?: string;
+    last_refill_time?: string;
+  };
   updated_at: string;
 }
 
@@ -51,10 +60,11 @@ export interface ModelCost {
   description: string;
 }
 
-// 计费表接口
-export interface PricingTable {
-  pricing_table: Record<string, number>; // token阈值 -> 积分的映射
-  description: string; // 说明
+// 累计token计费配置接口
+export interface TokenThresholdConfig {
+  token_threshold: number;      // 计费阈值
+  points_per_threshold: number; // 每阈值积分
+  description: string;          // 说明
 }
 
 // 积分API
@@ -79,6 +89,8 @@ export const creditsAPI = {
           free_model_usage_count: balance.free_model_usage_count || 0,
           checkin_points: balance.checkin_points || 0,
           admin_gift_points: balance.admin_gift_points || 0,
+          accumulated_tokens: balance.accumulated_tokens || 0,
+          auto_refill: balance.auto_refill || undefined,
           updated_at: new Date().toISOString()
         };
         return { success: true, data: creditBalance };
@@ -130,16 +142,16 @@ export const creditsAPI = {
     }
   },
 
-  // 获取计费表
-  async getPricingTable(): Promise<{ success: boolean; data?: PricingTable; message?: string }> {
+  // 获取累计token计费配置
+  async getPricingTable(): Promise<{ success: boolean; data?: TokenThresholdConfig; message?: string }> {
     try {
       const response = await request.get("/api/credits/pricing-table");
       return { success: true, data: response.data };
     } catch (error: any) {
-      console.error("获取计费表失败:", error);
+      console.error("获取计费配置失败:", error);
       return { 
         success: false, 
-        message: error.response?.data?.error || "获取计费表失败" 
+        message: error.response?.data?.error || "获取计费配置失败" 
       };
     }
   }

@@ -27,38 +27,26 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
-  ResponsiveContainer,
-} from "recharts"
 import { creditsAPI, type CreditBalance, type CreditUsageHistory } from "@/api/credits"
 import { PricingTableModal } from "./pricing-table-modal"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import React from "react"
 
-// 图表数据接口
-interface ChartDataPoint {
-  date: string;
-  balance: number;
-  id: string;
-}
 
 export function CreditsContent() {
   const [loading, setLoading] = useState(true)
   const [creditBalance, setCreditBalance] = useState<CreditBalance | null>(null)
   const [usageHistory, setUsageHistory] = useState<CreditUsageHistory[]>([])
-  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
   const [selectedRecord, setSelectedRecord] = useState<string | null>(null)
   
   // 计费表弹窗状态
   const [pricingTableOpen, setPricingTableOpen] = useState(false)
   const [selectedTokenCount, setSelectedTokenCount] = useState<number | undefined>(undefined)
+  
+  // 累计token计费配置
+  const [tokenThreshold, setTokenThreshold] = useState<number>(5000)
+  const [pointsPerThreshold, setPointsPerThreshold] = useState<number>(1)
   
   // 日期状态使用Date对象
   const [startDate, setStartDate] = useState<Date>(() => {
@@ -86,18 +74,24 @@ export function CreditsContent() {
     setError(null)
 
     try {
-      const [balanceResult, historyResult] = await Promise.all([
+      const [balanceResult, historyResult, configResult] = await Promise.all([
         creditsAPI.getBalance(),
         creditsAPI.getUsageHistory({
           start_date: startDateParam ? format(startDateParam, 'yyyy-MM-dd') : format(startDate, 'yyyy-MM-dd'),
           end_date: endDateParam ? format(endDateParam, 'yyyy-MM-dd') : format(endDate, 'yyyy-MM-dd'),
           page: page,
           page_size: pageSize
-        })
+        }),
+        creditsAPI.getPricingTable()
       ])
 
       if (balanceResult.success && balanceResult.data) {
         setCreditBalance(balanceResult.data)
+      }
+
+      if (configResult.success && configResult.data) {
+        setTokenThreshold(configResult.data.token_threshold)
+        setPointsPerThreshold(configResult.data.points_per_threshold)
       }
 
       if (historyResult.success && historyResult.data) {
@@ -107,74 +101,12 @@ export function CreditsContent() {
         setUsageHistory(historyArray)
         setCurrentPage(historyResult.data.currentPage || 1)
         setTotalPages(historyResult.data.totalPages || 1)
-        
-        // 生成图表数据 - 获取更多数据用于图表显示
-        const chartHistoryResult = await creditsAPI.getUsageHistory({
-          start_date: startDateParam ? format(startDateParam, 'yyyy-MM-dd') : format(startDate, 'yyyy-MM-dd'),
-          end_date: endDateParam ? format(endDateParam, 'yyyy-MM-dd') : format(endDate, 'yyyy-MM-dd'),
-          page: 1,
-          page_size: 100 // 获取更多数据用于图表
-        })
-        
-        if (chartHistoryResult.success && chartHistoryResult.data) {
-          const chartPoints = generateChartData(chartHistoryResult.data.history || [], balanceResult.data || null)
-          setChartData(chartPoints)
-        }
       }
     } catch (err: any) {
       setError("加载积分数据失败")
     }
 
     setLoading(false)
-  }
-
-  // 生成图表数据
-  const generateChartData = (history: CreditUsageHistory[], balance: CreditBalance | null): ChartDataPoint[] => {
-    if (!balance || !Array.isArray(history) || !history.length) return []
-
-    // 按时间排序，从最新到最旧
-    const sortedHistory = [...history].sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    )
-
-    // 生成图表点 - 按时间序列
-    const points: ChartDataPoint[] = []
-    let currentBalance = balance.available_points
-
-    // 添加当前时间点（最新余额）
-    points.push({
-      date: new Date().toISOString(),
-      balance: currentBalance,
-      id: 'current'
-    })
-
-    // 按时间倒推，计算每个时间点的余额
-    sortedHistory.forEach((record, index) => {
-      // 加回这次消耗的积分（因为我们在倒推）
-      currentBalance += Math.abs(record.amount)
-      
-      points.push({
-        date: record.timestamp,
-        balance: currentBalance,
-        id: record.id
-      })
-    })
-
-    // 反转数组，让时间从早到晚排列
-    return points.reverse()
-  }
-  
-  // 获取日期范围内的所有日期
-  const getDateRange = (start: Date, end: Date): Date[] => {
-    const dates: Date[] = []
-    const current = new Date(start)
-    
-    while (current <= end) {
-      dates.push(new Date(current))
-      current.setDate(current.getDate() + 1)
-    }
-    
-    return dates
   }
 
   // 查询数据
@@ -241,19 +173,6 @@ export function CreditsContent() {
         setUsageHistory(historyArray)
         setCurrentPage(historyResult.data.currentPage || 1)
         setTotalPages(historyResult.data.totalPages || 1)
-        
-        // 生成图表数据
-        const chartHistoryResult = await creditsAPI.getUsageHistory({
-          start_date: format(startDateParam, 'yyyy-MM-dd'),
-          end_date: format(endDateParam, 'yyyy-MM-dd'),
-          page: 1,
-          page_size: 100
-        })
-        
-        if (chartHistoryResult.success && chartHistoryResult.data) {
-          const chartPoints = generateChartData(chartHistoryResult.data.history || [], balanceResult.data || null)
-          setChartData(chartPoints)
-        }
       }
     } catch (err: any) {
       setError("加载积分数据失败")
@@ -266,32 +185,10 @@ export function CreditsContent() {
     loadData()
   }, [])
 
-  // 计算统计数据
-  const totalUsage = Array.isArray(usageHistory) ? usageHistory.reduce((sum, item) => sum + Math.abs(item.amount), 0) : 0
+  // 计算统计数据 - 在累计token模式下，统计信息基于实际使用情况而非进度积分
+  const totalUsage = Array.isArray(usageHistory) ? usageHistory.reduce((sum, item) => sum + Math.round(Math.abs(item.amount) * 100) / 100, 0) : 0
   const uniqueModels = Array.isArray(usageHistory) ? new Set(usageHistory.map(item => item.relatedModel)).size : 0
 
-  // 计算Y轴的动态范围
-  const getYAxisDomain = (data: ChartDataPoint[]) => {
-    if (data.length === 0) return [0, 100]
-    
-    const values = data.map(item => item.balance)
-    const minValue = Math.min(...values)
-    const maxValue = Math.max(...values)
-    
-    // 如果最大值和最小值相同（所有点都在同一水平线）
-    if (minValue === maxValue) {
-      return [Math.max(0, minValue - 10), maxValue + 10]
-    }
-    
-    // 计算范围并添加适当的padding
-    const range = maxValue - minValue
-    const padding = Math.max(range * 0.1, 5) // 至少5个单位的padding
-    
-    return [
-      Math.max(0, minValue - padding), // 确保不小于0
-      maxValue + padding
-    ]
-  }
 
   return (
     <div className="space-y-6">
@@ -328,6 +225,10 @@ export function CreditsContent() {
                   <span className="font-semibold">{creditBalance?.free_model_usage_count?.toLocaleString() || 0}</span> 
                   <span className="ml-1 text-xs opacity-90">免费调用</span>
                 </Badge>
+                <Badge className="bg-orange-500 text-white hover:bg-orange-600 px-2.5 py-1.5 shadow-sm">
+                  <span className="font-semibold">{creditBalance?.accumulated_tokens?.toLocaleString() || 0}</span> 
+                  <span className="ml-1 text-xs opacity-90">累计Token</span>
+                </Badge>
                 {(creditBalance?.expired_points || 0) > 0 && (
                   <Badge className="bg-orange-500 text-white hover:bg-orange-600 px-2.5 py-1.5 shadow-sm">
                     <span className="font-semibold">{(creditBalance?.expired_points || 0).toLocaleString()}</span> 
@@ -339,6 +240,30 @@ export function CreditsContent() {
               <div className="text-xs text-muted-foreground mb-4 px-1">
                 仅显示当前有效订阅的积分数据
               </div>
+              
+              {/* 累计Token进度条 */}
+              {creditBalance && (
+                <div className="bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-orange-800 dark:text-orange-200">累计Token进度</span>
+                    <span className="text-xs text-orange-600 dark:text-orange-300">
+                      距离下次扣费还需 {Math.max(0, tokenThreshold - (creditBalance.accumulated_tokens % tokenThreshold)).toLocaleString()} Token
+                    </span>
+                  </div>
+                  <div className="w-full bg-orange-200 dark:bg-orange-800 rounded-full h-2 mb-2">
+                    <div 
+                      className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                      style={{ 
+                        width: `${Math.min(100, ((creditBalance.accumulated_tokens % tokenThreshold) / tokenThreshold) * 100)}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-orange-700 dark:text-orange-300">
+                    <span>{(creditBalance.accumulated_tokens % tokenThreshold).toLocaleString()} / {tokenThreshold.toLocaleString()} Token</span>
+                    <span>{(((creditBalance.accumulated_tokens % tokenThreshold) / tokenThreshold) * 100).toFixed(1)}%</span>
+                  </div>
+                </div>
+              )}
               
               <Separator className="my-4" />
               
@@ -409,72 +334,7 @@ export function CreditsContent() {
               
               <Separator className="my-4" />
               
-              <div className="flex items-center justify-end mb-2 text-sm text-muted-foreground">
-                <span className="inline-block w-3 h-3 rounded-full bg-sky-500 mr-1"></span> 积分余额趋势
-              </div>
-              
               <div className="space-y-6">
-                {/* 折线图区域 */}
-                {chartData.length > 0 ? (
-                  <div className="h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        key="credits-chart"
-                        data={chartData}
-                        margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#888" opacity={0.2} />
-                        <XAxis 
-                          dataKey="date" 
-                          stroke="#888" 
-                          fontSize={12} 
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(value) => {
-                            const date = new Date(value)
-                            return format(date, 'MM-dd HH:mm')
-                          }}
-                        />
-                        <YAxis
-                          stroke="#888"
-                          fontSize={12}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(value) => `${value}`}
-                          domain={getYAxisDomain(chartData)}
-                          type="number"
-                        />
-                        <RechartsTooltip 
-                          formatter={(value: any) => [`${value} 积分`, '余额']}
-                          labelFormatter={(label: any) => {
-                            const date = new Date(label)
-                            return `时间: ${format(date, 'yyyy-MM-dd HH:mm:ss')}`
-                          }}
-                          contentStyle={{ 
-                            backgroundColor: 'var(--card)', 
-                            borderColor: 'var(--border)',
-                            borderRadius: '0.5rem',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                          }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="balance"
-                          stroke="#0ea5e9"
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                          activeDot={{ r: 6, fill: '#0ea5e9' }}
-                          isAnimationActive={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <div className="h-72 flex items-center justify-center">
-                    <p className="text-muted-foreground">暂无图表数据</p>
-                  </div>
-                )}
-                
                 {/* 历史记录表格 */}
                 <div className="overflow-auto">
                   {Array.isArray(usageHistory) && usageHistory.length > 0 ? (
@@ -551,8 +411,17 @@ export function CreditsContent() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex items-center justify-end">
-                                    <span className="font-medium text-red-600">{Math.abs(item.amount)}</span>
-                                    <span className="ml-1 text-sm text-muted-foreground">积分</span>
+                                    {Math.abs(item.amount) < 1 ? (
+                                      <div className="text-right">
+                                        <div className="font-medium text-orange-600">{Math.round(Math.abs(item.amount) * 100) / 100}</div>
+                                        <div className="text-xs text-muted-foreground">进度积分</div>
+                                      </div>
+                                    ) : (
+                                      <div className="text-right">
+                                        <div className="font-medium text-red-600">{Math.round(Math.abs(item.amount) * 100) / 100}</div>
+                                        <div className="text-xs text-muted-foreground">积分</div>
+                                      </div>
+                                    )}
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -562,21 +431,43 @@ export function CreditsContent() {
                                 <TableRow className="bg-sky-50/50 dark:bg-sky-900/10">
                                   <TableCell colSpan={4} className="py-4">
                                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                                      <h5 className="text-sm font-medium mb-3 text-blue-900 dark:text-blue-100">💰 计费公式详情</h5>
-                                      <div className="space-y-2 text-sm">
+                                      <h5 className="text-sm font-medium mb-3 text-blue-900 dark:text-blue-100">💰 累计Token计费详情</h5>
+                                      <div className="space-y-3 text-sm">
                                         <div className="font-mono bg-white dark:bg-gray-800 p-3 rounded border">
-                                          <div className="text-gray-600 dark:text-gray-300 mb-1">计算步骤:</div>
-                                          <div>
-                                            <span className="underline decoration-green-500 decoration-2">{item.input_tokens.toLocaleString()}(输入) × {item.billing_details.input_multiplier}(输入倍率)</span> + {(item.total_cache_tokens || 0) > 0 && <span><span className="underline decoration-blue-500 decoration-2">{(item.total_cache_tokens || 0).toLocaleString()}(缓存) × {item.billing_details.cache_multiplier}(缓存倍率)</span> + </span>}<span className="underline decoration-red-500 decoration-2">{item.output_tokens.toLocaleString()}(输出) × {item.billing_details.output_multiplier}(输出倍率)</span> = {item.billing_details.total_weighted_tokens.toLocaleString()}(加权Token) → <button
-                                              className="text-blue-600 hover:text-blue-800 underline cursor-pointer mx-1"
-                                              onClick={(e) => {
-                                                e.stopPropagation()
-                                                setSelectedTokenCount(Math.round(item.billing_details?.total_weighted_tokens || 0))
-                                                setPricingTableOpen(true)
-                                              }}
-                                            >
-                                              查阶梯表
-                                            </button> → <span className="font-bold text-red-600">{item.billing_details.final_points}(积分)</span>
+                                          <div className="text-gray-600 dark:text-gray-300 mb-2">1. 加权Token计算:</div>
+                                          <div className="mb-2">
+                                            <span className="underline decoration-green-500 decoration-2">{item.input_tokens.toLocaleString()}(输入) × {item.billing_details.input_multiplier}(输入倍率)</span> + {(item.total_cache_tokens || 0) > 0 && <span><span className="underline decoration-blue-500 decoration-2">{(item.total_cache_tokens || 0).toLocaleString()}(缓存) × {item.billing_details.cache_multiplier}(缓存倍率)</span> + </span>}<span className="underline decoration-red-500 decoration-2">{item.output_tokens.toLocaleString()}(输出) × {item.billing_details.output_multiplier}(输出倍率)</span> = <span className="font-bold text-blue-600">{item.billing_details.total_weighted_tokens.toLocaleString()}(加权Token)</span>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="font-mono bg-white dark:bg-gray-800 p-3 rounded border">
+                                          <div className="text-gray-600 dark:text-gray-300 mb-2">2. 累计计费机制:</div>
+                                          <div className="space-y-1">
+                                            <div>本次进度积分: <span className="font-bold text-orange-600">{Math.round(Math.abs(item.amount) * 100) / 100}</span></div>
+                                            <div className="text-xs text-gray-500">
+                                              {Math.abs(item.amount) < 1 ? 
+                                                "此次调用未触发扣费，Token已累计到您的账户" : 
+                                                "此次调用触发了积分扣费"
+                                              }
+                                            </div>
+                                            <div className="mt-2">
+                                              <button
+                                                className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  setSelectedTokenCount(Math.round(item.billing_details?.total_weighted_tokens || 0))
+                                                  setPricingTableOpen(true)
+                                                }}
+                                              >
+                                                查看累计计费配置 →
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
+                                          <div className="text-yellow-800 dark:text-yellow-200 text-xs">
+                                            <strong>💡 累计计费说明:</strong> 系统会累计您的加权Token使用量，只有当累计数量达到设定阈值时才会扣除积分。这样避免了小额Token也扣费的问题，让计费更加合理。
                                           </div>
                                         </div>
                                       </div>

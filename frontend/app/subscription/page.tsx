@@ -88,7 +88,8 @@ export default function SubscriptionPage() {
     setRedeemingCoupon(true)
 
     try {
-      const response = await request.post("/api/subscription/redeem", {
+      // 调用预检查接口，不执行实际兑换
+      const response = await request.post("/api/subscription/redeem/preview", {
         couponCode: couponCode.trim()
       })
 
@@ -112,15 +113,45 @@ export default function SubscriptionPage() {
             })
           }, 1000)
         } else {
-          // 升级情况，直接显示成功
-          toast({
-            title: "兑换成功",
-            description: response.data.message,
-            variant: "default"
-          })
-          setCouponCode("")
-          loadSubscriptionData()
+          // 升级情况，直接执行兑换
+          await executeActualRedeem()
         }
+      } else {
+        toast({
+          title: "预检查失败",
+          description: response.data.message,
+          variant: "destructive"
+        })
+      }
+    } catch (error: any) {
+      toast({
+        title: "预检查失败",
+        description: error.response?.data?.message || "预检查失败",
+        variant: "destructive"
+      })
+    }
+
+    setRedeemingCoupon(false)
+  }
+
+  // 执行实际兑换操作
+  const executeActualRedeem = async () => {
+    try {
+      const response = await request.post("/api/subscription/redeem", {
+        couponCode: couponCode.trim()
+      })
+
+      if (response.data.success) {
+        toast({
+          title: "兑换成功",
+          description: response.data.message,
+          variant: "default"
+        })
+        setCouponCode("")
+        setShowWarning(false)
+        setWarningInfo({ serviceLevel: '', warning: '' })
+        setCountdown(0)
+        loadSubscriptionData()
       } else {
         toast({
           title: "兑换失败",
@@ -135,21 +166,13 @@ export default function SubscriptionPage() {
         variant: "destructive"
       })
     }
-
-    setRedeemingCoupon(false)
   }
 
   // 确认兑换（在警告倒计时结束后）
-  const handleConfirmRedeem = () => {
-    toast({
-      title: "兑换成功",
-      description: `${warningInfo.serviceLevel === 'same_level' ? '同级' : '降级'}兑换完成`,
-      variant: "default"
-    })
-    setCouponCode("")
-    setShowWarning(false)
-    setWarningInfo({ serviceLevel: '', warning: '' })
-    loadSubscriptionData()
+  const handleConfirmRedeem = async () => {
+    setRedeemingCoupon(true)
+    await executeActualRedeem()
+    setRedeemingCoupon(false)
   }
 
   // 取消兑换
@@ -406,10 +429,19 @@ export default function SubscriptionPage() {
                     </Button>
                     <Button 
                       onClick={handleConfirmRedeem}
-                      disabled={countdown > 0}
+                      disabled={countdown > 0 || redeemingCoupon}
                       className="bg-amber-600 hover:bg-amber-700 text-white"
                     >
-                      {countdown > 0 ? `等待 ${countdown}s` : '确认兑换'}
+                      {redeemingCoupon ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          兑换中...
+                        </>
+                      ) : countdown > 0 ? (
+                        `等待 ${countdown}s`
+                      ) : (
+                        '确认兑换'
+                      )}
                     </Button>
                   </div>
                 </div>

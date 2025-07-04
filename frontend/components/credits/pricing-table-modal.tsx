@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Calculator, Info } from "lucide-react"
-import { creditsAPI, type PricingTable } from "@/api/credits"
+import { creditsAPI, type TokenThresholdConfig } from "@/api/credits"
 
 interface PricingTableModalProps {
   open: boolean
@@ -22,24 +22,24 @@ interface PricingTableModalProps {
 }
 
 export function PricingTableModal({ open, onOpenChange, tokenCount }: PricingTableModalProps) {
-  const [pricingTable, setPricingTable] = useState<PricingTable | null>(null)
+  const [thresholdConfig, setThresholdConfig] = useState<TokenThresholdConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // 加载计费表数据
-  const loadPricingTable = async () => {
+  // 加载计费配置数据
+  const loadThresholdConfig = async () => {
     setLoading(true)
     setError(null)
 
     try {
       const result = await creditsAPI.getPricingTable()
       if (result.success && result.data) {
-        setPricingTable(result.data)
+        setThresholdConfig(result.data)
       } else {
-        setError(result.message || "获取计费表失败")
+        setError(result.message || "获取计费配置失败")
       }
     } catch (err: any) {
-      setError("获取计费表失败")
+      setError("获取计费配置失败")
     }
 
     setLoading(false)
@@ -47,36 +47,21 @@ export function PricingTableModal({ open, onOpenChange, tokenCount }: PricingTab
 
   useEffect(() => {
     if (open) {
-      loadPricingTable()
+      loadThresholdConfig()
     }
   }, [open])
 
-  // 将计费表转换为排序的数组
-  const getSortedPricingData = () => {
-    if (!pricingTable) return []
-
-    return Object.entries(pricingTable.pricing_table)
-      .map(([threshold, points]) => ({
-        threshold: parseInt(threshold),
-        points: points,
-      }))
-      .sort((a, b) => a.threshold - b.threshold)
+  // 计算当前累计token可以扣费的次数
+  const getDeductTimes = () => {
+    if (!thresholdConfig || tokenCount === undefined) return 0
+    return Math.floor(tokenCount / thresholdConfig.token_threshold)
   }
 
-  // 判断某个档位是否为当前token数量对应的档位
-  const isCurrentTier = (threshold: number, nextThreshold?: number) => {
-    if (tokenCount === undefined) return false
-    
-    if (nextThreshold === undefined) {
-      // 最后一个档位
-      return tokenCount >= threshold
-    } else {
-      // 中间档位
-      return tokenCount >= threshold && tokenCount < nextThreshold
-    }
+  // 计算当前累计token余量
+  const getRemainingTokens = () => {
+    if (!thresholdConfig || tokenCount === undefined) return 0
+    return tokenCount % thresholdConfig.token_threshold
   }
-
-  const sortedData = getSortedPricingData()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -84,10 +69,10 @@ export function PricingTableModal({ open, onOpenChange, tokenCount }: PricingTab
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="h-5 w-5 text-blue-500" />
-            积分计费表
+            累计Token计费配置
           </DialogTitle>
           <DialogDescription>
-            基于加权Token总数的阶梯计费表，Token数量越多，每Token消耗的积分越高
+            基于累计加权Token的计费方式，避免小额token也扣费的问题
           </DialogDescription>
         </DialogHeader>
 
@@ -100,68 +85,56 @@ export function PricingTableModal({ open, onOpenChange, tokenCount }: PricingTab
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        ) : pricingTable ? (
+        ) : thresholdConfig ? (
           <div className="space-y-4">
             {/* 说明信息 */}
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                {pricingTable.description}
+                {thresholdConfig.description}
                 {tokenCount !== undefined && (
-                  <span className="block mt-2 font-medium">
-                    当前Token数量: <span className="text-blue-600">{tokenCount.toLocaleString()}</span>
-                  </span>
+                  <div className="mt-3 space-y-1">
+                    <div className="font-medium">当前Token使用情况:</div>
+                    <div className="text-sm space-y-1">
+                      <div>总加权Token: <span className="text-blue-600 font-mono">{tokenCount.toLocaleString()}</span></div>
+                      <div>可扣费次数: <span className="text-green-600 font-mono">{getDeductTimes()}</span> 次</div>
+                      <div>总扣费积分: <span className="text-red-600 font-mono">{getDeductTimes() * thresholdConfig.points_per_threshold}</span> 积分</div>
+                      <div>累计余量: <span className="text-orange-600 font-mono">{getRemainingTokens()}</span> Token</div>
+                    </div>
+                  </div>
                 )}
               </AlertDescription>
             </Alert>
 
-            {/* 计费表 */}
+            {/* 计费配置 */}
             <div className="border rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50 dark:bg-gray-800">
-                    <TableHead className="font-semibold">Token阈值</TableHead>
-                    <TableHead className="font-semibold">消耗积分</TableHead>
+                    <TableHead className="font-semibold">配置项</TableHead>
+                    <TableHead className="font-semibold">配置值</TableHead>
                     <TableHead className="font-semibold">说明</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedData.map((item, index) => {
-                    const nextThreshold = sortedData[index + 1]?.threshold
-                    const isCurrent = isCurrentTier(item.threshold, nextThreshold)
-                    
-                    return (
-                      <TableRow 
-                        key={item.threshold}
-                        className={isCurrent ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200" : ""}
-                      >
-                        <TableCell className="font-mono">
-                          <div className="flex items-center gap-2">
-                            <span>
-                              {item.threshold.toLocaleString()}
-                              {nextThreshold !== undefined && ` - ${(nextThreshold - 1).toLocaleString()}`}
-                            </span>
-                            {isCurrent && (
-                              <Badge variant="default" className="bg-blue-500 text-white">
-                                当前档位
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-semibold text-red-600">
-                            {item.points} 积分
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-600 dark:text-gray-400">
-                          {nextThreshold !== undefined 
-                            ? `${item.threshold.toLocaleString()} ≤ Token < ${nextThreshold.toLocaleString()}`
-                            : `Token ≥ ${item.threshold.toLocaleString()}`
-                          }
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
+                  <TableRow>
+                    <TableCell className="font-medium">计费阈值</TableCell>
+                    <TableCell className="font-mono text-blue-600">
+                      {thresholdConfig.token_threshold.toLocaleString()} Token
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                      累计达到此Token数量时进行扣费
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">每阈值积分</TableCell>
+                    <TableCell className="font-mono text-red-600">
+                      {thresholdConfig.points_per_threshold} 积分
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                      每达到一个阈值扣除的积分数量
+                    </TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
@@ -170,12 +143,26 @@ export function PricingTableModal({ open, onOpenChange, tokenCount }: PricingTab
             <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
               <div className="font-medium">计费说明：</div>
               <ul className="list-disc list-inside space-y-1 ml-2">
-                <li>系统根据加权Token总数查找对应的积分消耗</li>
+                <li>系统累计用户的加权Token使用量</li>
                 <li>加权Token = 输入Token×输入倍率 + 输出Token×输出倍率 + 缓存Token×缓存倍率</li>
-                <li>Token数量越高，积分消耗越多（阶梯计费）</li>
-                <li>每次API调用都会根据实际Token使用量进行计费</li>
+                <li>当累计Token达到阈值时，扣除相应积分并重置计数器</li>
+                <li>解决了小额Token也扣费的问题，只有累计到一定量才扣费</li>
+                <li>支持一次性扣除多个阈值的积分（如累计10000token时扣除2积分）</li>
               </ul>
             </div>
+
+            {/* 示例计算 */}
+            {tokenCount !== undefined && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                <div className="font-medium text-blue-900 dark:text-blue-100 mb-2">📊 当前计费示例</div>
+                <div className="font-mono text-sm space-y-1">
+                  <div>当前累计: {tokenCount.toLocaleString()} Token</div>
+                  <div>扣费次数: {tokenCount.toLocaleString()} ÷ {thresholdConfig.token_threshold.toLocaleString()} = {getDeductTimes()} 次</div>
+                  <div>扣费积分: {getDeductTimes()} × {thresholdConfig.points_per_threshold} = <span className="text-red-600 font-bold">{getDeductTimes() * thresholdConfig.points_per_threshold} 积分</span></div>
+                  <div>剩余累计: {tokenCount.toLocaleString()} % {thresholdConfig.token_threshold.toLocaleString()} = <span className="text-orange-600">{getRemainingTokens()} Token</span></div>
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
 

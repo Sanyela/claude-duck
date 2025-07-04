@@ -73,13 +73,16 @@ func RedeemActivationCodeToWallet(userID uint, activationCode *models.Activation
 		newExpiresAt = time.Now().Add(newValidityDuration)
 	}
 
-	// 更新钱包积分
+	// 更新钱包积分和自动补给配置
 	updates := map[string]interface{}{
 		"wallet_expires_at":       newExpiresAt,
 		"daily_max_points":        plan.DailyMaxPoints,
 		"degradation_guaranteed":  plan.DegradationGuaranteed,
 		"daily_checkin_points":    plan.DailyCheckinPoints,
 		"daily_checkin_points_max": plan.DailyCheckinPointsMax,
+		"auto_refill_enabled":     plan.AutoRefillEnabled,
+		"auto_refill_threshold":   plan.AutoRefillThreshold,
+		"auto_refill_amount":      plan.AutoRefillAmount,
 		"status":                  "active",
 		"updated_at":              time.Now(),
 	}
@@ -114,6 +117,9 @@ func RedeemActivationCodeToWallet(userID uint, activationCode *models.Activation
 		DegradationGuaranteed: plan.DegradationGuaranteed,
 		DailyCheckinPoints:    plan.DailyCheckinPoints,
 		DailyCheckinPointsMax: plan.DailyCheckinPointsMax,
+		AutoRefillEnabled:     plan.AutoRefillEnabled,
+		AutoRefillThreshold:   plan.AutoRefillThreshold,
+		AutoRefillAmount:      plan.AutoRefillAmount,
 		ActivatedAt:           time.Now(),
 		ExpiresAt:             newExpiresAt,
 		Reason:                fmt.Sprintf("激活码兑换 - %s服务", serviceLevel),
@@ -202,6 +208,12 @@ func AdminGiftToWallet(adminUserID, targetUserID uint, plan *models.Subscription
 		if plan.DailyCheckinPointsMax > wallet.DailyCheckinPointsMax {
 			updates["daily_checkin_points_max"] = plan.DailyCheckinPointsMax
 		}
+		// 更新自动补给配置
+		if plan.AutoRefillEnabled {
+			updates["auto_refill_enabled"] = plan.AutoRefillEnabled
+			updates["auto_refill_threshold"] = plan.AutoRefillThreshold
+			updates["auto_refill_amount"] = plan.AutoRefillAmount
+		}
 	}
 
 	// 更新钱包
@@ -222,6 +234,9 @@ func AdminGiftToWallet(adminUserID, targetUserID uint, plan *models.Subscription
 		DegradationGuaranteed: plan.DegradationGuaranteed,
 		DailyCheckinPoints:    plan.DailyCheckinPoints,
 		DailyCheckinPointsMax: plan.DailyCheckinPointsMax,
+		AutoRefillEnabled:     plan.AutoRefillEnabled,
+		AutoRefillThreshold:   plan.AutoRefillThreshold,
+		AutoRefillAmount:      plan.AutoRefillAmount,
 		ActivatedAt:           time.Now(),
 		ExpiresAt:             expiresAt,
 		Reason:                reason,

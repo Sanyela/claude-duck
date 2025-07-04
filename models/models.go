@@ -11,7 +11,7 @@ type User struct {
 	ID                    uint           `gorm:"primarykey" json:"id"`
 	Email                 string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"email"`
 	Username              string         `gorm:"type:varchar(191);uniqueIndex;not null" json:"username"`
-	Password              string         `gorm:"not null" json:"-"`                          // 密码不在JSON中返回
+	Password              *string        `gorm:"" json:"-"`                                   // 密码不在JSON中返回，可为空
 	IsAdmin               bool           `gorm:"default:false" json:"is_admin"`              // 是否是管理员
 	IsDisabled            bool           `gorm:"default:false" json:"is_disabled"`           // 是否被禁用
 	DegradationGuaranteed int            `gorm:"default:0" json:"degradation_guaranteed"`    // 10条内保证不降级的数量
@@ -71,6 +71,12 @@ type SubscriptionPlan struct {
 	DailyCheckinPoints    int64          `gorm:"default:0" json:"daily_checkin_points"`     // 每日签到奖励积分（最低值）
 	DailyCheckinPointsMax int64          `gorm:"default:0" json:"daily_checkin_points_max"` // 每日签到奖励积分（最高值）
 	DailyMaxPoints        int64          `gorm:"default:0" json:"daily_max_points"`         // 每日最大使用积分数量，0表示无限制
+	
+	// 自动补给配置
+	AutoRefillEnabled   bool  `gorm:"default:false" json:"auto_refill_enabled"`     // 是否启用自动补给
+	AutoRefillThreshold int64 `gorm:"default:0" json:"auto_refill_threshold"`       // 自动补给阈值，积分低于此值时触发
+	AutoRefillAmount    int64 `gorm:"default:0" json:"auto_refill_amount"`          // 每次补给的积分数量
+	
 	Features              string         `gorm:"type:text" json:"features"`                 // JSON string array
 	Active                bool           `gorm:"default:true" json:"active"`
 	CreatedAt             time.Time      `json:"created_at"`
@@ -246,6 +252,9 @@ type UserWallet struct {
 	TotalPoints     int64 `gorm:"not null;default:0" json:"total_points"`     // 总积分 (历史累计充值)
 	AvailablePoints int64 `gorm:"not null;default:0" json:"available_points"` // 可用积分
 	UsedPoints      int64 `gorm:"not null;default:0" json:"used_points"`      // 已使用积分
+	
+	// 累计token计费相关
+	AccumulatedTokens int64 `gorm:"not null;default:0" json:"accumulated_tokens"` // 累计加权token数量
 
 	// 当前生效的订阅属性 (来自最新激活的套餐)
 	DailyMaxPoints        int64 `gorm:"default:0" json:"daily_max_points"`       // 每日最大使用积分，0表示无限制
@@ -254,6 +263,12 @@ type UserWallet struct {
 	// 签到相关 (来自当前套餐)
 	DailyCheckinPoints    int64 `gorm:"default:0" json:"daily_checkin_points"`     // 每日签到积分(最低)
 	DailyCheckinPointsMax int64 `gorm:"default:0" json:"daily_checkin_points_max"` // 每日签到积分(最高)
+
+	// 自动补给配置 (来自当前套餐)
+	AutoRefillEnabled   bool  `gorm:"default:false" json:"auto_refill_enabled"`   // 是否启用自动补给
+	AutoRefillThreshold int64 `gorm:"default:0" json:"auto_refill_threshold"`     // 自动补给阈值
+	AutoRefillAmount    int64 `gorm:"default:0" json:"auto_refill_amount"`        // 每次补给积分数量
+	LastAutoRefillTime  *time.Time `gorm:"" json:"last_auto_refill_time"`         // 最后一次自动补给时间
 
 	// 钱包状态
 	WalletExpiresAt time.Time `gorm:"not null" json:"wallet_expires_at"`       // 钱包过期时间 (最晚的订阅过期时间)
@@ -294,6 +309,11 @@ type RedemptionRecord struct {
 	DegradationGuaranteed int   `gorm:"default:0" json:"degradation_guaranteed"` // 降级保证
 	DailyCheckinPoints    int64 `gorm:"default:0" json:"daily_checkin_points"`   // 签到积分范围
 	DailyCheckinPointsMax int64 `gorm:"default:0" json:"daily_checkin_points_max"`
+	
+	// 自动补给属性
+	AutoRefillEnabled   bool  `gorm:"default:false" json:"auto_refill_enabled"`   // 自动补给开关
+	AutoRefillThreshold int64 `gorm:"default:0" json:"auto_refill_threshold"`     // 补给阈值
+	AutoRefillAmount    int64 `gorm:"default:0" json:"auto_refill_amount"`        // 补给数量
 
 	// 记录信息
 	ActivatedAt time.Time `gorm:"not null;index" json:"activated_at"` // 激活时间

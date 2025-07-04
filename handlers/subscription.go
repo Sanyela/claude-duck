@@ -61,8 +61,8 @@ type RedeemCouponResponse struct {
 	Success         bool              `json:"success"`
 	Message         string            `json:"message"`
 	NewSubscription *SubscriptionData `json:"newSubscription,omitempty"`
-	ServiceLevel    string            `json:"serviceLevel,omitempty"`    // upgrade, downgrade, same_level
-	Warning         string            `json:"warning,omitempty"`         // 警告信息
+	ServiceLevel    string            `json:"serviceLevel,omitempty"` // upgrade, downgrade, same_level
+	Warning         string            `json:"warning,omitempty"`      // 警告信息
 }
 
 // 签到相关响应结构
@@ -232,7 +232,7 @@ func HandleGetSubscriptionHistory(c *gin.Context) {
 	// 转换为响应格式
 	var historyData []PaymentHistoryData
 	now := time.Now()
-	
+
 	for _, record := range records {
 		// 判断状态：有效、已过期
 		subscriptionStatus := "已过期"
@@ -273,15 +273,99 @@ func HandleGetSubscriptionHistory(c *gin.Context) {
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
 
 	c.JSON(http.StatusOK, gin.H{
-		"history":      historyData,
-		"total":        total,
-		"page":         page,
-		"page_size":    pageSize,
-		"total_pages":  totalPages,
+		"history":     historyData,
+		"total":       total,
+		"page":        page,
+		"page_size":   pageSize,
+		"total_pages": totalPages,
 	})
 }
 
-// HandleRedeemCoupon 兑换激活码
+// HandleRedeemCouponPreview 预检查激活码兑换（不执行实际兑换）
+func HandleRedeemCouponPreview(c *gin.Context) {
+	// 验证token并获取用户ID
+	userID, err := getUserIDFromToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	// 检查用户是否被禁用
+	var user models.User
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
+			Success: false,
+			Message: "获取用户信息失败",
+		})
+		return
+	}
+
+	if user.IsDisabled {
+		c.JSON(http.StatusForbidden, RedeemCouponResponse{
+			Success: false,
+			Message: "您的账户已被管理员禁用，无法兑换激活码",
+		})
+		return
+	}
+
+	var req RedeemCouponRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, RedeemCouponResponse{
+			Success: false,
+			Message: "Invalid request format",
+		})
+		return
+	}
+
+	// 查找激活码
+	var activationCode models.ActivationCode
+	err = database.DB.Preload("Plan").Where("code = ? AND status = ?", req.CouponCode, "unused").First(&activationCode).Error
+	if err != nil {
+		c.JSON(http.StatusOK, RedeemCouponResponse{
+			Success: false,
+			Message: "无效的激活码或已被使用。",
+		})
+		return
+	}
+
+	// 检查订阅计划是否启用
+	if !activationCode.Plan.Active {
+		c.JSON(http.StatusOK, RedeemCouponResponse{
+			Success: false,
+			Message: "该订阅计划已停用。",
+		})
+		return
+	}
+
+	// 判断服务等级（预检查，不执行兑换）
+	wallet, err := utils.GetUserWallet(userID)
+	var serviceLevel string
+	var warning string
+
+	if err == nil && wallet.Status == "active" {
+		serviceLevel = utils.DetermineServiceLevel(wallet, &activationCode.Plan)
+		switch serviceLevel {
+		case "same_level":
+			warning = "同等级兑换将重置您的积分余额, 之前未使用的积分将被清空。"
+		case "downgrade":
+			warning = "新套餐的签到奖励积分低于当前套餐, 强制兑换可能会丢失签到奖励, 积分恢复奖励等。"
+		}
+	} else {
+		serviceLevel = "upgrade" // 新用户或过期用户默认为升级
+	}
+
+	// 返回预检查结果，不执行实际兑换
+	c.JSON(http.StatusOK, RedeemCouponResponse{
+		Success: true,
+		Message: fmt.Sprintf("预检查成功：将充值 %d 积分，有效期 %d 天。",
+			activationCode.Plan.PointAmount,
+			activationCode.Plan.ValidityDays),
+		ServiceLevel: serviceLevel,
+		Warning:      warning,
+	})
+}
+
+// HandleRedeemCoupon 兑换激活码（实际执行兑换）
 func HandleRedeemCoupon(c *gin.Context) {
 	// 验证token并获取用户ID
 	userID, err := getUserIDFromToken(c)
@@ -341,7 +425,7 @@ func HandleRedeemCoupon(c *gin.Context) {
 	wallet, err := utils.GetUserWallet(userID)
 	var serviceLevel string
 	var warning string
-	
+
 	if err == nil && wallet.Status == "active" {
 		serviceLevel = utils.DetermineServiceLevel(wallet, &activationCode.Plan)
 		switch serviceLevel {
@@ -584,9 +668,9 @@ func getWalletCheckinPointsRange(userID uint) CheckinPointsRange {
 	}
 
 	// 检查钱包是否有效且有签到配置
-	if wallet.Status != "active" || 
-	   wallet.WalletExpiresAt.Before(time.Now()) ||
-	   wallet.DailyCheckinPoints <= 0 {
+	if wallet.Status != "active" ||
+		wallet.WalletExpiresAt.Before(time.Now()) ||
+		wallet.DailyCheckinPoints <= 0 {
 		return CheckinPointsRange{MinPoints: 0, MaxPoints: 0, HasValid: false}
 	}
 
