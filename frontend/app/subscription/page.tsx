@@ -32,6 +32,9 @@ export default function SubscriptionPage() {
   const [couponCode, setCouponCode] = useState("")
   const [redeemingCoupon, setRedeemingCoupon] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showWarning, setShowWarning] = useState(false)
+  const [warningInfo, setWarningInfo] = useState({ serviceLevel: '', warning: '' })
+  const [countdown, setCountdown] = useState(0)
 
   // 加载订阅数据
   const loadSubscriptionData = async () => {
@@ -72,8 +75,8 @@ export default function SubscriptionPage() {
     }
   }
 
-  // 兑换激活码
-  const handleRedeemCoupon = async () => {
+  // 预检查激活码并显示警告
+  const handlePreCheckCoupon = async () => {
     if (!couponCode.trim()) {
       toast({
         title: "请输入激活码",
@@ -90,14 +93,34 @@ export default function SubscriptionPage() {
       })
 
       if (response.data.success) {
-        toast({
-          title: "兑换成功",
-          description: response.data.message,
-          variant: "default"
-        })
-        setCouponCode("")
-        // 重新加载数据
-        loadSubscriptionData()
+        const { serviceLevel, warning } = response.data
+        
+        if ((serviceLevel === 'same_level' || serviceLevel === 'downgrade') && warning) {
+          // 显示警告并开始倒计时
+          setWarningInfo({ serviceLevel, warning })
+          setShowWarning(true)
+          setCountdown(10)
+          
+          // 倒计时
+          const timer = setInterval(() => {
+            setCountdown(prev => {
+              if (prev <= 1) {
+                clearInterval(timer)
+                return 0
+              }
+              return prev - 1
+            })
+          }, 1000)
+        } else {
+          // 升级情况，直接显示成功
+          toast({
+            title: "兑换成功",
+            description: response.data.message,
+            variant: "default"
+          })
+          setCouponCode("")
+          loadSubscriptionData()
+        }
       } else {
         toast({
           title: "兑换失败",
@@ -114,6 +137,26 @@ export default function SubscriptionPage() {
     }
 
     setRedeemingCoupon(false)
+  }
+
+  // 确认兑换（在警告倒计时结束后）
+  const handleConfirmRedeem = () => {
+    toast({
+      title: "兑换成功",
+      description: `${warningInfo.serviceLevel === 'same_level' ? '同级' : '降级'}兑换完成`,
+      variant: "default"
+    })
+    setCouponCode("")
+    setShowWarning(false)
+    setWarningInfo({ serviceLevel: '', warning: '' })
+    loadSubscriptionData()
+  }
+
+  // 取消兑换
+  const handleCancelRedeem = () => {
+    setShowWarning(false)
+    setWarningInfo({ serviceLevel: '', warning: '' })
+    setCountdown(0)
   }
 
   useEffect(() => {
@@ -313,7 +356,7 @@ export default function SubscriptionPage() {
             <CardFooter>
               <Button 
                 className="w-full bg-sky-500 hover:bg-sky-600 text-primary-foreground"
-                onClick={handleRedeemCoupon}
+                onClick={handlePreCheckCoupon}
                 disabled={redeemingCoupon || !couponCode.trim()}
               >
                 {redeemingCoupon ? (
@@ -330,6 +373,49 @@ export default function SubscriptionPage() {
               </Button>
             </CardFooter>
           </Card>
+
+          {/* 警告对话框 */}
+          {showWarning && (
+            <Card className="mt-6 border-amber-200 bg-amber-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-800">
+                  <AlertCircle className="h-5 w-5" />
+                  {warningInfo.serviceLevel === 'same_level' ? '同级兑换警告' : '降级兑换警告'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Alert className="border-amber-200 bg-amber-50">
+                  <AlertDescription className="text-amber-800">
+                    {warningInfo.warning}
+                  </AlertDescription>
+                </Alert>
+                <div className="mt-4 text-center">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    请仔细阅读上述警告，确认无误后等待倒计时结束
+                  </p>
+                  <div className="text-2xl font-bold text-amber-600 mb-4">
+                    {countdown > 0 ? `${countdown}秒` : '现在可以确认兑换'}
+                  </div>
+                  <div className="flex gap-3 justify-center">
+                    <Button 
+                      variant="outline"
+                      onClick={handleCancelRedeem}
+                      className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                    >
+                      取消兑换
+                    </Button>
+                    <Button 
+                      onClick={handleConfirmRedeem}
+                      disabled={countdown > 0}
+                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      {countdown > 0 ? `等待 ${countdown}s` : '确认兑换'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </DashboardLayout>

@@ -61,6 +61,8 @@ type RedeemCouponResponse struct {
 	Success         bool              `json:"success"`
 	Message         string            `json:"message"`
 	NewSubscription *SubscriptionData `json:"newSubscription,omitempty"`
+	ServiceLevel    string            `json:"serviceLevel,omitempty"`    // upgrade, downgrade, same_level
+	Warning         string            `json:"warning,omitempty"`         // 警告信息
 }
 
 // 签到相关响应结构
@@ -83,7 +85,7 @@ type CheckinResponse struct {
 	RewardPoints int64  `json:"rewardPoints"` // 获得的奖励积分
 }
 
-// HandleGetActiveSubscription 获取用户所有已激活的订阅
+// HandleGetActiveSubscription 获取用户钱包信息（替代原订阅查询）
 func HandleGetActiveSubscription(c *gin.Context) {
 	// 验证token并获取用户ID
 	userID, err := getUserIDFromToken(c)
@@ -92,17 +94,23 @@ func HandleGetActiveSubscription(c *gin.Context) {
 		return
 	}
 
-	// 获取用户的所有订阅记录，按到期时间排序
-	var subscriptions []models.Subscription
-	err = database.DB.Preload("Plan").
-		Where("user_id = ? AND status = 'active'", userID).
-		Where("source_type IN (?)", []string{"activation_code", "payment"}). // 只返回真正的订阅
-		Order("expires_at ASC").
-		Find(&subscriptions).Error
-
+	// 获取用户钱包信息
+	wallet, err := utils.GetOrCreateUserWallet(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: "查询订阅信息失败",
+			Error: "查询钱包信息失败",
+		})
+		return
+	}
+
+	// 更新钱包状态
+	utils.UpdateWalletStatus(userID)
+
+	// 获取用户的有效兑换记录（用于显示历史）
+	records, err := utils.GetWalletActiveRedemptionRecords(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: "查询兑换记录失败",
 		})
 		return
 	}
@@ -111,48 +119,70 @@ func HandleGetActiveSubscription(c *gin.Context) {
 	var result []SubscriptionData
 	now := time.Now()
 
-	// 找到当前正在使用的订阅（按到期时间最早原则）
-	var currentSubscriptionIndex = -1
-	for i, sub := range subscriptions {
-		if sub.ExpiresAt.After(now) && sub.AvailablePoints > 0 {
-			currentSubscriptionIndex = i
-			break
-		}
-	}
-
-	for i, sub := range subscriptions {
-		// 计算详细状态
-		detailedStatus := "已过期"
-		if sub.ExpiresAt.After(now) {
-			if sub.AvailablePoints > 0 {
-				detailedStatus = "有效"
-			} else {
-				detailedStatus = "已用完"
-			}
-		}
-
-		// 是否是当前正在消耗的订阅
-		isCurrentlyUsed := (i == currentSubscriptionIndex)
-
-		subscriptionData := SubscriptionData{
-			ID: fmt.Sprintf("SUB-%d-%d", sub.UserID, sub.ID),
+	if wallet.Status == "active" && wallet.WalletExpiresAt.After(now) {
+		// 钱包有效，构建统一的订阅数据
+		walletSubscription := SubscriptionData{
+			ID: fmt.Sprintf("WALLET-%d", userID),
 			Plan: SubscriptionPlanData{
-				ID:       fmt.Sprintf("PLAN-%03d", sub.SubscriptionPlanID),
-				Name:     getSubscriptionPlanName(sub),
+				ID:       "WALLET-PLAN",
+				Name:     "统一钱包",
 				Features: []string{},
 			},
-			Status:            sub.Status,
-			CurrentPeriodEnd:  sub.ExpiresAt.Format(time.RFC3339),
-			CancelAtPeriodEnd: sub.CancelAtPeriodEnd,
-			TotalPoints:       sub.TotalPoints,
-			UsedPoints:        sub.UsedPoints,
-			AvailablePoints:   sub.AvailablePoints,
-			ActivatedAt:       sub.ActivatedAt.Format(time.RFC3339),
-			DetailedStatus:    detailedStatus,
-			IsCurrentUsing:    isCurrentlyUsed,
+			Status:            wallet.Status,
+			CurrentPeriodEnd:  wallet.WalletExpiresAt.Format(time.RFC3339),
+			CancelAtPeriodEnd: false,
+			TotalPoints:       wallet.TotalPoints,
+			UsedPoints:        wallet.UsedPoints,
+			AvailablePoints:   wallet.AvailablePoints,
+			ActivatedAt:       wallet.CreatedAt.Format(time.RFC3339),
+			DetailedStatus:    "有效",
+			IsCurrentUsing:    true,
 		}
+		result = append(result, walletSubscription)
 
-		result = append(result, subscriptionData)
+		// 添加兑换记录作为历史信息
+		for _, record := range records {
+			if record.ExpiresAt.After(now) {
+				recordData := SubscriptionData{
+					ID: fmt.Sprintf("RECORD-%d", record.ID),
+					Plan: SubscriptionPlanData{
+						ID:       fmt.Sprintf("PLAN-%d", record.ID),
+						Name:     record.Reason,
+						Features: []string{},
+					},
+					Status:            "active",
+					CurrentPeriodEnd:  record.ExpiresAt.Format(time.RFC3339),
+					CancelAtPeriodEnd: false,
+					TotalPoints:       record.PointsAmount,
+					UsedPoints:        0, // 兑换记录不记录已使用
+					AvailablePoints:   record.PointsAmount,
+					ActivatedAt:       record.ActivatedAt.Format(time.RFC3339),
+					DetailedStatus:    "已合并到钱包",
+					IsCurrentUsing:    false,
+				}
+				result = append(result, recordData)
+			}
+		}
+	} else {
+		// 钱包已过期或无效
+		expiredWallet := SubscriptionData{
+			ID: fmt.Sprintf("WALLET-%d", userID),
+			Plan: SubscriptionPlanData{
+				ID:       "WALLET-PLAN",
+				Name:     "统一钱包",
+				Features: []string{},
+			},
+			Status:            "expired",
+			CurrentPeriodEnd:  wallet.WalletExpiresAt.Format(time.RFC3339),
+			CancelAtPeriodEnd: false,
+			TotalPoints:       wallet.TotalPoints,
+			UsedPoints:        wallet.UsedPoints,
+			AvailablePoints:   0, // 过期后可用积分为0
+			ActivatedAt:       wallet.CreatedAt.Format(time.RFC3339),
+			DetailedStatus:    "已过期",
+			IsCurrentUsing:    false,
+		}
+		result = append(result, expiredWallet)
 	}
 
 	c.JSON(http.StatusOK, ActiveSubscriptionResponse{
@@ -169,7 +199,7 @@ func getSubscriptionPlanName(subscription models.Subscription) string {
 	return fmt.Sprintf("套餐-%d", subscription.SubscriptionPlanID)
 }
 
-// HandleGetSubscriptionHistory 获取订阅历史
+// HandleGetSubscriptionHistory 获取钱包兑换历史
 func HandleGetSubscriptionHistory(c *gin.Context) {
 	// 验证token并获取用户ID
 	userID, err := getUserIDFromToken(c)
@@ -178,38 +208,77 @@ func HandleGetSubscriptionHistory(c *gin.Context) {
 		return
 	}
 
-	// 直接查询用户的所有订阅记录
-	var subscriptions []models.Subscription
-	err = database.DB.Preload("Plan").Where("user_id = ?", userID).Order("activated_at DESC").Find(&subscriptions).Error
+	// 获取分页参数
+	page := 1
+	pageSize := 20
+	if p := c.Query("page"); p != "" {
+		if parsedPage, err := strconv.Atoi(p); err == nil && parsedPage > 0 {
+			page = parsedPage
+		}
+	}
+	if ps := c.Query("page_size"); ps != "" {
+		if parsedSize, err := strconv.Atoi(ps); err == nil && parsedSize > 0 && parsedSize <= 100 {
+			pageSize = parsedSize
+		}
+	}
+
+	// 查询用户的所有兑换记录
+	records, total, err := utils.GetWalletRedemptionHistory(userID, pageSize, (page-1)*pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to fetch subscription history"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取兑换历史失败"})
 		return
 	}
 
 	// 转换为响应格式
 	var historyData []PaymentHistoryData
-	for _, subscription := range subscriptions {
-		// 判断订阅状态：有效、已用完、已过期
+	now := time.Now()
+	
+	for _, record := range records {
+		// 判断状态：有效、已过期
 		subscriptionStatus := "已过期"
-		if subscription.ExpiresAt.After(time.Now()) {
-			if subscription.AvailablePoints > 0 {
-				subscriptionStatus = "有效"
-			} else {
-				subscriptionStatus = "已用完"
-			}
+		if record.ExpiresAt.After(now) {
+			subscriptionStatus = "有效"
+		}
+
+		// 根据来源类型确定支付状态
+		paymentStatus := "paid"
+		switch record.SourceType {
+		case "activation_code":
+			paymentStatus = "code_redeemed"
+		case "admin_gift":
+			paymentStatus = "admin_gifted"
+		case "daily_checkin":
+			paymentStatus = "checkin_reward"
+		case "payment":
+			paymentStatus = "paid"
+		}
+
+		// 获取计划名称
+		planName := record.Reason
+		if record.SubscriptionPlan != nil {
+			planName = record.SubscriptionPlan.Title
 		}
 
 		historyData = append(historyData, PaymentHistoryData{
-			ID:                 fmt.Sprintf("%d", subscription.ID),
-			PlanName:           subscription.Plan.Title,
-			Date:               subscription.ActivatedAt.Format(time.RFC3339),
-			PaymentStatus:      "paid", // 订阅记录默认都是已支付状态
+			ID:                 fmt.Sprintf("REC-%d", record.ID),
+			PlanName:           planName,
+			Date:               record.ActivatedAt.Format(time.RFC3339),
+			PaymentStatus:      paymentStatus,
 			SubscriptionStatus: subscriptionStatus,
-			InvoiceURL:         subscription.InvoiceURL,
+			InvoiceURL:         record.InvoiceURL,
 		})
 	}
 
-	c.JSON(http.StatusOK, SubscriptionHistoryResponse{History: historyData})
+	// 计算总页数
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+
+	c.JSON(http.StatusOK, gin.H{
+		"history":      historyData,
+		"total":        total,
+		"page":         page,
+		"page_size":    pageSize,
+		"total_pages":  totalPages,
+	})
 }
 
 // HandleRedeemCoupon 兑换激活码
@@ -268,67 +337,48 @@ func HandleRedeemCoupon(c *gin.Context) {
 		return
 	}
 
-	// 开始事务
-	tx := database.DB.Begin()
-
-	now := time.Now()
-	if err := tx.Model(&activationCode).Updates(map[string]interface{}{
-		"status":          "used",
-		"used_by_user_id": userID,
-		"used_at":         now,
-	}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
-			Success: false,
-			Message: "激活码兑换失败。",
-		})
-		return
+	// 判断服务等级（在兑换前）
+	wallet, err := utils.GetUserWallet(userID)
+	var serviceLevel string
+	var warning string
+	
+	if err == nil && wallet.Status == "active" {
+		serviceLevel = utils.DetermineServiceLevel(wallet, &activationCode.Plan)
+		switch serviceLevel {
+		case "same_level":
+			warning = "同等级兑换将重置您的积分余额，之前未使用的积分将被清空。"
+		case "downgrade":
+			warning = "新套餐的签到奖励积分低于当前套餐，强制兑换可能会丢失签到奖励。"
+		}
+	} else {
+		serviceLevel = "upgrade" // 新用户或过期用户默认为升级
 	}
 
-	// 创建新的订阅记录
-	subscription := models.Subscription{
-		UserID:             userID,
-		SubscriptionPlanID: activationCode.Plan.ID,
-		Status:             "active",
-		ActivatedAt:        now,
-		ExpiresAt:          now.AddDate(0, 0, activationCode.Plan.ValidityDays),
-		TotalPoints:        activationCode.Plan.PointAmount,
-		UsedPoints:         0,
-		AvailablePoints:    activationCode.Plan.PointAmount,
-		DailyMaxPoints:     activationCode.Plan.DailyMaxPoints, // 继承计划的每日积分限制
-		SourceType:         "activation_code",
-		SourceID:           fmt.Sprintf("AC-%d", activationCode.ID),
-		InvoiceURL:         "", // 激活码兑换无发票
-		CancelAtPeriodEnd:  false,
-		CreatedAt:          now,
-		UpdatedAt:          now,
-	}
-
-	if err := tx.Create(&subscription).Error; err != nil {
-		tx.Rollback()
+	// 使用新的钱包架构兑换激活码
+	err = utils.RedeemActivationCodeToWallet(userID, &activationCode)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, RedeemCouponResponse{
 			Success: false,
-			Message: "创建订阅记录失败。",
+			Message: fmt.Sprintf("激活码兑换失败: %s", err.Error()),
 		})
 		return
 	}
 
 	// 更新用户的服务降级配置（如果未锁定）
-	if err := tx.Where("id = ?", userID).First(&user).Error; err == nil {
-		if !user.DegradationLocked && activationCode.Plan.DegradationGuaranteed > user.DegradationGuaranteed {
-			user.DegradationGuaranteed = activationCode.Plan.DegradationGuaranteed
-			user.DegradationSource = "subscription"
-			tx.Save(&user)
-		}
+	if !user.DegradationLocked && activationCode.Plan.DegradationGuaranteed > user.DegradationGuaranteed {
+		database.DB.Model(&user).Updates(map[string]interface{}{
+			"degradation_guaranteed": activationCode.Plan.DegradationGuaranteed,
+			"degradation_source":     "subscription",
+		})
 	}
-
-	tx.Commit()
 
 	c.JSON(http.StatusOK, RedeemCouponResponse{
 		Success: true,
 		Message: fmt.Sprintf("激活码兑换成功！已充值 %d 积分，有效期 %d 天。",
 			activationCode.Plan.PointAmount,
 			activationCode.Plan.ValidityDays),
+		ServiceLevel: serviceLevel,
+		Warning:      warning,
 	})
 }
 
@@ -374,8 +424,8 @@ func HandleGetCheckinStatus(c *gin.Context) {
 		return
 	}
 
-	// 获取用户有效订阅的签到积分配置
-	pointsRange := getUserCheckinPointsRange(userID)
+	// 获取用户钱包的签到积分配置
+	pointsRange := getWalletCheckinPointsRange(userID)
 
 	// 如果没有有效的签到积分配置，不显示签到功能
 	if !pointsRange.HasValid {
@@ -394,12 +444,11 @@ func HandleGetCheckinStatus(c *gin.Context) {
 	err = database.DB.Where("user_id = ? AND checkin_date = ?", userID, today).First(&todayCheckin).Error
 	todayChecked := err == nil
 
-	// 获取最后签到日期
-	var lastCheckin models.DailyCheckin
-	err = database.DB.Where("user_id = ?", userID).Order("checkin_date DESC").First(&lastCheckin).Error
+	// 获取最后签到日期（从钱包中获取）
+	wallet, err := utils.GetUserWallet(userID)
 	lastCheckinDate := ""
-	if err == nil {
-		lastCheckinDate = lastCheckin.CheckinDate
+	if err == nil && wallet.LastCheckinDate != "" {
+		lastCheckinDate = wallet.LastCheckinDate
 	}
 
 	c.JSON(http.StatusOK, CheckinStatusResponse{
@@ -451,8 +500,8 @@ func HandleDailyCheckin(c *gin.Context) {
 		return
 	}
 
-	// 获取用户有效订阅的签到积分配置
-	pointsRange := getUserCheckinPointsRange(userID)
+	// 获取用户钱包的签到积分配置
+	pointsRange := getWalletCheckinPointsRange(userID)
 	if !pointsRange.HasValid {
 		c.JSON(http.StatusOK, CheckinResponse{
 			Success:      false,
@@ -472,15 +521,6 @@ func HandleDailyCheckin(c *gin.Context) {
 		rewardPoints = pointsRange.MinPoints + int64(rand.Int63n(randRange))
 	}
 
-	// 获取签到有效期配置
-	var validityConfig models.SystemConfig
-	validityDays := 1 // 默认有效期1天
-	if err := database.DB.Where("config_key = ?", "daily_checkin_validity_days").First(&validityConfig).Error; err == nil {
-		if days, err := strconv.Atoi(validityConfig.ConfigValue); err == nil {
-			validityDays = days
-		}
-	}
-
 	// 检查今天是否已经签到
 	today := time.Now().Format("2006-01-02")
 	var existingCheckin models.DailyCheckin
@@ -494,21 +534,15 @@ func HandleDailyCheckin(c *gin.Context) {
 		return
 	}
 
-	// 开始事务
-	tx := database.DB.Begin()
-
-	now := time.Now()
-
 	// 创建签到记录
 	checkinRecord := models.DailyCheckin{
 		UserID:      userID,
 		CheckinDate: today,
 		Points:      rewardPoints,
-		CreatedAt:   now,
+		CreatedAt:   time.Now(),
 	}
 
-	if err := tx.Create(&checkinRecord).Error; err != nil {
-		tx.Rollback()
+	if err := database.DB.Create(&checkinRecord).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, CheckinResponse{
 			Success:      false,
 			Message:      "签到记录创建失败",
@@ -517,64 +551,16 @@ func HandleDailyCheckin(c *gin.Context) {
 		return
 	}
 
-	// 创建积分奖励订阅记录
-	// 查找或创建签到专用的虚拟订阅计划
-	var checkinPlan models.SubscriptionPlan
-	err = tx.Where("title = ? AND point_amount = 0", "每日签到奖励").First(&checkinPlan).Error
+	// 使用新的钱包架构添加签到积分
+	err = utils.DailyCheckinToWallet(userID, rewardPoints)
 	if err != nil {
-		// 创建签到专用计划
-		checkinPlan = models.SubscriptionPlan{
-			Title:                 "每日签到奖励",
-			Description:           "每日签到获得的积分奖励",
-			PointAmount:           0, // 特殊标记
-			Price:                 0,
-			Currency:              "CNY",
-			ValidityDays:          validityDays,
-			DegradationGuaranteed: 0,
-			DailyCheckinPoints:    0, // 签到虚拟计划不参与签到积分计算
-			DailyCheckinPointsMax: 0, // 签到虚拟计划不参与签到积分计算
-			Features:              "[]",
-			Active:                true,
-		}
-		if err := tx.Create(&checkinPlan).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, CheckinResponse{
-				Success:      false,
-				Message:      "创建签到计划失败",
-				RewardPoints: 0,
-			})
-			return
-		}
-	}
-
-	subscription := models.Subscription{
-		UserID:             userID,
-		SubscriptionPlanID: checkinPlan.ID,
-		Status:             "active",
-		ActivatedAt:        now,
-		ExpiresAt:          now.AddDate(0, 0, validityDays), // 根据配置设置有效期
-		TotalPoints:        rewardPoints,
-		UsedPoints:         0,
-		AvailablePoints:    rewardPoints,
-		SourceType:         "daily_checkin",
-		SourceID:           fmt.Sprintf("CHECKIN-%s-%d", today, userID),
-		InvoiceURL:         "", // 签到奖励无发票
-		CancelAtPeriodEnd:  false,
-		CreatedAt:          now,
-		UpdatedAt:          now,
-	}
-
-	if err := tx.Create(&subscription).Error; err != nil {
-		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, CheckinResponse{
 			Success:      false,
-			Message:      "积分奖励创建失败",
+			Message:      fmt.Sprintf("签到积分添加失败: %s", err.Error()),
 			RewardPoints: 0,
 		})
 		return
 	}
-
-	tx.Commit()
 
 	c.JSON(http.StatusOK, CheckinResponse{
 		Success:      true,
@@ -583,74 +569,36 @@ func HandleDailyCheckin(c *gin.Context) {
 	})
 }
 
-// getUserCheckinPointsRange 获取用户的签到积分范围
+// getUserCheckinPointsRange 获取用户的签到积分范围 (已弃用，使用getWalletCheckinPointsRange)
 func getUserCheckinPointsRange(userID uint) CheckinPointsRange {
-	// 获取用户所有有效订阅
-	var subscriptions []models.Subscription
-	err := database.DB.Preload("Plan").
-		Where("user_id = ? AND status = 'active' AND expires_at > ?", userID, time.Now()).
-		Where("source_type IN (?)", []string{"activation_code", "payment"}). // 只考虑真正的订阅
-		Find(&subscriptions).Error
-	if err != nil || len(subscriptions) == 0 {
+	// 此函数已被 getWalletCheckinPointsRange 替代
+	return getWalletCheckinPointsRange(userID)
+}
+
+// getWalletCheckinPointsRange 获取钱包签到积分范围
+func getWalletCheckinPointsRange(userID uint) CheckinPointsRange {
+	// 获取用户钱包
+	wallet, err := utils.GetUserWallet(userID)
+	if err != nil {
 		return CheckinPointsRange{MinPoints: 0, MaxPoints: 0, HasValid: false}
 	}
 
-	// 收集所有有效的签到积分配置
-	type PointsRange struct {
-		MinPoints int64
-		MaxPoints int64
-	}
-	var validRanges []PointsRange
-
-	for _, sub := range subscriptions {
-		// 只有当最小值 > 0 时才认为是有效的签到配置
-		if sub.Plan.DailyCheckinPoints > 0 {
-			maxPoints := sub.Plan.DailyCheckinPointsMax
-			// 如果最大值为0或小于最小值，则设为最小值
-			if maxPoints <= 0 || maxPoints < sub.Plan.DailyCheckinPoints {
-				maxPoints = sub.Plan.DailyCheckinPoints
-			}
-			validRanges = append(validRanges, PointsRange{
-				MinPoints: sub.Plan.DailyCheckinPoints,
-				MaxPoints: maxPoints,
-			})
-		}
-	}
-
-	if len(validRanges) == 0 {
+	// 检查钱包是否有效且有签到配置
+	if wallet.Status != "active" || 
+	   wallet.WalletExpiresAt.Before(time.Now()) ||
+	   wallet.DailyCheckinPoints <= 0 {
 		return CheckinPointsRange{MinPoints: 0, MaxPoints: 0, HasValid: false}
 	}
 
-	// 获取多订阅策略配置
-	var strategyConfig models.SystemConfig
-	strategy := "highest" // 默认使用最高策略
-	if err := database.DB.Where("config_key = ?", "daily_checkin_multi_subscription_strategy").First(&strategyConfig).Error; err == nil {
-		strategy = strategyConfig.ConfigValue
-	}
-
-	// 根据策略选择订阅
-	var selectedRange PointsRange
-	if strategy == "lowest" {
-		// 选择最小值最低的订阅
-		selectedRange = validRanges[0]
-		for _, r := range validRanges {
-			if r.MinPoints < selectedRange.MinPoints {
-				selectedRange = r
-			}
-		}
-	} else {
-		// 默认选择最大值最高的订阅
-		selectedRange = validRanges[0]
-		for _, r := range validRanges {
-			if r.MaxPoints > selectedRange.MaxPoints {
-				selectedRange = r
-			}
-		}
+	// 确保最大值不小于最小值
+	maxPoints := wallet.DailyCheckinPointsMax
+	if maxPoints <= 0 || maxPoints < wallet.DailyCheckinPoints {
+		maxPoints = wallet.DailyCheckinPoints
 	}
 
 	return CheckinPointsRange{
-		MinPoints: selectedRange.MinPoints,
-		MaxPoints: selectedRange.MaxPoints,
+		MinPoints: wallet.DailyCheckinPoints,
+		MaxPoints: maxPoints,
 		HasValid:  true,
 	}
 }

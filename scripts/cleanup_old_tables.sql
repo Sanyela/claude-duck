@@ -1,37 +1,14 @@
--- =====================================================
--- 清理老架构的表和字段
--- 警告：执行此脚本前请确保新架构运行正常且数据一致性验证通过
--- =====================================================
-
--- 1. 删除老架构相关的表
--- 注意：这些表在新架构中已被 user_wallets 和 redemption_records 替代
-
--- 备份表（可选，如果需要保留备份）
--- CREATE TABLE subscriptions_backup AS SELECT * FROM subscriptions;
--- CREATE TABLE daily_points_usage_backup AS SELECT * FROM daily_points_usage;
--- CREATE TABLE gift_records_backup AS SELECT * FROM gift_records;
+-- 1. 删除老架构的核心表
+-- 注意：只删除已完全迁移且不再使用的表
 
 -- 删除外键约束
-ALTER TABLE daily_points_usage DROP FOREIGN KEY IF EXISTS daily_points_usage_subscription_id_foreign;
-ALTER TABLE gift_records DROP FOREIGN KEY IF EXISTS gift_records_subscription_id_foreign;
-
--- 删除老表
+-- 注意：如果外键不存在会报错，但不影响继续执行
+SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS daily_points_usage;
-DROP TABLE IF EXISTS gift_records;
 DROP TABLE IF EXISTS subscriptions;
+SET FOREIGN_KEY_CHECKS = 1;
 
--- 2. 从 users 表中删除冗余字段
--- 这些字段的功能已移到 user_wallets 表中
-ALTER TABLE users 
-DROP COLUMN IF EXISTS degradation_guaranteed,
-DROP COLUMN IF EXISTS degradation_source,
-DROP COLUMN IF EXISTS degradation_locked,
-DROP COLUMN IF EXISTS degradation_counter;
-
--- 3. 删除不再使用的索引
--- DROP INDEX IF EXISTS idx_subscriptions_user_id ON subscriptions;
--- DROP INDEX IF EXISTS idx_subscriptions_status ON subscriptions;
--- DROP INDEX IF EXISTS idx_daily_points_usage_user_date ON daily_points_usage;
+-- 表已在上面删除，这里不需要重复
 
 -- 4. 重建性能优化索引
 CREATE INDEX IF NOT EXISTS idx_user_wallets_status ON user_wallets(status);
@@ -59,15 +36,15 @@ WHERE config_key = 'daily_checkin_points';
 -- =====================================================
 
 -- 检查表是否成功删除
--- SELECT table_name FROM information_schema.tables 
--- WHERE table_schema = DATABASE() 
--- AND table_name IN ('subscriptions', 'daily_points_usage', 'gift_records');
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = DATABASE() 
+AND table_name IN ('subscriptions', 'daily_points_usage', 'gift_records');
 
 -- 检查新表数据完整性
--- SELECT 
---     (SELECT COUNT(*) FROM users) as user_count,
---     (SELECT COUNT(*) FROM user_wallets) as wallet_count,
---     (SELECT COUNT(*) FROM redemption_records) as redemption_count;
+SELECT 
+    (SELECT COUNT(*) FROM users) as user_count,
+    (SELECT COUNT(*) FROM user_wallets) as wallet_count,
+    (SELECT COUNT(*) FROM redemption_records) as redemption_count;
 
 -- =====================================================
 -- 完成清理

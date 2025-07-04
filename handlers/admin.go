@@ -9,6 +9,7 @@ import (
 
 	"claude/database"
 	"claude/models"
+	"claude/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -171,8 +172,8 @@ func HandleAdminGetActivationCodes(c *gin.Context) {
 			// 对于"已用完"状态，我们需要特殊处理
 			// 查找状态为used且积分已用完的激活码
 			query = query.Where("status = ? AND used_by_user_id IS NOT NULL", "used").
-				Joins("LEFT JOIN subscriptions ON activation_codes.used_by_user_id = subscriptions.user_id AND activation_codes.subscription_plan_id = subscriptions.subscription_plan_id").
-				Where("subscriptions.available_points = 0 AND subscriptions.total_points > 0")
+				Joins("LEFT JOIN user_wallets ON activation_codes.used_by_user_id = user_wallets.user_id").
+				Where("user_wallets.available_points = 0 AND user_wallets.total_points > 0")
 		} else {
 			query = query.Where("status = ?", status)
 		}
@@ -748,25 +749,53 @@ func HandleAdminToggleUserStatus(c *gin.Context) {
 // HandleAdminGetUserSubscriptions 获取用户的订阅列表
 func HandleAdminGetUserSubscriptions(c *gin.Context) {
 	userID := c.Param("id")
-
-	var subscriptions []models.Subscription
-	err := database.DB.Preload("Plan").
-		Where("user_id = ? AND status = 'active'", userID).
-		Find(&subscriptions).Error
+	
+	// 转换userID为uint
+	uid, err := strconv.ParseUint(userID, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户订阅失败"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
 		return
 	}
 
+	// 获取用户钱包信息
+	wallet, err := utils.GetOrCreateUserWallet(uint(uid))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户钱包失败"})
+		return
+	}
+
+	// 获取用户的兑换记录
+	records, err := utils.GetWalletActiveRedemptionRecords(uint(uid))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取兑换记录失败"})
+		return
+	}
+
+	// 构建响应数据
+	walletInfo := gin.H{
+		"wallet_id":                 wallet.UserID,
+		"status":                    wallet.Status,
+		"total_points":              wallet.TotalPoints,
+		"available_points":          wallet.AvailablePoints,
+		"used_points":               wallet.UsedPoints,
+		"wallet_expires_at":         wallet.WalletExpiresAt,
+		"daily_max_points":          wallet.DailyMaxPoints,
+		"degradation_guaranteed":    wallet.DegradationGuaranteed,
+		"daily_checkin_points":      wallet.DailyCheckinPoints,
+		"daily_checkin_points_max":  wallet.DailyCheckinPointsMax,
+		"last_checkin_date":         wallet.LastCheckinDate,
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"subscriptions": subscriptions,
+		"wallet":           walletInfo,
+		"redemption_records": records,
+		"total_records":    len(records),
 	})
 }
 
-// HandleAdminUpdateUserSubscriptionLimit 更新用户订阅的每日积分限制
+// HandleAdminUpdateUserWalletLimit 更新用户钱包的每日积分限制
 func HandleAdminUpdateUserSubscriptionLimit(c *gin.Context) {
 	userID := c.Param("id")
-	subscriptionID := c.Param("subscription_id")
 
 	var requestData struct {
 		DailyMaxPoints int64 `json:"daily_max_points"`
@@ -777,18 +806,26 @@ func HandleAdminUpdateUserSubscriptionLimit(c *gin.Context) {
 		return
 	}
 
-	// 验证订阅是否属于该用户
-	var subscription models.Subscription
-	err := database.DB.Where("id = ? AND user_id = ?", subscriptionID, userID).First(&subscription).Error
+	// 转换userID为uint
+	uid, err := strconv.ParseUint(userID, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "找不到该订阅"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
 		return
 	}
 
-	// 更新订阅的每日积分限制
-	result := database.DB.Model(&subscription).Update("daily_max_points", requestData.DailyMaxPoints)
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+	// 验证用户是否存在
+	var user models.User
+	if err := database.DB.Where("id = ?", uid).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+
+	// 更新钱包的每日积分限制
+	err = database.DB.Model(&models.UserWallet{}).
+		Where("user_id = ?", uid).
+		Update("daily_max_points", requestData.DailyMaxPoints).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新钱包限制失败: " + err.Error()})
 		return
 	}
 
@@ -798,9 +835,9 @@ func HandleAdminUpdateUserSubscriptionLimit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("订阅每日积分限制已更新为: %s", limitText),
-		"subscription": gin.H{
-			"id":               subscription.ID,
+		"message": fmt.Sprintf("用户钱包每日积分限制已更新为: %s", limitText),
+		"wallet": gin.H{
+			"user_id":          uid,
 			"daily_max_points": requestData.DailyMaxPoints,
 		},
 	})
@@ -862,71 +899,35 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 		dailyMaxPoints = *requestData.DailyMaxPoints
 	}
 
-	// 开始数据库事务
-	tx := database.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	// 转换userID为uint
+	uid, err := strconv.ParseUint(userID, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
+		return
+	}
 
-	// 创建赠送记录
+	// 使用新的钱包架构进行管理员赠送
+	err = utils.AdminGiftToWallet(admin.ID, uint(uid), &plan, pointsAmount, validityDays, dailyMaxPoints, requestData.Reason)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "赠送失败: " + err.Error()})
+		return
+	}
+
+	// 创建赠送记录（用于管理追踪）
 	giftRecord := models.GiftRecord{
 		FromAdminID:        admin.ID,
-		ToUserID:           targetUser.ID,
+		ToUserID:           uint(uid),
 		SubscriptionPlanID: requestData.SubscriptionPlanID,
 		PointsAmount:       pointsAmount,
 		ValidityDays:       validityDays,
 		DailyMaxPoints:     dailyMaxPoints,
 		Reason:             requestData.Reason,
-		Status:             "pending",
+		Status:             "completed",
 	}
 
-	if err := tx.Create(&giftRecord).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建赠送记录失败: " + err.Error()})
-		return
-	}
-
-	// 直接创建订阅记录
-	now := time.Now()
-	expiresAt := now.AddDate(0, 0, validityDays)
-
-	subscription := models.Subscription{
-		UserID:             targetUser.ID,
-		SubscriptionPlanID: requestData.SubscriptionPlanID,
-		Status:             "active",
-		ActivatedAt:        now,
-		ExpiresAt:          expiresAt,
-		TotalPoints:        pointsAmount,
-		UsedPoints:         0,
-		AvailablePoints:    pointsAmount,
-		DailyMaxPoints:     dailyMaxPoints,
-		SourceType:         "admin_gift",
-		SourceID:           fmt.Sprintf("gift_%d", giftRecord.ID),
-	}
-
-	if err := tx.Create(&subscription).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建订阅失败: " + err.Error()})
-		return
-	}
-
-	// 更新赠送记录状态
-	subscriptionID := subscription.ID
-	giftRecord.SubscriptionID = &subscriptionID
-	giftRecord.Status = "completed"
-
-	if err := tx.Save(&giftRecord).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新赠送记录失败: " + err.Error()})
-		return
-	}
-
-	// 提交事务
-	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "提交事务失败: " + err.Error()})
-		return
+	if err := database.DB.Create(&giftRecord).Error; err != nil {
+		// 即使赠送记录创建失败，钱包已经更新成功，只记录日志
+		fmt.Printf("创建赠送记录失败: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -937,15 +938,11 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 			"validity_days":    validityDays,
 			"daily_max_points": dailyMaxPoints,
 		},
-		"subscription": gin.H{
-			"id":         subscription.ID,
-			"expires_at": subscription.ExpiresAt,
-			"status":     subscription.Status,
-		},
+		"wallet_updated": true,
 	})
 }
 
-// HandleAdminGetGiftRecords 获取赠送记录列表
+// HandleAdminGetGiftRecords 获取赠送记录列表（兼容新架构）
 func HandleAdminGetGiftRecords(c *gin.Context) {
 	pagination := getPagination(c)
 	var records []models.GiftRecord
@@ -972,6 +969,8 @@ func HandleAdminGetGiftRecords(c *gin.Context) {
 	offset := (pagination.Page - 1) * pagination.PageSize
 	query.Order("created_at DESC").Offset(offset).Limit(pagination.PageSize).Find(&records)
 
+	// 注：在新的钱包架构下，GiftRecord 表仍然用于追踪管理员赠送记录
+	// 实际的积分已经通过 RedemptionRecord 表管理
 	c.JSON(http.StatusOK, PaginatedResponse{
 		Data:       records,
 		Total:      total,
@@ -989,17 +988,16 @@ func HandleAdminDashboard(c *gin.Context) {
 	var totalUsers int64
 	database.DB.Model(&models.User{}).Count(&totalUsers)
 
-	// 获取总有效订阅人数（去重用户）
+	// 获取总有效钱包用户数
 	var activeSubscriptionUsers int64
-	database.DB.Model(&models.Subscription{}).
-		Where("status = 'active' AND expires_at > ?", now).
-		Distinct("user_id").
+	database.DB.Model(&models.UserWallet{}).
+		Where("status = 'active' AND wallet_expires_at > ?", now).
 		Count(&activeSubscriptionUsers)
 
-	// 获取总订阅数量
+	// 获取总订阅数量（兼容字段名）
 	var totalSubscriptions int64
-	database.DB.Model(&models.Subscription{}).
-		Where("status = 'active' AND expires_at > ?", now).
+	database.DB.Model(&models.RedemptionRecord{}).
+		Where("activated_at IS NOT NULL").
 		Count(&totalSubscriptions)
 
 	// 获取总积分统计
@@ -1010,8 +1008,8 @@ func HandleAdminDashboard(c *gin.Context) {
 	}
 
 	var pointsStats PointsStats
-	database.DB.Model(&models.Subscription{}).
-		Where("status = 'active' AND expires_at > ?", now).
+	database.DB.Model(&models.UserWallet{}).
+		Where("status = 'active' AND wallet_expires_at > ?", now).
 		Select("SUM(total_points) as total_points, SUM(used_points) as used_points, SUM(available_points) as available_points").
 		Scan(&pointsStats)
 
@@ -1100,10 +1098,10 @@ func HandleAdminDashboard(c *gin.Context) {
 	}
 
 	var planStats []PlanStats
-	database.DB.Model(&models.Subscription{}).
-		Joins("JOIN subscription_plans ON subscriptions.subscription_plan_id = subscription_plans.id").
-		Where("subscriptions.status = 'active' AND subscriptions.expires_at > ?", now).
-		Where("subscriptions.source_type IN ?", []string{"activation_code", "payment"}).
+	database.DB.Model(&models.RedemptionRecord{}).
+		Joins("JOIN subscription_plans ON redemption_records.subscription_plan_id = subscription_plans.id").
+		Where("redemption_records.activated_at IS NOT NULL").
+		Where("redemption_records.source_type IN ?", []string{"activation_code", "payment"}).
 		Group("subscription_plans.title").
 		Select("subscription_plans.title as plan_name, COUNT(*) as count").
 		Scan(&planStats)
@@ -1116,10 +1114,10 @@ func HandleAdminDashboard(c *gin.Context) {
 	}
 
 	var sourceStats []SourceStats
-	database.DB.Model(&models.Subscription{}).
-		Where("status = 'active' AND expires_at > ?", now).
+	database.DB.Model(&models.RedemptionRecord{}).
+		Where("activated_at IS NOT NULL").
 		Group("source_type").
-		Select("source_type, COUNT(*) as count, SUM(available_points) as points").
+		Select("source_type, COUNT(*) as count, SUM(points_amount) as points").
 		Scan(&sourceStats)
 
 	// 构建响应数据

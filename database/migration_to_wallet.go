@@ -81,14 +81,13 @@ func migrateUserToWallet(tx *gorm.DB, userID uint) error {
 	var latestSubscription *models.Subscription
 	var latestActivationTime time.Time
 
-	// 4. 汇总所有有效订阅的积分
+	// 4. 汇总所有有效订阅的积分（修复逻辑一致性）
 	for _, sub := range subscriptions {
-		// 累计积分
-		wallet.TotalPoints += sub.TotalPoints
-		wallet.UsedPoints += sub.UsedPoints
-
-		// 只累计未过期的订阅的可用积分
+		// 只处理未过期的有效订阅
 		if sub.Status == "active" && sub.ExpiresAt.After(time.Now()) {
+			// 累计积分（只累计有效订阅）
+			wallet.TotalPoints += sub.TotalPoints
+			wallet.UsedPoints += sub.UsedPoints
 			wallet.AvailablePoints += sub.AvailablePoints
 			wallet.Status = "active"
 
@@ -98,8 +97,9 @@ func migrateUserToWallet(tx *gorm.DB, userID uint) error {
 			}
 		}
 
-		// 找到最新激活的套餐（用于确定当前属性）
-		if latestSubscription == nil || sub.ActivatedAt.After(latestActivationTime) {
+		// 找到最新激活的非签到套餐（用于确定当前属性）
+		// 排除签到类型的订阅，因为它们使用虚拟计划，签到配置为0
+		if sub.SourceType != "daily_checkin" && (latestSubscription == nil || sub.ActivatedAt.After(latestActivationTime)) {
 			latestSubscription = &sub
 			latestActivationTime = sub.ActivatedAt
 		}

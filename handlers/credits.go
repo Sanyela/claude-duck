@@ -100,73 +100,51 @@ func HandleGetCreditBalance(c *gin.Context) {
 		return
 	}
 
-	// 获取用户当前活跃订阅（过滤掉签到和管理员赠送）
-	var activeSubscriptions []models.Subscription
-	err = database.DB.Where("user_id = ? AND status = 'active' AND expires_at > ? AND source_type IN (?)",
-		userID, time.Now(), []string{"activation_code", "payment"}).Find(&activeSubscriptions).Error
+	// 使用新的钱包架构获取积分信息
+	wallet, err := utils.GetOrCreateUserWallet(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get active subscriptions"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取用户钱包失败"})
 		return
 	}
 
-	// 获取签到积分（有效的签到订阅）
-	var checkinSubscriptions []models.Subscription
-	err = database.DB.Where("user_id = ? AND status = 'active' AND expires_at > ? AND source_type = ?",
-		userID, time.Now(), "daily_checkin").Find(&checkinSubscriptions).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get checkin subscriptions"})
-		return
-	}
+	// 更新钱包状态
+	utils.UpdateWalletStatus(userID)
 
-	// 获取管理员赠送积分（有效的管理员赠送订阅）
-	var adminGiftSubscriptions []models.Subscription
-	err = database.DB.Where("user_id = ? AND status = 'active' AND expires_at > ? AND source_type = ?",
-		userID, time.Now(), "admin_gift").Find(&adminGiftSubscriptions).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get admin gift subscriptions"})
-		return
-	}
-
-	var validPoints, totalPoints, usedPoints int64
+	// 获取分类积分信息（从兑换记录中统计）
 	var checkinPoints, adminGiftPoints int64
-	isCurrentSubscription := len(activeSubscriptions) > 0
-
-	if isCurrentSubscription {
-		// 如果有活跃订阅，统计所有活跃订阅的积分
-		for _, sub := range activeSubscriptions {
-			validPoints += sub.AvailablePoints
-			totalPoints += sub.TotalPoints
-			usedPoints += sub.UsedPoints
+	
+	// 统计有效的签到积分
+	var checkinRecords []models.RedemptionRecord
+	err = database.DB.Where("user_id = ? AND source_type = ? AND expires_at > ?", 
+		userID, "daily_checkin", time.Now()).Find(&checkinRecords).Error
+	if err == nil {
+		for _, record := range checkinRecords {
+			checkinPoints += record.PointsAmount
 		}
 	}
 
-	// 统计签到积分
-	for _, sub := range checkinSubscriptions {
-		checkinPoints += sub.AvailablePoints
+	// 统计有效的管理员赠送积分
+	var adminGiftRecords []models.RedemptionRecord
+	err = database.DB.Where("user_id = ? AND source_type = ? AND expires_at > ?", 
+		userID, "admin_gift", time.Now()).Find(&adminGiftRecords).Error
+	if err == nil {
+		for _, record := range adminGiftRecords {
+			adminGiftPoints += record.PointsAmount
+		}
 	}
 
-	// 统计管理员赠送积分
-	for _, sub := range adminGiftSubscriptions {
-		adminGiftPoints += sub.AvailablePoints
-	}
-
-	// 如果没有活跃订阅，所有积分都应该是0
+	// 判断是否有有效的订阅
+	isCurrentSubscription := wallet.Status == "active" && wallet.WalletExpiresAt.After(time.Now())
 
 	// 获取用户免费模型使用次数
-	var freeModelUsageCount int64
-	err = database.DB.Where("id = ?", userID).First(&user).Error
-	if err != nil {
-		freeModelUsageCount = 0 // 如果获取失败，默认为0
-	} else {
-		freeModelUsageCount = user.FreeModelUsageCount
-	}
+	freeModelUsageCount := user.FreeModelUsageCount
 
-	// 转换为响应格式 - 不显示过期积分，只显示活跃订阅的积分
+	// 转换为响应格式 - 使用钱包数据
 	balanceData := CreditBalanceData{
-		Available:             int(validPoints), // 只显示活跃订阅的可用积分
-		Total:                 int(totalPoints), // 只显示活跃订阅的总积分
-		Used:                  int(usedPoints),  // 只显示活跃订阅的已使用积分
-		Expired:               0,                // 不再显示过期积分
+		Available:             int(wallet.AvailablePoints), // 钱包可用积分
+		Total:                 int(wallet.TotalPoints),     // 钱包总积分
+		Used:                  int(wallet.UsedPoints),      // 钱包已使用积分
+		Expired:               0,                           // 不再显示过期积分
 		IsCurrentSubscription: isCurrentSubscription,
 		FreeModelUsageCount:   int(freeModelUsageCount), // 免费模型使用次数
 		CheckinPoints:         int(checkinPoints),       // 签到积分
@@ -384,70 +362,53 @@ func HandleGetDailyUsage(c *gin.Context) {
 		return
 	}
 
-	// 获取用户今日使用情况
-	usages, err := utils.GetUserDailyPointsUsage(userID)
+	// 使用新的钱包架构获取每日使用情况
+	usedToday, dailyLimit, err := utils.GetUserDailyUsage(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取每日使用情况失败"})
 		return
 	}
 
-	// 获取用户的活跃订阅信息
-	var activeSubscriptions []models.Subscription
-	err = database.DB.Preload("Plan").
-		Where("user_id = ? AND status = 'active' AND expires_at > ?", userID, time.Now()).
-		Find(&activeSubscriptions).Error
+	// 获取用户钱包信息
+	wallet, err := utils.GetOrCreateUserWallet(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取订阅信息失败"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "获取用户钱包失败"})
 		return
 	}
 
 	// 构建响应数据
 	type DailyUsageInfo struct {
-		SubscriptionID   uint   `json:"subscription_id"`
-		SubscriptionName string `json:"subscription_name"`
-		PointsUsed       int64  `json:"points_used"`
-		DailyLimit       int64  `json:"daily_limit"`
-		RemainingPoints  int64  `json:"remaining_points"`
-		HasLimit         bool   `json:"has_limit"`
+		WalletID        uint   `json:"wallet_id"`
+		WalletName      string `json:"wallet_name"`
+		PointsUsed      int64  `json:"points_used"`
+		DailyLimit      int64  `json:"daily_limit"`
+		RemainingPoints int64  `json:"remaining_points"`
+		HasLimit        bool   `json:"has_limit"`
 	}
 
 	today := time.Now().Format("2006-01-02")
-	usageMap := make(map[uint]int64)
-	for _, usage := range usages {
-		usageMap[usage.SubscriptionID] = usage.PointsUsed
+	hasLimit := dailyLimit > 0
+	var remainingPoints int64
+
+	if hasLimit {
+		remainingPoints = dailyLimit - usedToday
+		if remainingPoints < 0 {
+			remainingPoints = 0
+		}
 	}
 
-	var dailyUsageList []DailyUsageInfo
-	for _, sub := range activeSubscriptions {
-		dailyLimit := sub.DailyMaxPoints
-		if dailyLimit == 0 {
-			dailyLimit = sub.Plan.DailyMaxPoints
-		}
-
-		pointsUsed := usageMap[sub.ID]
-		hasLimit := dailyLimit > 0
-		var remainingPoints int64
-
-		if hasLimit {
-			remainingPoints = dailyLimit - pointsUsed
-			if remainingPoints < 0 {
-				remainingPoints = 0
-			}
-		}
-
-		dailyUsageList = append(dailyUsageList, DailyUsageInfo{
-			SubscriptionID:   sub.ID,
-			SubscriptionName: sub.Plan.Title,
-			PointsUsed:       pointsUsed,
-			DailyLimit:       dailyLimit,
-			RemainingPoints:  remainingPoints,
-			HasLimit:         hasLimit,
-		})
+	dailyUsageInfo := DailyUsageInfo{
+		WalletID:        wallet.UserID,
+		WalletName:      "用户钱包",
+		PointsUsed:      usedToday,
+		DailyLimit:      dailyLimit,
+		RemainingPoints: remainingPoints,
+		HasLimit:        hasLimit,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"usage_date": today,
-		"usage_list": dailyUsageList,
+		"usage_info": dailyUsageInfo,
 	})
 }
 

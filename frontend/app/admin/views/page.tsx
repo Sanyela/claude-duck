@@ -248,7 +248,7 @@ export default function AdminDashboardPage() {
               <CardDescription>各订阅计划的用户数量分布</CardDescription>
             </CardHeader>
             <CardContent>
-              {dashboardData?.distributions.subscription_plans.length ? (
+              {dashboardData?.distributions.subscription_plans?.length ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={dashboardData.distributions.subscription_plans}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -275,7 +275,7 @@ export default function AdminDashboardPage() {
               <CardDescription>最近7天的用户注册情况</CardDescription>
             </CardHeader>
             <CardContent>
-              {dashboardData?.trends.user_registration.length ? (
+              {dashboardData?.trends.user_registration?.length ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={dashboardData.trends.user_registration}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -311,7 +311,7 @@ export default function AdminDashboardPage() {
               <CardDescription>最近7天的积分消耗情况</CardDescription>
             </CardHeader>
             <CardContent>
-              {dashboardData?.trends.points_usage.length ? (
+              {dashboardData?.trends.points_usage?.length ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={dashboardData.trends.points_usage}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -349,7 +349,7 @@ export default function AdminDashboardPage() {
             <CardDescription>不同来源的积分数量和订阅数分布</CardDescription>
           </CardHeader>
           <CardContent>
-            {dashboardData?.distributions.points_sources.length ? (
+            {dashboardData?.distributions.points_sources?.length ? (
               <div className="grid gap-6 lg:grid-cols-2">
                 <div>
                   <h4 className="text-sm font-medium mb-4">按订阅数量</h4>
@@ -367,7 +367,7 @@ export default function AdminDashboardPage() {
                         fill="#8884d8"
                         dataKey="count"
                       >
-                        {dashboardData.distributions.points_sources.map((entry, index) => (
+                        {dashboardData.distributions.points_sources?.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -391,7 +391,7 @@ export default function AdminDashboardPage() {
                         fill="#8884d8"
                         dataKey="points"
                       >
-                        {dashboardData.distributions.points_sources.map((entry, index) => (
+                        {dashboardData.distributions.points_sources?.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
