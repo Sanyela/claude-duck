@@ -859,12 +859,19 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 	userID := c.Param("id")
 
 	// 获取当前管理员信息
-	adminInterface, exists := c.Get("user")
+	adminIDInterface, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "无法获取管理员信息"})
 		return
 	}
-	admin := adminInterface.(models.User)
+	adminID := adminIDInterface.(uint)
+	
+	// 从数据库获取管理员完整信息
+	var admin models.User
+	if err := database.DB.Where("id = ?", adminID).First(&admin).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取管理员信息失败"})
+		return
+	}
 
 	// 解析请求数据
 	var requestData struct {
