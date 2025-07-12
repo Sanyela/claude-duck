@@ -22,7 +22,7 @@ export function getAnnouncements(language: string = 'zh'): Promise<GetAnnounceme
     url: '/announcements',
     method: 'get',
     params: { language },
-  });
+  }).then(response => response.data);
 }
 
 // 公告接口定义
@@ -41,7 +41,7 @@ export const announcementsAPI = {
   async getActiveAnnouncements(language: string = "zh"): Promise<{ success: boolean; data?: PublicAnnouncement[]; message?: string }> {
     try {
       const response = await request.get(`/api/announcements?language=${language}&active=true`);
-      return { success: true, data: response.data };
+      return { success: true, data: response.data.announcements };
     } catch (error: any) {
       console.error("获取公告失败:", error);
       return { 

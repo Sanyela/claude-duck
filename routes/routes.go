@@ -22,6 +22,8 @@ func SetupRoutes(r *gin.Engine) {
 	{
 		// Bing每日图片API
 		public.GET("/bing", handlers.GetBingDailyImage)
+		// 公告API
+		public.GET("/announcements", handlers.HandleAnnouncements)
 	}
 
 	// 认证相关路由
@@ -29,7 +31,7 @@ func SetupRoutes(r *gin.Engine) {
 	{
 		auth.POST("/register", handlers.HandleRegister)
 		auth.POST("/login", handlers.HandleLogin)
-		auth.POST("/logout", middleware.JWTAuth(), handlers.HandleLogout) // 登出需要token验证
+		auth.POST("/logout", middleware.JWTAuth(), handlers.HandleLogout)   // 登出需要token验证
 		auth.GET("/user", middleware.JWTAuth(), handlers.HandleGetUserInfo) // 需要token验证
 
 		// 邮箱验证码相关路由
@@ -54,8 +56,6 @@ func SetupRoutes(r *gin.Engine) {
 	api := r.Group("/api")
 	api.Use(middleware.JWTAuth()) // 应用JWT认证中间件到整个组
 	{
-		api.GET("/announcements", handlers.HandleAnnouncements)
-
 		// 订阅相关路由
 		api.GET("/subscription/active", handlers.HandleGetActiveSubscription)
 		api.GET("/subscription/history", handlers.HandleGetSubscriptionHistory)
@@ -80,11 +80,11 @@ func SetupRoutes(r *gin.Engine) {
 		// 设备管理路由
 		devices := api.Group("/devices")
 		{
-			devices.GET("", handlers.GetDevices)                  // 获取设备列表
-			devices.DELETE("/:deviceId", handlers.RevokeDevice)   // 下线指定设备
-			devices.DELETE("", handlers.RevokeAllDevices)         // 下线其他设备
+			devices.GET("", handlers.GetDevices)                     // 获取设备列表
+			devices.DELETE("/:deviceId", handlers.RevokeDevice)      // 下线指定设备
+			devices.DELETE("", handlers.RevokeAllDevices)            // 下线其他设备
 			devices.DELETE("/force", handlers.RevokeAllDevicesForce) // 强制下线所有设备
-			devices.GET("/stats", handlers.GetDeviceStats)        // 获取设备统计
+			devices.GET("/stats", handlers.GetDeviceStats)           // 获取设备统计
 		}
 	}
 
@@ -133,14 +133,14 @@ func SetupRoutes(r *gin.Engine) {
 
 	// 静态文件服务 - 提供前端构建的静态资源
 	r.Static("/assets", "./ui/dist/assets")
-	r.Static("/_next", "./ui/dist/_next")         // Next.js 静态文件
+	r.Static("/_next", "./ui/dist/_next") // Next.js 静态文件
 	r.StaticFile("/favicon.ico", "./ui/dist/favicon.ico")
 	r.StaticFile("/icon.png", "./ui/dist/icon.png")
 
 	// SPA fallback - 所有未匹配的路由都返回前端应用
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		
+
 		// 如果请求的是API路径，返回404
 		if len(path) >= 4 && path[:4] == "/api" {
 			c.JSON(404, gin.H{
@@ -148,7 +148,7 @@ func SetupRoutes(r *gin.Engine) {
 			})
 			return
 		}
-		
+
 		// 如果请求的是静态文件路径但文件不存在，返回404
 		if len(path) >= 6 && path[:6] == "/_next" {
 			c.JSON(404, gin.H{

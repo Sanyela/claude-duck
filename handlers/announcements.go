@@ -78,5 +78,7 @@ func HandleAnnouncements(c *gin.Context) {
 	}
 
 	// 返回公告列表
-	c.JSON(http.StatusOK, announcements)
+	c.JSON(http.StatusOK, AnnouncementsResponse{
+		Announcements: announcements,
+	})
 }
