@@ -119,14 +119,18 @@ func HandleGetActiveSubscription(c *gin.Context) {
 	var result []SubscriptionData
 	now := time.Now()
 
+	// 确保新用户也有基本显示
 	if wallet.Status == "active" && wallet.WalletExpiresAt.After(now) {
+		// 获取当前主要套餐名称和特性
+		planName, features := getWalletDisplayPlanName(userID, records)
+
 		// 钱包有效，构建统一的订阅数据
 		walletSubscription := SubscriptionData{
 			ID: fmt.Sprintf("WALLET-%d", userID),
 			Plan: SubscriptionPlanData{
 				ID:       "WALLET-PLAN",
-				Name:     "统一钱包",
-				Features: []string{},
+				Name:     planName,
+				Features: features,
 			},
 			Status:            wallet.Status,
 			CurrentPeriodEnd:  wallet.WalletExpiresAt.Format(time.RFC3339),
@@ -143,11 +147,14 @@ func HandleGetActiveSubscription(c *gin.Context) {
 		// 添加兑换记录作为历史信息
 		for _, record := range records {
 			if record.ExpiresAt.After(now) {
+				// 转换兑换描述为中文
+				planName := formatReasonToChinese(record.Reason)
+
 				recordData := SubscriptionData{
 					ID: fmt.Sprintf("RECORD-%d", record.ID),
 					Plan: SubscriptionPlanData{
 						ID:       fmt.Sprintf("PLAN-%d", record.ID),
-						Name:     record.Reason,
+						Name:     planName,
 						Features: []string{},
 					},
 					Status:            "active",
@@ -157,29 +164,45 @@ func HandleGetActiveSubscription(c *gin.Context) {
 					UsedPoints:        0, // 兑换记录不记录已使用
 					AvailablePoints:   record.PointsAmount,
 					ActivatedAt:       record.ActivatedAt.Format(time.RFC3339),
-					DetailedStatus:    "已合并到钱包",
+					DetailedStatus:    "已整合",
 					IsCurrentUsing:    false,
 				}
 				result = append(result, recordData)
 			}
 		}
 	} else {
-		// 钱包已过期或无效
+		// 钱包已过期或无效，仍然显示最近的套餐名称
+		planName, features := getWalletDisplayPlanName(userID, records)
+		if planName == "基础套餐" {
+			planName = "统一钱包"
+		}
+
+		// 为新用户提供基本显示
+		status := "expired"
+		detailedStatus := "已过期"
+		availablePoints := int64(0)
+
+		// 如果是新用户（没有积分记录），显示为待激活状态
+		if wallet.TotalPoints == 0 && len(records) == 0 {
+			detailedStatus = "待激活"
+			planName = "免费用户"
+		}
+
 		expiredWallet := SubscriptionData{
 			ID: fmt.Sprintf("WALLET-%d", userID),
 			Plan: SubscriptionPlanData{
 				ID:       "WALLET-PLAN",
-				Name:     "统一钱包",
-				Features: []string{},
+				Name:     planName,
+				Features: features,
 			},
-			Status:            "expired",
+			Status:            status,
 			CurrentPeriodEnd:  wallet.WalletExpiresAt.Format(time.RFC3339),
 			CancelAtPeriodEnd: false,
 			TotalPoints:       wallet.TotalPoints,
 			UsedPoints:        wallet.UsedPoints,
-			AvailablePoints:   0, // 过期后可用积分为0
+			AvailablePoints:   availablePoints,
 			ActivatedAt:       wallet.CreatedAt.Format(time.RFC3339),
-			DetailedStatus:    "已过期",
+			DetailedStatus:    detailedStatus,
 			IsCurrentUsing:    false,
 		}
 		result = append(result, expiredWallet)
@@ -234,37 +257,39 @@ func HandleGetSubscriptionHistory(c *gin.Context) {
 	now := time.Now()
 
 	for _, record := range records {
-		// 判断状态：有效、已过期
-		subscriptionStatus := "已过期"
-		if record.ExpiresAt.After(now) {
-			subscriptionStatus = "有效"
-		}
-
-		// 根据来源类型确定支付状态
-		paymentStatus := "paid"
+		// 根据来源类型确定支付状态和中文描述
+		paymentStatusCN := "支付成功"
 		switch record.SourceType {
 		case "activation_code":
-			paymentStatus = "code_redeemed"
+			paymentStatusCN = "激活码兑换"
 		case "admin_gift":
-			paymentStatus = "admin_gifted"
+			paymentStatusCN = "管理员赠送"
 		case "daily_checkin":
-			paymentStatus = "checkin_reward"
+			paymentStatusCN = "签到奖励"
 		case "payment":
-			paymentStatus = "paid"
+			paymentStatusCN = "支付成功"
+		case "auto_refill":
+			paymentStatusCN = "自动补给"
 		}
 
-		// 获取计划名称
-		planName := record.Reason
+		// 获取计划名称并转换为中文
+		planName := formatReasonToChinese(record.Reason)
 		if record.SubscriptionPlan != nil {
 			planName = record.SubscriptionPlan.Title
+		}
+
+		// 订阅状态中文化
+		subscriptionStatusCN := "已过期"
+		if record.ExpiresAt.After(now) {
+			subscriptionStatusCN = "已整合"
 		}
 
 		historyData = append(historyData, PaymentHistoryData{
 			ID:                 fmt.Sprintf("REC-%d", record.ID),
 			PlanName:           planName,
 			Date:               record.ActivatedAt.Format(time.RFC3339),
-			PaymentStatus:      paymentStatus,
-			SubscriptionStatus: subscriptionStatus,
+			PaymentStatus:      paymentStatusCN,      // 使用中文状态
+			SubscriptionStatus: subscriptionStatusCN, // 使用中文状态
 			InvoiceURL:         record.InvoiceURL,
 		})
 	}
@@ -685,4 +710,92 @@ func getWalletCheckinPointsRange(userID uint) CheckinPointsRange {
 		MaxPoints: maxPoints,
 		HasValid:  true,
 	}
+}
+
+// getWalletDisplayPlanName 获取钱包显示的套餐名称和特性
+func getWalletDisplayPlanName(userID uint, records []models.RedemptionRecord) (string, []string) {
+	if len(records) == 0 {
+		return "基础套餐", []string{}
+	}
+
+	// 重新查询记录以确保预加载套餐信息
+	var recordsWithPlan []models.RedemptionRecord
+	database.DB.Preload("SubscriptionPlan").Where("user_id = ? AND expires_at > ?", userID, time.Now()).
+		Order("created_at DESC").Find(&recordsWithPlan)
+
+	// 找到主要套餐（积分最多的套餐）
+	var mainPlan *models.SubscriptionPlan
+	var allFeatures []string
+	planCounts := make(map[string]int)
+
+	for _, record := range recordsWithPlan {
+		if record.SubscriptionPlan != nil {
+			planCounts[record.SubscriptionPlan.Title]++
+
+			// 选择积分最多的套餐作为主要套餐
+			if mainPlan == nil || record.SubscriptionPlan.PointAmount > mainPlan.PointAmount {
+				mainPlan = record.SubscriptionPlan
+			}
+		}
+	}
+
+	// 构建特性列表
+	if mainPlan != nil {
+		allFeatures = []string{
+			"模型智能不降级，保证回答质量",
+			"享受完整Claude 4 Sonnet能力",
+			"优先处理请求，响应更快",
+		}
+
+		// 如果有多个不同套餐，显示为组合套餐
+		if len(planCounts) > 1 {
+			return mainPlan.Title + " (组合套餐)", allFeatures
+		}
+
+		// 单一套餐，添加统一管理标识
+		return mainPlan.Title + " (统一管理)", allFeatures
+	}
+
+	// 没有找到套餐信息
+	return "基础套餐", []string{}
+}
+
+// formatReasonToChinese 将兑换记录的描述转换为中文
+func formatReasonToChinese(reason string) string {
+	// 处理激活码兑换记录
+	if strings.Contains(reason, "upgrade服务") {
+		return "激活码兑换 (套餐升级)"
+	}
+	if strings.Contains(reason, "same_level服务") {
+		return "激活码兑换 (同级套餐)"
+	}
+	if strings.Contains(reason, "downgrade服务") {
+		return "激活码兑换 (套餐降级)"
+	}
+	if strings.Contains(reason, "激活码兑换") && !strings.Contains(reason, "服务") {
+		return "激活码兑换"
+	}
+
+	// 处理自动补给记录
+	if strings.Contains(reason, "自动补给积分") {
+		return "自动补给积分"
+	}
+
+	// 处理签到记录
+	if strings.Contains(reason, "每日签到奖励") {
+		return "每日签到奖励"
+	}
+
+	// 处理管理员赠送
+	if strings.Contains(reason, "管理员赠送") {
+		return "管理员赠送积分"
+	}
+
+	// 处理支付记录
+	if strings.Contains(reason, "支付") {
+		return "在线支付"
+	}
+
+	// 默认返回原文
+	return reason
 }

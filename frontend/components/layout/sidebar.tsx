@@ -125,7 +125,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden md:flex md:flex-col md:w-56 bg-background">
+    <aside className="hidden md:flex md:flex-col md:w-56 bg-background sticky top-0 h-screen">
       <div className="flex h-16 items-center justify-center px-4">
         <Link href="/" className="font-semibold text-lg text-foreground" prefetch={false}>
           Claude Duck
