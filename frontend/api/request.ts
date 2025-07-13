@@ -1,28 +1,7 @@
 import axios from "axios";
 
-// 智能检测API基础URL
+// 使用环境变量配置API基础URL
 const getBaseURL = () => {
-  // 如果有显式设置环境变量，优先使用
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  
-  // 在浏览器环境中
-  if (typeof window !== "undefined") {
-    const { protocol, hostname, port } = window.location;
-    
-    // 分离部署模式：前端在3000端口，后端在9998端口
-    if (port === "3000") {
-      return `${protocol}//${hostname}:9998`;
-    }
-    
-    // 单体部署模式：如果是从9998端口访问，说明是单点应用
-    if (port === "9998" || !port) {
-      return `${protocol}//${hostname}${port ? `:${port}` : ""}`;
-    }
-  }
-  
-  // 服务端渲染时的默认值
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:9998";
 };
 
