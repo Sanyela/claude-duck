@@ -3,11 +3,6 @@
 // Placeholder for server actions related to authentication and OAuth.
 // In a real application, these would interact with your database and auth provider.
 
-interface AuthFormData {
-  email?: string
-  password?: string
-  name?: string
-}
 
 export async function login(formData: FormData) {
   const email = formData.get("email") as string
@@ -25,7 +20,6 @@ export async function login(formData: FormData) {
 export async function signup(formData: FormData) {
   const name = formData.get("name") as string
   const email = formData.get("email") as string
-  const password = formData.get("password") as string
   console.log("Server Action: Signup attempt", { name, email })
   // Simulate API call & user creation
   await new Promise((resolve) => setTimeout(resolve, 1000))

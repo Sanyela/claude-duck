@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,7 +19,7 @@ export default function AdminConfigsPage() {
   const [editingConfig, setEditingConfig] = useState<SystemConfig | null>(null)
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false)
 
-  const loadConfigs = async () => {
+  const loadConfigs = useCallback(async () => {
     setLoading(true)
     const result = await adminAPI.getSystemConfigs()
     if (result.success && result.configs) {
@@ -33,11 +33,11 @@ export default function AdminConfigsPage() {
       })
     }
     setLoading(false)
-  }
+  }, [toast])
 
   useEffect(() => {
     loadConfigs()
-  }, [])
+  }, [loadConfigs])
 
   const handleUpdateConfig = async (config: SystemConfig) => {
     const result = await adminAPI.updateSystemConfig({
