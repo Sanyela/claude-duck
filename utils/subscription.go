@@ -14,9 +14,9 @@ import (
 func DetermineServiceLevel(currentWallet *models.UserWallet, newPlan *models.SubscriptionPlan) string {
 	// 比较关键属性来判断服务等级
 	newScore := calculateServiceScore(newPlan.DailyCheckinPoints, newPlan.DailyCheckinPointsMax, 
-		newPlan.DailyMaxPoints, int64(newPlan.DegradationGuaranteed))
+		newPlan.AutoRefillAmount)
 	currentScore := calculateServiceScore(currentWallet.DailyCheckinPoints, currentWallet.DailyCheckinPointsMax,
-		currentWallet.DailyMaxPoints, int64(currentWallet.DegradationGuaranteed))
+		currentWallet.AutoRefillAmount)
 	
 	if newScore > currentScore {
 		return "upgrade"
@@ -27,9 +27,9 @@ func DetermineServiceLevel(currentWallet *models.UserWallet, newPlan *models.Sub
 }
 
 // calculateServiceScore 计算服务分数
-func calculateServiceScore(checkinMin, checkinMax, dailyMax int64, degradation int64) int64 {
-	// 简单的分数计算：各项属性的加权和
-	score := checkinMin*1 + checkinMax*1 + dailyMax*2 + degradation*3
+func calculateServiceScore(checkinMin, checkinMax, autoRefillAmount int64) int64 {
+	// 按新的规则计算分数：签到奖励最高+最低 * 1 + 积分恢复积分 * 1(如果没有则是0)
+	score := (checkinMin + checkinMax) * 1 + autoRefillAmount * 1
 	return score
 }
 
