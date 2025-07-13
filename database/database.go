@@ -74,6 +74,7 @@ func Migrate() error {
 		&models.UserWallet{},
 		&models.RedemptionRecord{},
 		&models.UserDailyUsage{},
+		&models.ConversationLog{}, // 新增对话日志表
 	)
 
 	if err != nil {
