@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,7 +37,7 @@ export default function SubscriptionPage() {
   const [countdown, setCountdown] = useState(0)
 
   // 加载订阅数据
-  const loadSubscriptionData = async () => {
+  const loadSubscriptionData = useCallback(async () => {
     setLoading(true)
     setError(null)
 
@@ -54,19 +54,19 @@ export default function SubscriptionPage() {
       if (historyResult.success) {
         setPaymentHistory(historyResult.data || [])
       }
-    } catch (err: any) {
+    } catch {
       setError("加载订阅数据失败")
     }
 
     setLoading(false)
-  }
+  }, [])
 
   // 获取支付历史
   const getPaymentHistory = async (): Promise<{ success: boolean; data?: PaymentHistory[]; message?: string }> => {
     try {
       const response = await request.get("/api/subscription/history")
       return { success: true, data: response.data.history || [] }
-    } catch (error: any) {
+    } catch {
       console.error("获取支付历史失败:", error)
       return { 
         success: false, 
@@ -123,7 +123,7 @@ export default function SubscriptionPage() {
           variant: "destructive"
         })
       }
-    } catch (error: any) {
+    } catch {
       toast({
         title: "预检查失败",
         description: error.response?.data?.message || "预检查失败",
@@ -159,7 +159,7 @@ export default function SubscriptionPage() {
           variant: "destructive"
         })
       }
-    } catch (error: any) {
+    } catch {
       toast({
         title: "兑换失败",
         description: error.response?.data?.message || "激活码兑换失败",
@@ -184,9 +184,8 @@ export default function SubscriptionPage() {
 
   useEffect(() => {
     loadSubscriptionData()
-  }, [])
+  }, [loadSubscriptionData])
 
-  const isSubscriptionActive = subscriptions.length > 0 && subscriptions[0].status === "active"
 
   return (
     <DashboardLayout>
@@ -214,7 +213,7 @@ export default function SubscriptionPage() {
                 const validSubscriptions = subscriptions.filter(sub => sub.detailedStatus === "有效");
                 return validSubscriptions.length > 0 ? (
                   <div className="space-y-4">
-                    {validSubscriptions.map((subscription, index) => (
+                    {validSubscriptions.map((subscription) => (
                       <div key={subscription.id} className={`p-4 rounded-lg border ${
                         subscription.isCurrentUsing ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20' : 'border-border bg-card'
                       }`}>

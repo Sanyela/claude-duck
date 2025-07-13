@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Calculator, Info } from "lucide-react"
 import { creditsAPI, type TokenThresholdConfig } from "@/api/credits"
@@ -38,7 +37,7 @@ export function PricingTableModal({ open, onOpenChange, tokenCount }: PricingTab
       } else {
         setError(result.message || "获取计费配置失败")
       }
-    } catch (err: any) {
+    } catch {
       setError("获取计费配置失败")
     }
 

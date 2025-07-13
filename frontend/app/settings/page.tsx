@@ -94,7 +94,7 @@ export default function SettingsPage() {
             <CardDescription>选择您喜欢的外观模式。</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">请使用侧边栏的 "切换主题" 按钮来更改应用的外观模式。</p>
+            <p className="text-sm text-muted-foreground">请使用侧边栏的 &quot;切换主题&quot; 按钮来更改应用的外观模式。</p>
           </CardContent>
         </Card>
       </div>

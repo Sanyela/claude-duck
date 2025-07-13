@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Gift, Calendar, Sparkles } from "lucide-react"
-import { checkinAPI, CheckinStatusResponse, CheckinResponse } from "@/api/checkin"
+import { checkinAPI, CheckinStatusResponse } from "@/api/checkin"
 import { useToast } from "@/components/ui/use-toast"
 import confetti from "canvas-confetti"
 
@@ -27,7 +27,7 @@ export function CheckinButton({ onCheckinSuccess }: CheckinButtonProps) {
     try {
       const status = await checkinAPI.getStatus()
       setCheckinStatus(status)
-    } catch (error: any) {
+    } catch {
       console.error("获取签到状态失败:", error)
       setError(error.message || "获取签到状态失败")
     } finally {
@@ -71,7 +71,7 @@ export function CheckinButton({ onCheckinSuccess }: CheckinButtonProps) {
           variant: "destructive"
         })
       }
-    } catch (error: any) {
+    } catch {
       console.error("签到失败:", error)
       toast({
         title: "签到失败",

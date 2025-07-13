@@ -8,7 +8,7 @@ import { Package, CalendarClock, ArrowRight } from "lucide-react"
 import { getActiveSubscription, type ActiveSubscription } from "@/api/subscription"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { format, formatDistanceToNow } from "date-fns"
+import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 
 export function SubscriptionSummary() {
@@ -43,7 +43,7 @@ export function SubscriptionSummary() {
     try {
       const endDate = new Date(dateStr)
       return formatDistanceToNow(endDate, { locale: zhCN, addSuffix: true })
-    } catch (e) {
+    } catch {
       return "未知"
     }
   }

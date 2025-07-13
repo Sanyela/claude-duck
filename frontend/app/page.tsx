@@ -20,7 +20,15 @@ import { announcementsAPI, type PublicAnnouncement } from "@/api/announcements"
 export default function DashboardPage() {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [creditData, setCreditData] = useState<any>(null); // 积分数据包含自动补给信息
+  const [creditData, setCreditData] = useState<{
+    points: number;
+    usage: number;
+    auto_refill?: {
+      enabled: boolean;
+      threshold: number;
+      amount: number;
+    };
+  } | null>(null);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
