@@ -1,8 +1,7 @@
 import axios from "axios";
 
-// 使用环境变量配置API基础URL
 const getBaseURL = () => {
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:9998";
+  return "/api/proxy";
 };
 
 // 创建axios实例
