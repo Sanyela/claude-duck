@@ -201,9 +201,9 @@ export default function DashboardPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* 积分卡片 */}
           <Card className="shadow-lg bg-card text-card-foreground border-border">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle>当前积分</CardTitle>
+                <CardTitle className="text-lg">积分状态</CardTitle>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="ghost"
@@ -224,57 +224,19 @@ export default function DashboardPage() {
                 </div>
               ) : (dashboardData.pointBalance.total_points || 0) > 0 ? (
                 <>
-                  <div className="flex items-end justify-between">
+                  <div className="flex items-end justify-between mb-2">
                     <div>
-                      <div className="text-3xl font-bold">
+                      <div className="text-2xl font-bold">
                         <AnimatedNumber 
                           value={dashboardData.pointBalance.available_points || 0}
                           duration={800}
-                          className="text-3xl font-bold"
+                          className="text-2xl font-bold"
                           refreshTrigger={refreshTrigger}
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        积分总数: <AnimatedNumber 
-                          value={dashboardData.pointBalance.total_points || 0} 
-                          duration={600} 
-                          className="font-medium"
-                          refreshTrigger={refreshTrigger}
-                        /> | 
-                        已使用: <AnimatedNumber 
-                          value={dashboardData.pointBalance.used_points || 0} 
-                          duration={600} 
-                          className="font-medium"
-                          refreshTrigger={refreshTrigger}
-                        />
-                        {(dashboardData.pointBalance.checkin_points || 0) > 0 && (
-                          <> | <span className="text-purple-600 dark:text-purple-400">签到积分: <AnimatedNumber 
-                            value={dashboardData.pointBalance.checkin_points || 0} 
-                            duration={500} 
-                            className="font-medium"
-                            refreshTrigger={refreshTrigger}
-                          /></span></>
-                        )}
-                        {(dashboardData.pointBalance.admin_gift_points || 0) > 0 && (
-                          <> | <span className="text-amber-600 dark:text-amber-400">管理员赠送: <AnimatedNumber 
-                            value={dashboardData.pointBalance.admin_gift_points || 0} 
-                            duration={500} 
-                            className="font-medium"
-                            refreshTrigger={refreshTrigger}
-                          /></span></>
-                        )}
-                        {(dashboardData.pointBalance.expired_points || 0) > 0 && (
-                          <> | <span className="text-orange-500">已过期: <AnimatedNumber 
-                            value={dashboardData.pointBalance.expired_points || 0} 
-                            duration={500} 
-                            className="font-medium"
-                            refreshTrigger={refreshTrigger}
-                          /></span></>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground opacity-75 mt-1">
-                        * 仅显示当前有效订阅数据
-                      </p>
+                      <div className="text-xs text-muted-foreground">
+                        当前积分
+                      </div>
                     </div>
                     <Link 
                       href="/credits"
@@ -283,75 +245,83 @@ export default function DashboardPage() {
                       详情 <ChevronRight className="h-4 w-4 ml-1" />
                     </Link>
                   </div>
+                  
+                  <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                    <span>积分总数: <span className="font-semibold text-slate-700 dark:text-slate-300">{dashboardData.pointBalance.total_points?.toLocaleString() || '0'}</span></span>
+                    <span className="mx-2">|</span>
+                    <span>已使用: <span className="font-semibold text-slate-700 dark:text-slate-300">{dashboardData.pointBalance.used_points?.toLocaleString() || '0'}</span></span>
+                    {(dashboardData.pointBalance.checkin_points || 0) > 0 && (
+                      <>
+                        <span className="mx-2">|</span>
+                        <span>签到积分: <span className="font-semibold text-purple-600 dark:text-purple-400">{dashboardData.pointBalance.checkin_points?.toLocaleString()}</span></span>
+                      </>
+                    )}
+                    {(dashboardData.pointBalance.admin_gift_points || 0) > 0 && (
+                      <>
+                        <span className="mx-2">|</span>
+                        <span>管理员赠送: <span className="font-semibold text-amber-600 dark:text-amber-400">{dashboardData.pointBalance.admin_gift_points?.toLocaleString()}</span></span>
+                      </>
+                    )}
+                  </div>
+                  
                   {(dashboardData.pointBalance.total_points || 0) > 0 && (
-                    <>
-                      <Progress value={creditUsagePercentage} className="mt-3 h-2 [&>*]:bg-sky-500" />
-                      <p className="text-xs text-muted-foreground mt-1 text-right">
-                        使用率: {creditUsagePercentage.toFixed(1)}%
-                      </p>
-                    </>
+                    <div className="relative mb-2">
+                      <Progress value={creditUsagePercentage} className="h-6 [&>*]:bg-sky-500" />
+                      <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white mix-blend-difference">
+                        {dashboardData.pointBalance.available_points?.toLocaleString() || '0'} / {dashboardData.pointBalance.total_points?.toLocaleString() || '0'}
+                      </div>
+                    </div>
                   )}
+                  
+                  <p className="text-xs text-muted-foreground opacity-75">
+                    * 仅显示当前有效订阅数据，使用率: {creditUsagePercentage.toFixed(1)}%
+                  </p>
                   
                   {/* 自动补给信息 */}
                   {creditData?.auto_refill?.enabled && (
-                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg p-3 border border-emerald-200 dark:border-emerald-800 mt-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Zap className="h-4 w-4 text-emerald-600" />
-                        <span className="text-sm font-medium text-emerald-800 dark:text-emerald-200">自动补给已启用</span>
-                        {creditData.auto_refill.needs_refill ? (
-                          <Badge className="bg-orange-500 text-white text-xs px-2 py-0.5">
-                            需要补给
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg p-2.5 border border-emerald-200 dark:border-emerald-800 mt-2">
+                      {/* 第一行：标题和状态 */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-sm font-medium text-emerald-800 dark:text-emerald-200">自动补给</span>
+                          <Badge className={creditData.auto_refill.needs_refill ? "bg-orange-500 text-white" : "bg-green-500 text-white"}>
+                            {creditData.auto_refill.needs_refill ? "待补给" : "正常"}
                           </Badge>
-                        ) : (
-                          <Badge className="bg-green-500 text-white text-xs px-2 py-0.5">
-                            无需补给
-                          </Badge>
-                        )}
+                        </div>
+                        <span className="text-xs text-emerald-700 dark:text-emerald-300 font-mono bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded">
+                          当前积分 ≤ {creditData.auto_refill.threshold} → 自动补给 +{creditData.auto_refill.amount}
+                        </span>
                       </div>
                       
-                      <div className="space-y-1 text-xs text-emerald-700 dark:text-emerald-300">
-                        <div className="flex justify-between">
-                          <span>补给条件:</span>
-                          <span>积分 ≤ <AnimatedNumber 
-                            value={creditData.auto_refill.threshold} 
-                            duration={400} 
-                            className="font-medium"
-                            refreshTrigger={refreshTrigger}
-                          /></span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>补给数量:</span>
-                          <span>+<AnimatedNumber 
-                            value={creditData.auto_refill.amount} 
-                            duration={400} 
-                            className="font-medium"
-                            refreshTrigger={refreshTrigger}
-                          /> 积分</span>
-                        </div>
-                        
-                        {creditData.auto_refill.needs_refill && creditData.auto_refill.next_refill_time && (
-                          <div className="flex items-center gap-1 mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-700">
-                            <Clock className="h-3 w-3" />
-                            <span className="text-emerald-800 dark:text-emerald-200">
-                              下次补给: {new Date(creditData.auto_refill.next_refill_time).toLocaleString('zh-CN', {
-                                month: 'short',
+                      {/* 第二行：检查时间和触发规则 */}
+                      <div className="flex items-center justify-between mt-1.5 text-xs">
+                        <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                          🕐 检查时间: 0、4、8、12、16、20点
+                        </span>
+                        <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 rounded">
+                          积分不足时自动触发
+                        </span>
+                      </div>
+                      
+                      {/* 第三行：时间信息 */}
+                      <div className="flex items-center justify-between mt-1.5 text-xs">
+                        <div className="flex items-center gap-3">
+                          {creditData.auto_refill.last_refill_time && (
+                            <span className="text-emerald-600 dark:text-emerald-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded">
+                              ✅ 上次补给: {new Date(creditData.auto_refill.last_refill_time).toLocaleString('zh-CN', {
+                                month: 'numeric',
                                 day: 'numeric',
                                 hour: '2-digit',
                                 minute: '2-digit'
                               })}
                             </span>
-                          </div>
-                        )}
-                        
-                        {creditData.auto_refill.last_refill_time && (
-                          <div className="text-emerald-600 dark:text-emerald-400">
-                            上次补给: {new Date(creditData.auto_refill.last_refill_time).toLocaleString('zh-CN', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
+                          )}
+                        </div>
+                        {creditData.auto_refill.needs_refill && (
+                          <span className="text-orange-700 dark:text-orange-300 font-medium bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded">
+                            ⚠️ 积分不足，等待自动补给
+                          </span>
                         )}
                       </div>
                     </div>
