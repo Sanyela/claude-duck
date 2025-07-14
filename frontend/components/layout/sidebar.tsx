@@ -111,12 +111,6 @@ const adminNavItems = [
   },
 ]
 
-const settingsItem = {
-  href: "/settings",
-  label: "设置",
-  icon: SettingsIcon,
-  activeColor: "bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-slate-200",
-}
 
 const inactiveItemClasses = "text-slate-600 hover:bg-slate-500/10 dark:text-slate-400 dark:hover:bg-slate-500/10"
 

@@ -41,13 +41,6 @@ const navItems = [
   },
 ]
 
-// 设置项定义 - 暂时不开放给用户使用
-const settingsItem = {
-  href: "/settings",
-  label: "设置",
-  icon: SettingsIcon,
-  activeColor: "bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-slate-200",
-}
 
 export function MainHeader() {
   const pathname = usePathname()

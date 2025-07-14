@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,7 @@ export default function AdminAnnouncementsPage() {
   const [isAnnouncementDialogOpen, setIsAnnouncementDialogOpen] = useState(false)
   const [isCreateAnnouncementMode, setIsCreateAnnouncementMode] = useState(false)
 
-  const loadAnnouncements = async () => {
+  const loadAnnouncements = useCallback(async () => {
     setLoading(true)
     const result = await adminAPI.getAnnouncements()
     if (result.success && result.announcements) {
@@ -38,11 +38,11 @@ export default function AdminAnnouncementsPage() {
       })
     }
     setLoading(false)
-  }
+  }, [toast])
 
   useEffect(() => {
     loadAnnouncements()
-  }, [])
+  }, [loadAnnouncements])
 
   const handleSaveAnnouncement = async (announcement: Announcement) => {
     const result = isCreateAnnouncementMode

@@ -6,7 +6,7 @@ interface AnimatedNumberProps {
   value: number
   duration?: number
   className?: string
-  refreshTrigger?: any // 用于触发重新动画的任意值
+  refreshTrigger?: number | string // 用于触发重新动画的任意值
 }
 
 export function AnimatedNumber({ value, duration = 600, className = "", refreshTrigger }: AnimatedNumberProps) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,7 @@ export default function AdminPlansPage() {
   const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false)
   const [isCreatePlanMode, setIsCreatePlanMode] = useState(false)
 
-  const loadPlans = async () => {
+  const loadPlans = useCallback(async () => {
     setLoading(true)
     const result = await adminAPI.getSubscriptionPlans()
     if (result.success && result.plans) {
@@ -38,11 +38,11 @@ export default function AdminPlansPage() {
       })
     }
     setLoading(false)
-  }
+  }, [toast])
 
   useEffect(() => {
     loadPlans()
-  }, [])
+  }, [loadPlans])
 
   const handleSavePlan = async (plan: SubscriptionPlan) => {
     const result = isCreatePlanMode

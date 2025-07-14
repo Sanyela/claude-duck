@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { BellRing, AlertTriangle, ArrowRight, CreditCard, DollarSign, BookOpen, Calendar, ChevronRight, Loader2, Zap, Clock, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { Greeting } from "@/components/dashboard/greeting"
 import { CheckinButton } from "@/components/dashboard/CheckinButton"
-import { AnimatedNumber, RollingNumber } from "@/components/ui/animated-number"
+import { AnimatedNumber } from "@/components/ui/animated-number"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
@@ -20,7 +20,15 @@ import { announcementsAPI, type PublicAnnouncement } from "@/api/announcements"
 export default function DashboardPage() {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [creditData, setCreditData] = useState<any>(null); // 积分数据包含自动补给信息
+  const [creditData, setCreditData] = useState<{
+    points: number;
+    usage: number;
+    auto_refill?: {
+      enabled: boolean;
+      threshold: number;
+      amount: number;
+    };
+  } | null>(null);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

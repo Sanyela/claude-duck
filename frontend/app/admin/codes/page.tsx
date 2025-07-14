@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   ColumnDef,
   flexRender,
@@ -53,6 +53,15 @@ type ActivationCodeRow = {
   total_points: number
   used_points: number
   available_points: number
+  // 后端返回的原始数据结构
+  subscription?: {
+    total_points: number
+    used_points: number
+    available_points: number
+  }
+  plan?: {
+    point_amount: number
+  }
 }
 
 export default function AdminCodesPage() {
@@ -141,7 +150,7 @@ export default function AdminCodesPage() {
       header: "状态",
       cell: ({ row }) => {
         const code = row.original
-        let status = code.status
+        const status = code.status
         let displayText = ""
         let variant: "default" | "secondary" | "destructive" | "outline" = "secondary"
 
@@ -323,7 +332,7 @@ export default function AdminCodesPage() {
   })
 
   // 加载数据
-  const loadCodes = async () => {
+  const loadCodes = useCallback(async () => {
     setLoading(true)
     const params = {
       page: pagination.page,
@@ -347,9 +356,9 @@ export default function AdminCodesPage() {
         created_at: code.created_at,
         used_at: code.used_at || null,
         // 积分信息 - 如果后端返回了subscription信息则使用，否则使用默认值
-        total_points: (code as any).subscription?.total_points || code.plan?.point_amount || 0,
-        used_points: (code as any).subscription?.used_points || 0,
-        available_points: (code as any).subscription?.available_points || 0,
+        total_points: code.subscription?.total_points || code.plan?.point_amount || 0,
+        used_points: code.subscription?.used_points || 0,
+        available_points: code.subscription?.available_points || 0,
       }))
       setData(transformedData)
       
@@ -370,7 +379,7 @@ export default function AdminCodesPage() {
       })
     }
     setLoading(false)
-  }
+  }, [pagination.page, pagination.pageSize, searchParams.query, searchParams.type, searchParams.status, toast])
 
   const loadPlans = async () => {
     const result = await adminAPI.getSubscriptionPlans()
@@ -402,7 +411,7 @@ export default function AdminCodesPage() {
 
   useEffect(() => {
     loadCodes()
-  }, [pagination.page, pagination.pageSize])
+  }, [loadCodes, pagination.page, pagination.pageSize])
 
   // 监听搜索参数变化
   useEffect(() => {
@@ -412,14 +421,8 @@ export default function AdminCodesPage() {
     } else {
       setPagination(prev => ({ ...prev, page: 1 }))
     }
-  }, [searchParams.query, searchParams.type, searchParams.status])
+  }, [searchParams.query, searchParams.type, searchParams.status, loadCodes, pagination.page])
 
-  // 监听搜索参数变化，重置到第一页
-  const handleSearchParamsChange = (newParams: Partial<typeof searchParams>) => {
-    setSearchParams(prev => ({ ...prev, ...newParams }))
-    // 重置到第一页
-    setPagination(prev => ({ ...prev, page: 1 }))
-  }
 
   // 搜索处理
   const handleSearch = () => {
@@ -508,7 +511,7 @@ export default function AdminCodesPage() {
       } else {
         setDailyLimitData({ daily_limit: 0 })
       }
-    } catch (error) {
+    } catch {
       setDailyLimitData({ daily_limit: 0 })
     }
     setIsDailyLimitDialogOpen(true)
@@ -619,7 +622,7 @@ export default function AdminCodesPage() {
         variant: "default"
       })
       setIsCopyDialogOpen(false)
-    } catch (error) {
+    } catch {
       toast({
         title: "复制失败",
         description: "请手动选择批次号文本进行复制",
@@ -985,7 +988,7 @@ export default function AdminCodesPage() {
               <DialogHeader>
                 <DialogTitle>编辑每日最大使用量</DialogTitle>
                 <DialogDescription>
-                  为激活码 "{editingCode?.code}" 对应的订阅设置每日最大积分使用量
+                  为激活码 &quot;{editingCode?.code}&quot; 对应的订阅设置每日最大积分使用量
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">

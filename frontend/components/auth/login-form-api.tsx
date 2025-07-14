@@ -24,7 +24,6 @@ export function LoginForm() {
   
   const [isLoading, setIsLoading] = useState(false)
   const [countdown, setCountdown] = useState(0)
-  const [showPasswordLogin, setShowPasswordLogin] = useState(false)
   const [authType, setAuthType] = useState<'email_code' | 'password'>('email_code')
   const [errors, setErrors] = useState<{
     email_auth?: string
@@ -626,7 +625,7 @@ export function LoginForm() {
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    输入邮箱后点击"获取验证码"，系统将自动识别登录或注册
+                    输入邮箱后点击&quot;获取验证码&quot;，系统将自动识别登录或注册
                   </p>
                 </div>
                 
