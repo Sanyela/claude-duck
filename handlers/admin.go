@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -761,7 +760,7 @@ func HandleAdminToggleUserStatus(c *gin.Context) {
 // HandleAdminGetUserSubscriptions 获取用户的订阅列表
 func HandleAdminGetUserSubscriptions(c *gin.Context) {
 	userID := c.Param("id")
-	
+
 	// 转换userID为uint
 	uid, err := strconv.ParseUint(userID, 10, 32)
 	if err != nil {
@@ -785,23 +784,23 @@ func HandleAdminGetUserSubscriptions(c *gin.Context) {
 
 	// 构建响应数据
 	walletInfo := gin.H{
-		"wallet_id":                 wallet.UserID,
-		"status":                    wallet.Status,
-		"total_points":              wallet.TotalPoints,
-		"available_points":          wallet.AvailablePoints,
-		"used_points":               wallet.UsedPoints,
-		"wallet_expires_at":         wallet.WalletExpiresAt,
-		"daily_max_points":          wallet.DailyMaxPoints,
-		"degradation_guaranteed":    wallet.DegradationGuaranteed,
-		"daily_checkin_points":      wallet.DailyCheckinPoints,
-		"daily_checkin_points_max":  wallet.DailyCheckinPointsMax,
-		"last_checkin_date":         wallet.LastCheckinDate,
+		"wallet_id":                wallet.UserID,
+		"status":                   wallet.Status,
+		"total_points":             wallet.TotalPoints,
+		"available_points":         wallet.AvailablePoints,
+		"used_points":              wallet.UsedPoints,
+		"wallet_expires_at":        wallet.WalletExpiresAt,
+		"daily_max_points":         wallet.DailyMaxPoints,
+		"degradation_guaranteed":   wallet.DegradationGuaranteed,
+		"daily_checkin_points":     wallet.DailyCheckinPoints,
+		"daily_checkin_points_max": wallet.DailyCheckinPointsMax,
+		"last_checkin_date":        wallet.LastCheckinDate,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"wallet":           walletInfo,
+		"wallet":             walletInfo,
 		"redemption_records": records,
-		"total_records":    len(records),
+		"total_records":      len(records),
 	})
 }
 
@@ -866,7 +865,7 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 		return
 	}
 	adminID := adminIDInterface.(uint)
-	
+
 	// 从数据库获取管理员完整信息
 	var admin models.User
 	if err := database.DB.Where("id = ?", adminID).First(&admin).Error; err != nil {
