@@ -267,8 +267,6 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 				"api", // 非流式请求
 				c.ClientIP(), startTime, configMap, isFreeModel)
 
-			// 记录完整的对话日志
-			recordConversationLog(userID, username, c.ClientIP(), requestData, &claudeResp, nil, "api", isFreeModel, startTime)
 		}
 	} else {
 		// 记录失败的请求但不扣费
@@ -288,8 +286,6 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 		}
 		database.DB.Create(&apiTransaction)
 
-		// 记录失败的对话日志
-		recordConversationLog(userID, username, c.ClientIP(), requestData, nil, nil, "api", isFreeModel, startTime)
 	}
 }
 
@@ -379,8 +375,6 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 			"stream",   // 流式请求
 			c.ClientIP(), startTime, configMap, isFreeModel)
 
-		// 记录成功的流式对话日志
-		recordConversationLog(userID, username, c.ClientIP(), requestData, finalClaudeResp, nil, "stream", isFreeModel, startTime)
 	} else if messageID != "" {
 		// 失败的流式请求，记录但不扣费
 		apiTransaction := models.APITransaction{
@@ -405,8 +399,6 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 		}
 		database.DB.Create(&apiTransaction)
 
-		// 记录失败的流式对话日志
-		recordConversationLog(userID, username, c.ClientIP(), requestData, finalClaudeResp, nil, "stream", isFreeModel, startTime)
 	}
 }
 
@@ -526,115 +518,3 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	tx.Commit()
 }
 
-// recordConversationLog 记录完整的对话日志
-func recordConversationLog(userID uint, username string, ip string, requestData map[string]interface{}, claudeResp *ClaudeResponse, apiTransactionID *uint, requestType string, isFreeModel bool, startTime time.Time) {
-	// 解析请求数据
-	model, _ := requestData["model"].(string)
-	messages, _ := json.Marshal(requestData["messages"])
-	systemPrompt, _ := requestData["system"].(string)
-	tools, _ := json.Marshal(requestData["tools"])
-	stopSequences, _ := json.Marshal(requestData["stop_sequences"])
-	userInputJSON, _ := json.Marshal(requestData)
-
-	// 解析参数
-	var temperature *float64
-	var maxTokens *int
-	var topP *float64
-	var topK *int
-
-	if temp, ok := requestData["temperature"].(float64); ok {
-		temperature = &temp
-	}
-	if tokens, ok := requestData["max_tokens"].(float64); ok {
-		maxTokensInt := int(tokens)
-		maxTokens = &maxTokensInt
-	}
-	if p, ok := requestData["top_p"].(float64); ok {
-		topP = &p
-	}
-	if k, ok := requestData["top_k"].(float64); ok {
-		topKInt := int(k)
-		topK = &topKInt
-	}
-
-	// 准备响应数据
-	var aiResponseJSON []byte
-	var responseText string
-	var messageID string
-	var stopReason string
-	var stopSequence string
-	var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int
-	var serviceTier string
-
-	if claudeResp != nil {
-		aiResponseJSON, _ = json.Marshal(claudeResp)
-		messageID = claudeResp.ID
-		stopReason = claudeResp.StopReason
-		if claudeResp.StopSequence != nil {
-			stopSequenceBytes, _ := json.Marshal(claudeResp.StopSequence)
-			stopSequence = string(stopSequenceBytes)
-		}
-		inputTokens = claudeResp.Usage.InputTokens
-		outputTokens = claudeResp.Usage.OutputTokens
-		cacheCreationTokens = claudeResp.Usage.CacheCreationInputTokens
-		cacheReadTokens = claudeResp.Usage.CacheReadInputTokens
-		serviceTier = claudeResp.Usage.ServiceTier
-
-		// 提取文本响应
-		for _, content := range claudeResp.Content {
-			if content.Type == "text" {
-				responseText = content.Text
-				break
-			}
-		}
-	}
-
-	// 创建对话日志记录
-	conversationLog := models.ConversationLog{
-		UserID:           userID,
-		APITransactionID: apiTransactionID,
-		MessageID:        messageID,
-		RequestID:        messageID,
-		Model:            model,
-		RequestType:      requestType,
-		IP:               ip,
-		Username:         username,
-		UserInput:        string(userInputJSON),
-		SystemPrompt:     systemPrompt,
-		Messages:         string(messages),
-		Tools:            string(tools),
-		Temperature:      temperature,
-		MaxTokens:        maxTokens,
-		TopP:             topP,
-		TopK:             topK,
-		StopSequences:    string(stopSequences),
-		AIResponse:       string(aiResponseJSON),
-		ResponseText:     responseText,
-		StopReason:       stopReason,
-		StopSequence:     stopSequence,
-		InputTokens:      inputTokens,
-		OutputTokens:     outputTokens,
-		CacheCreationInputTokens: cacheCreationTokens,
-		CacheReadInputTokens:     cacheReadTokens,
-		TotalTokens:              inputTokens + outputTokens,
-		Duration:                 int(time.Since(startTime).Milliseconds()),
-		ServiceTier:              serviceTier,
-		Status:                   "success",
-		IsFreeModel:              isFreeModel,
-		CreatedAt:                time.Now(),
-	}
-
-	// 如果有API事务ID，获取计费信息
-	if apiTransactionID != nil {
-		var apiTx models.APITransaction
-		if err := database.DB.Where("id = ?", *apiTransactionID).First(&apiTx).Error; err == nil {
-			conversationLog.InputMultiplier = apiTx.InputMultiplier
-			conversationLog.OutputMultiplier = apiTx.OutputMultiplier
-			conversationLog.CacheMultiplier = apiTx.CacheMultiplier
-			conversationLog.PointsUsed = apiTx.PointsUsed
-		}
-	}
-
-	// 保存到数据库
-	database.DB.Create(&conversationLog)
-}
