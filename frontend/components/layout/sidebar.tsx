@@ -8,7 +8,6 @@ import {
   CreditCard,
   DollarSign,
   BookOpen,
-  SettingsIcon,
   Sun,
   Moon,
   Shield,
