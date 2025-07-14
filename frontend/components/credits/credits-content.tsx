@@ -413,8 +413,12 @@ export function CreditsContent() {
                                   <div className="flex items-center justify-end">
                                     {Math.abs(item.amount) < 1 ? (
                                       <div className="text-right">
-                                        <div className="font-medium text-orange-600">{Math.round(Math.abs(item.amount) * 100) / 100}</div>
-                                        <div className="text-xs text-muted-foreground">进度积分</div>
+                                        <div className="font-medium text-orange-600">
+                                          {Math.round(Math.abs(item.amount) * 100) / 100}
+                                        </div>
+                                        <div className="text-xs text-orange-500">
+                                          进度积分 (非实际扣费，仅展示此次对话累计Token对应的进度)
+                                        </div>
                                       </div>
                                     ) : (
                                       <div className="text-right">
@@ -436,39 +440,26 @@ export function CreditsContent() {
                                         <div className="font-mono bg-white dark:bg-gray-800 p-3 rounded border">
                                           <div className="text-gray-600 dark:text-gray-300 mb-2">1. 加权Token计算:</div>
                                           <div className="mb-2">
-                                            <span className="underline decoration-green-500 decoration-2">{item.input_tokens.toLocaleString()}(输入) × {item.billing_details.input_multiplier}(输入倍率)</span> + {(item.total_cache_tokens || 0) > 0 && <span><span className="underline decoration-blue-500 decoration-2">{(item.total_cache_tokens || 0).toLocaleString()}(缓存) × {item.billing_details.cache_multiplier}(缓存倍率)</span> + </span>}<span className="underline decoration-red-500 decoration-2">{item.output_tokens.toLocaleString()}(输出) × {item.billing_details.output_multiplier}(输出倍率)</span> = <span className="font-bold text-blue-600">{item.billing_details.total_weighted_tokens.toLocaleString()}(加权Token)</span>
+                                            <span className="underline decoration-green-500 decoration-2">{item.input_tokens.toLocaleString()}(输入) × {item.billing_details.input_multiplier}(输入倍率)</span> + {(item.total_cache_tokens || 0) > 0 && <span><span className="underline decoration-blue-500 decoration-2">{(item.total_cache_tokens || 0).toLocaleString()}(缓存) × {item.billing_details.cache_multiplier}(缓存倍率)</span> + </span>}<span className="underline decoration-red-500 decoration-2">{item.output_tokens.toLocaleString()}(输出) × {item.billing_details.output_multiplier}(输出倍率)</span> = <span className="font-bold text-blue-600">{item.billing_details.total_weighted_tokens.toLocaleString()}(加权Token)</span> → <button
+                                              className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                setSelectedTokenCount(Math.round(item.billing_details?.total_weighted_tokens || 0))
+                                                setPricingTableOpen(true)
+                                              }}
+                                            >
+                                              查计费表
+                                            </button> → 扣费: {Math.abs(item.amount) < 1 ? (
+                                              <span className="font-bold text-orange-600">0 <span className="text-gray-500">({Math.round(Math.abs(item.amount) * 100) / 100}进度积分)</span></span>
+                                            ) : (
+                                              <span className="font-bold text-red-600">{Math.round(Math.abs(item.amount) * 100) / 100}积分</span>
+                                            )}
                                           </div>
-                                        </div>
-                                        
-                                        <div className="font-mono bg-white dark:bg-gray-800 p-3 rounded border">
-                                          <div className="text-gray-600 dark:text-gray-300 mb-2">2. 累计计费机制:</div>
-                                          <div className="space-y-1">
-                                            <div>本次进度积分: <span className="font-bold text-orange-600">{Math.round(Math.abs(item.amount) * 100) / 100}</span></div>
+                                          {Math.abs(item.amount) < 1 && (
                                             <div className="text-xs text-gray-500">
-                                              {Math.abs(item.amount) < 1 ? 
-                                                "此次调用未触发扣费，Token已累计到您的账户" : 
-                                                "此次调用触发了积分扣费"
-                                              }
+                                              此次调用未触发扣费，Token已累计到您的账户
                                             </div>
-                                            <div className="mt-2">
-                                              <button
-                                                className="text-blue-600 hover:text-blue-800 underline cursor-pointer"
-                                                onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  setSelectedTokenCount(Math.round(item.billing_details?.total_weighted_tokens || 0))
-                                                  setPricingTableOpen(true)
-                                                }}
-                                              >
-                                                查看累计计费配置 →
-                                              </button>
-                                            </div>
-                                          </div>
-                                        </div>
-                                        
-                                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
-                                          <div className="text-yellow-800 dark:text-yellow-200 text-xs">
-                                            <strong>💡 累计计费说明:</strong> 系统会累计您的加权Token使用量，只有当累计数量达到设定阈值时才会扣除积分。这样避免了小额Token也扣费的问题，让计费更加合理。
-                                          </div>
+                                          )}
                                         </div>
                                       </div>
                                     </div>

@@ -30,19 +30,26 @@ interface CreditBalanceResponse {
   free_model_usage_count: number;
   checkin_points: number;
   admin_gift_points: number;
-  auto_refill?: AutoRefillInfo;  // 自动补给信息
+  accumulated_tokens: number;          // 累计token数量
+  auto_refill?: AutoRefillInfo;        // 自动补给信息
 }
 
 export function CreditSummary() {
   const [creditData, setCreditData] = useState<CreditBalanceResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tokenThreshold, setTokenThreshold] = useState<number>(5000)
+  const [pointsPerThreshold, setPointsPerThreshold] = useState<number>(1)
   const router = useRouter()
   
   useEffect(() => {
     const fetchCreditBalance = async () => {
       try {
-        const response = await creditsAPI.getBalance()
+        const [response, configResult] = await Promise.all([
+          creditsAPI.getBalance(),
+          creditsAPI.getPricingTable()
+        ])
+        
         if (response.success && response.data) {
           const balanceData = {
             available: response.data.available_points || 0,
@@ -53,12 +60,18 @@ export function CreditSummary() {
             free_model_usage_count: response.data.free_model_usage_count || 0,
             checkin_points: response.data.checkin_points || 0,
             admin_gift_points: response.data.admin_gift_points || 0,
+            accumulated_tokens: response.data.accumulated_tokens || 0,
             auto_refill: response.data.auto_refill || undefined,
           }
           console.log("积分数据:", balanceData) // 添加调试日志
           setCreditData(balanceData)
         } else {
           setError("无法加载积分信息")
+        }
+        
+        if (configResult.success && configResult.data) {
+          setTokenThreshold(configResult.data.token_threshold)
+          setPointsPerThreshold(configResult.data.points_per_threshold)
         }
       } catch (err) {
         console.error("获取积分余额失败:", err)
