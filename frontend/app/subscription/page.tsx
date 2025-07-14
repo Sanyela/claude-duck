@@ -33,7 +33,19 @@ export default function SubscriptionPage() {
   const [redeemingCoupon, setRedeemingCoupon] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showWarning, setShowWarning] = useState(false)
-  const [warningInfo, setWarningInfo] = useState({ serviceLevel: '', warning: '' })
+  const [warningInfo, setWarningInfo] = useState({ 
+    serviceLevel: '', 
+    warning: '', 
+    currentPoints: 0,
+    newPoints: 0,
+    totalPointsAfter: 0,
+    currentCheckinMin: 0,
+    currentCheckinMax: 0,
+    newCheckinMin: 0,
+    newCheckinMax: 0,
+    currentAutoRefill: 0,
+    newAutoRefill: 0
+  })
   const [countdown, setCountdown] = useState(0)
 
   // 加载订阅数据
@@ -94,11 +106,35 @@ export default function SubscriptionPage() {
       })
 
       if (response.data.success) {
-        const { serviceLevel, warning } = response.data
+        const { 
+          serviceLevel, 
+          warning, 
+          currentPoints, 
+          newPoints, 
+          totalPointsAfter,
+          currentCheckinMin,
+          currentCheckinMax,
+          newCheckinMin,
+          newCheckinMax,
+          currentAutoRefill,
+          newAutoRefill
+        } = response.data
         
         if ((serviceLevel === 'same_level' || serviceLevel === 'downgrade') && warning) {
           // 显示警告并开始倒计时
-          setWarningInfo({ serviceLevel, warning })
+          setWarningInfo({ 
+            serviceLevel, 
+            warning, 
+            currentPoints: currentPoints || 0,
+            newPoints: newPoints || 0,
+            totalPointsAfter: totalPointsAfter || 0,
+            currentCheckinMin: currentCheckinMin || 0,
+            currentCheckinMax: currentCheckinMax || 0,
+            newCheckinMin: newCheckinMin || 0,
+            newCheckinMax: newCheckinMax || 0,
+            currentAutoRefill: currentAutoRefill || 0,
+            newAutoRefill: newAutoRefill || 0
+          })
           setShowWarning(true)
           setCountdown(10)
           
@@ -149,7 +185,19 @@ export default function SubscriptionPage() {
         })
         setCouponCode("")
         setShowWarning(false)
-        setWarningInfo({ serviceLevel: '', warning: '' })
+        setWarningInfo({ 
+          serviceLevel: '', 
+          warning: '', 
+          currentPoints: 0,
+          newPoints: 0,
+          totalPointsAfter: 0,
+          currentCheckinMin: 0,
+          currentCheckinMax: 0,
+          newCheckinMin: 0,
+          newCheckinMax: 0,
+          currentAutoRefill: 0,
+          newAutoRefill: 0
+        })
         setCountdown(0)
         loadSubscriptionData()
       } else {
@@ -178,7 +226,19 @@ export default function SubscriptionPage() {
   // 取消兑换
   const handleCancelRedeem = () => {
     setShowWarning(false)
-    setWarningInfo({ serviceLevel: '', warning: '' })
+    setWarningInfo({ 
+      serviceLevel: '', 
+      warning: '', 
+      currentPoints: 0,
+      newPoints: 0,
+      totalPointsAfter: 0,
+      currentCheckinMin: 0,
+      currentCheckinMax: 0,
+      newCheckinMin: 0,
+      newCheckinMax: 0,
+      currentAutoRefill: 0,
+      newAutoRefill: 0
+    })
     setCountdown(0)
   }
 
@@ -398,38 +458,165 @@ export default function SubscriptionPage() {
 
           {/* 警告对话框 */}
           {showWarning && (
-            <Card className="mt-6 border-amber-200 bg-amber-50">
+            <Card className={`mt-6 ${
+              warningInfo.serviceLevel === 'downgrade' 
+                ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20' 
+                : 'border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20'
+            }`}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-amber-800">
+                <CardTitle className={`flex items-center gap-2 ${
+                  warningInfo.serviceLevel === 'downgrade' 
+                    ? 'text-red-800 dark:text-red-400' 
+                    : 'text-amber-800 dark:text-amber-400'
+                }`}>
                   <AlertCircle className="h-5 w-5" />
                   {warningInfo.serviceLevel === 'same_level' ? '同级兑换警告' : '降级兑换警告'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Alert className="border-amber-200 bg-amber-50">
-                  <AlertDescription className="text-amber-800">
+                <Alert className={`${
+                  warningInfo.serviceLevel === 'downgrade'
+                    ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'
+                    : 'border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20'
+                }`}>
+                  <AlertDescription className={`${
+                    warningInfo.serviceLevel === 'downgrade'
+                      ? 'text-red-800 font-medium dark:text-red-400'
+                      : 'text-amber-800 font-medium dark:text-amber-400'
+                  }`}>
                     {warningInfo.warning}
                   </AlertDescription>
                 </Alert>
+                
+                {/* 权益对比表 */}
+                <div className="mt-4 space-y-4">
+                  <div className={`bg-white dark:bg-gray-800 rounded-lg border overflow-hidden ${
+                    warningInfo.serviceLevel === 'downgrade' 
+                      ? 'border-red-200 dark:border-red-700' 
+                      : 'border-amber-200 dark:border-amber-700'
+                  }`}>
+                    <div className={`px-4 py-3 border-b ${
+                      warningInfo.serviceLevel === 'downgrade'
+                        ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'
+                        : 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700'
+                    }`}>
+                      <h4 className={`font-semibold text-sm flex items-center gap-2 ${
+                        warningInfo.serviceLevel === 'downgrade'
+                          ? 'text-red-800 dark:text-red-400'
+                          : 'text-amber-800 dark:text-amber-400'
+                      }`}>
+                        ⚖️ 权益对比分析
+                      </h4>
+                    </div>
+                    <div className="p-4">
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        {/* 表头 */}
+                        <div className="font-medium text-gray-600 dark:text-gray-400">权益项目</div>
+                        <div className="font-medium text-green-600 dark:text-green-400 text-center">您当前享有</div>
+                        <div className="font-medium text-blue-600 dark:text-blue-400 text-center">兑换后状态</div>
+                        
+                        {/* 分隔线 */}
+                        <div className="col-span-3 border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                        
+                        {/* 积分数量 */}
+                        <div className="text-gray-700 dark:text-gray-300">💰 积分数量</div>
+                        <div className="text-center text-green-600 dark:text-green-400 font-medium">
+                          {warningInfo.currentPoints.toLocaleString()}
+                        </div>
+                        <div className="text-center text-blue-600 dark:text-blue-400 font-medium">
+                          {warningInfo.serviceLevel === 'same_level' ? (
+                            <span>{warningInfo.newPoints.toLocaleString()}</span>
+                          ) : (
+                            <span>{warningInfo.currentPoints.toLocaleString()} + {warningInfo.newPoints.toLocaleString()} = {warningInfo.totalPointsAfter.toLocaleString()}</span>
+                          )}
+                        </div>
+                        
+                        {/* 签到奖励 */}
+                        <div className="text-gray-700 dark:text-gray-300">🎁 每日签到</div>
+                        <div className="text-center text-green-600 dark:text-green-400 font-medium">
+                          {warningInfo.currentCheckinMin > 0 ? (
+                            warningInfo.currentCheckinMin === warningInfo.currentCheckinMax ? 
+                              `${warningInfo.currentCheckinMin}积分` : 
+                              `${warningInfo.currentCheckinMin}-${warningInfo.currentCheckinMax}积分`
+                          ) : '未配置'}
+                        </div>
+                        <div className="text-center font-medium">
+                          {warningInfo.serviceLevel === 'downgrade' ? (
+                            <span className="text-green-600 dark:text-green-400">保持当前配置</span>
+                          ) : (
+                            <span className="text-blue-600 dark:text-blue-400">
+                              {warningInfo.newCheckinMin > 0 ? (
+                                warningInfo.newCheckinMin === warningInfo.newCheckinMax ? 
+                                  `${warningInfo.newCheckinMin}积分` : 
+                                  `${warningInfo.newCheckinMin}-${warningInfo.newCheckinMax}积分`
+                              ) : '未配置'}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* 自动补给 */}
+                        <div className="text-gray-700 dark:text-gray-300">🔄 自动补给</div>
+                        <div className="text-center text-green-600 dark:text-green-400 font-medium">
+                          {warningInfo.currentAutoRefill > 0 ? `${warningInfo.currentAutoRefill}积分` : '未配置'}
+                        </div>
+                        <div className="text-center font-medium">
+                          {warningInfo.serviceLevel === 'downgrade' ? (
+                            <span className="text-green-600 dark:text-green-400">保持当前配置</span>
+                          ) : (
+                            <span className="text-blue-600 dark:text-blue-400">
+                              {warningInfo.newAutoRefill > 0 ? `${warningInfo.newAutoRefill}积分` : '未配置'}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* 服务等级 */}
+                        <div className="text-gray-700 dark:text-gray-300">⭐ 服务等级</div>
+                        <div className="text-center text-green-600 dark:text-green-400 font-medium">
+                          当前等级
+                        </div>
+                        <div className="text-center font-medium">
+                          {warningInfo.serviceLevel === 'downgrade' ? (
+                            <span className="text-green-600 dark:text-green-400">保持当前等级</span>
+                          ) : (
+                            <span className="text-blue-600 dark:text-blue-400">同等级</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="mt-4 text-center">
                   <p className="text-sm text-muted-foreground mb-3">
                     请仔细阅读上述警告，确认无误后等待倒计时结束
                   </p>
-                  <div className="text-2xl font-bold text-amber-600 mb-4">
+                  <div className={`text-2xl font-bold mb-4 ${
+                    warningInfo.serviceLevel === 'downgrade'
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                  }`}>
                     {countdown > 0 ? `${countdown}秒` : '现在可以确认兑换'}
                   </div>
                   <div className="flex gap-3 justify-center">
                     <Button 
                       variant="outline"
                       onClick={handleCancelRedeem}
-                      className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                      className={`${
+                        warningInfo.serviceLevel === 'downgrade'
+                          ? 'border-red-300 text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30'
+                          : 'border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/30'
+                      }`}
                     >
                       取消兑换
                     </Button>
                     <Button 
                       onClick={handleConfirmRedeem}
                       disabled={countdown > 0 || redeemingCoupon}
-                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                      className={`${
+                        warningInfo.serviceLevel === 'downgrade'
+                          ? 'bg-red-600 hover:bg-red-700 text-white dark:bg-red-700 dark:hover:bg-red-800'
+                          : 'bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-700 dark:hover:bg-amber-800'
+                      }`}
                     >
                       {redeemingCoupon ? (
                         <>

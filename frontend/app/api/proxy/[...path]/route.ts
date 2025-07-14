@@ -6,35 +6,40 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
-  return proxyRequest(request, params.path, 'GET');
+  const resolvedParams = await params;
+  return proxyRequest(request, resolvedParams.path, 'GET');
 }
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
-  return proxyRequest(request, params.path, 'POST');
+  const resolvedParams = await params;
+  return proxyRequest(request, resolvedParams.path, 'POST');
 }
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
-  return proxyRequest(request, params.path, 'PUT');
+  const resolvedParams = await params;
+  return proxyRequest(request, resolvedParams.path, 'PUT');
 }
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
-  return proxyRequest(request, params.path, 'DELETE');
+  const resolvedParams = await params;
+  return proxyRequest(request, resolvedParams.path, 'DELETE');
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
-  return proxyRequest(request, params.path, 'PATCH');
+  const resolvedParams = await params;
+  return proxyRequest(request, resolvedParams.path, 'PATCH');
 }
 
 async function proxyRequest(

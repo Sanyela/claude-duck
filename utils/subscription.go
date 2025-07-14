@@ -73,30 +73,55 @@ func RedeemActivationCodeToWallet(userID uint, activationCode *models.Activation
 		newExpiresAt = time.Now().Add(newValidityDuration)
 	}
 
-	// 更新钱包积分和自动补给配置
-	updates := map[string]interface{}{
-		"wallet_expires_at":       newExpiresAt,
-		"daily_max_points":        plan.DailyMaxPoints,
-		"degradation_guaranteed":  plan.DegradationGuaranteed,
-		"daily_checkin_points":    plan.DailyCheckinPoints,
-		"daily_checkin_points_max": plan.DailyCheckinPointsMax,
-		"auto_refill_enabled":     plan.AutoRefillEnabled,
-		"auto_refill_threshold":   plan.AutoRefillThreshold,
-		"auto_refill_amount":      plan.AutoRefillAmount,
-		"status":                  "active",
-		"updated_at":              time.Now(),
-	}
-
+	// 根据服务等级决定更新的配置
+	var updates map[string]interface{}
+	
 	switch serviceLevel {
-	case "upgrade", "downgrade":
-		// 升级和降级：积分累加，保留未使用的积分
-		updates["total_points"] = gorm.Expr("total_points + ?", plan.PointAmount)
-		updates["available_points"] = gorm.Expr("available_points + ?", plan.PointAmount)
+	case "upgrade":
+		// 升级：更新所有配置和积分
+		updates = map[string]interface{}{
+			"wallet_expires_at":        newExpiresAt,
+			"daily_max_points":         plan.DailyMaxPoints,
+			"degradation_guaranteed":   plan.DegradationGuaranteed,
+			"daily_checkin_points":     plan.DailyCheckinPoints,
+			"daily_checkin_points_max": plan.DailyCheckinPointsMax,
+			"auto_refill_enabled":      plan.AutoRefillEnabled,
+			"auto_refill_threshold":    plan.AutoRefillThreshold,
+			"auto_refill_amount":       plan.AutoRefillAmount,
+			"status":                   "active",
+			"updated_at":               time.Now(),
+			"total_points":             gorm.Expr("total_points + ?", plan.PointAmount),
+			"available_points":         gorm.Expr("available_points + ?", plan.PointAmount),
+		}
+	case "downgrade":
+		// 降级：只增加积分，不更新其他配置，保留当前权益
+		updates = map[string]interface{}{
+			"status":                   "active",
+			"updated_at":               time.Now(),
+			"total_points":             gorm.Expr("total_points + ?", plan.PointAmount),
+			"available_points":         gorm.Expr("available_points + ?", plan.PointAmount),
+		}
+		// 如果当前钱包已过期，需要激活并延长过期时间
+		if wallet.WalletExpiresAt.Before(time.Now()) {
+			updates["wallet_expires_at"] = newExpiresAt
+		}
 	case "same_level":
-		// 同级：重置所有积分，包括未使用的积分
-		updates["total_points"] = plan.PointAmount
-		updates["available_points"] = plan.PointAmount
-		updates["used_points"] = 0
+		// 同级：重置所有积分和配置
+		updates = map[string]interface{}{
+			"wallet_expires_at":        newExpiresAt,
+			"daily_max_points":         plan.DailyMaxPoints,
+			"degradation_guaranteed":   plan.DegradationGuaranteed,
+			"daily_checkin_points":     plan.DailyCheckinPoints,
+			"daily_checkin_points_max": plan.DailyCheckinPointsMax,
+			"auto_refill_enabled":      plan.AutoRefillEnabled,
+			"auto_refill_threshold":    plan.AutoRefillThreshold,
+			"auto_refill_amount":       plan.AutoRefillAmount,
+			"status":                   "active",
+			"updated_at":               time.Now(),
+			"total_points":             plan.PointAmount,
+			"available_points":         plan.PointAmount,
+			"used_points":              0,
+		}
 	}
 
 	// 更新钱包
