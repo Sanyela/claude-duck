@@ -14,21 +14,13 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
 import { dashboardAPI, type DashboardData } from "@/api/dashboard"
-import { creditsAPI } from "@/api/credits"
+import { creditsAPI, type CreditBalance } from "@/api/credits"
 import { announcementsAPI, type PublicAnnouncement } from "@/api/announcements"
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [creditData, setCreditData] = useState<{
-    points: number;
-    usage: number;
-    auto_refill?: {
-      enabled: boolean;
-      threshold: number;
-      amount: number;
-    };
-  } | null>(null);
+  const [creditData, setCreditData] = useState<CreditBalance | null>(null);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

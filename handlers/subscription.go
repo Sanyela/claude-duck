@@ -63,21 +63,21 @@ type RedeemCouponResponse struct {
 	NewSubscription *SubscriptionData `json:"newSubscription,omitempty"`
 	ServiceLevel    string            `json:"serviceLevel,omitempty"` // upgrade, downgrade, same_level
 	Warning         string            `json:"warning,omitempty"`      // 警告信息
-	
+
 	// 权益对比数据
-	CurrentPoints     int64 `json:"currentPoints,omitempty"`     // 当前可用积分
-	NewPoints         int64 `json:"newPoints,omitempty"`         // 新增积分
-	TotalPointsAfter  int64 `json:"totalPointsAfter,omitempty"`  // 兑换后总积分
-	
+	CurrentPoints    int64 `json:"currentPoints,omitempty"`    // 当前可用积分
+	NewPoints        int64 `json:"newPoints,omitempty"`        // 新增积分
+	TotalPointsAfter int64 `json:"totalPointsAfter,omitempty"` // 兑换后总积分
+
 	// 签到奖励对比
-	CurrentCheckinMin  int64 `json:"currentCheckinMin,omitempty"`  // 当前签到最低积分
-	CurrentCheckinMax  int64 `json:"currentCheckinMax,omitempty"`  // 当前签到最高积分  
-	NewCheckinMin      int64 `json:"newCheckinMin,omitempty"`      // 新套餐签到最低积分
-	NewCheckinMax      int64 `json:"newCheckinMax,omitempty"`      // 新套餐签到最高积分
-	
+	CurrentCheckinMin int64 `json:"currentCheckinMin,omitempty"` // 当前签到最低积分
+	CurrentCheckinMax int64 `json:"currentCheckinMax,omitempty"` // 当前签到最高积分
+	NewCheckinMin     int64 `json:"newCheckinMin,omitempty"`     // 新套餐签到最低积分
+	NewCheckinMax     int64 `json:"newCheckinMax,omitempty"`     // 新套餐签到最高积分
+
 	// 自动补给对比
-	CurrentAutoRefill  int64 `json:"currentAutoRefill,omitempty"`  // 当前自动补给积分
-	NewAutoRefill      int64 `json:"newAutoRefill,omitempty"`      // 新套餐自动补给积分
+	CurrentAutoRefill int64 `json:"currentAutoRefill,omitempty"` // 当前自动补给积分
+	NewAutoRefill     int64 `json:"newAutoRefill,omitempty"`     // 新套餐自动补给积分
 }
 
 // 签到相关响应结构
@@ -387,19 +387,19 @@ func HandleRedeemCouponPreview(c *gin.Context) {
 
 	if err == nil && wallet.Status == "active" {
 		serviceLevel = utils.DetermineServiceLevel(wallet, &activationCode.Plan)
-		
+
 		// 当前用户权益数据
 		currentPoints = wallet.AvailablePoints
 		currentCheckinMin = wallet.DailyCheckinPoints
 		currentCheckinMax = wallet.DailyCheckinPointsMax
 		currentAutoRefill = wallet.AutoRefillAmount
-		
+
 		// 新套餐权益数据
 		newPoints = activationCode.Plan.PointAmount
 		newCheckinMin = activationCode.Plan.DailyCheckinPoints
 		newCheckinMax = activationCode.Plan.DailyCheckinPointsMax
 		newAutoRefill = activationCode.Plan.AutoRefillAmount
-		
+
 		// 计算兑换后积分
 		switch serviceLevel {
 		case "upgrade", "downgrade":
@@ -407,7 +407,7 @@ func HandleRedeemCouponPreview(c *gin.Context) {
 		case "same_level":
 			totalPointsAfter = newPoints
 		}
-		
+
 		switch serviceLevel {
 		case "same_level":
 			warning = "同等级兑换将重置您的积分余额，之前未使用的积分将被清空。"
@@ -806,8 +806,7 @@ func getWalletDisplayPlanName(userID uint, records []models.RedemptionRecord) (s
 			return mainPlan.Title + " (组合套餐)", allFeatures
 		}
 
-		// 单一套餐，添加统一管理标识
-		return mainPlan.Title + " (统一管理)", allFeatures
+		return mainPlan.Title, allFeatures
 	}
 
 	// 没有找到套餐信息
