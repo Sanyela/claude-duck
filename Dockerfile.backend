@@ -35,7 +35,7 @@ RUN apk --no-cache add ca-certificates tzdata && \
 COPY --from=builder /app/main .
 
 # 复制其他必要文件
-COPY scripts/ ./scripts/
+RUN mkdir -p scripts
 
 # 创建非 root 用户（处理已存在的组ID）
 RUN addgroup -g 1001 appgroup || addgroup appgroup && \

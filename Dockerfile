@@ -61,7 +61,7 @@ COPY --from=frontend-builder /app/frontend/out/ ui/dist/
 # COPY .env* ./
 
 # 复制其他必要文件
-COPY scripts/ ./scripts/
+RUN mkdir -p scripts
 
 # 创建非 root 用户
 RUN addgroup -g 1000 appgroup && \

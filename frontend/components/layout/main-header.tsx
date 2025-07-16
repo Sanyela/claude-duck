@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePathname } from "next/navigation"
+import { getAppName } from "@/lib/env"
 
 const navItems = [
   {
@@ -63,7 +64,7 @@ export function MainHeader() {
               className="font-semibold text-lg text-card-foreground"
               prefetch={false}
             >
-              Claude Duck
+              {getAppName()}
             </Link>
           </div>
           <nav className="grid gap-2 text-lg font-medium p-4">

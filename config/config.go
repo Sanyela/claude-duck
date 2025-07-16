@@ -10,6 +10,9 @@ import (
 )
 
 type Config struct {
+	// 应用配置
+	AppName string
+
 	// 数据库配置
 	DBHost     string
 	DBPort     string
@@ -69,6 +72,9 @@ func LoadConfig() {
 	}
 
 	AppConfig = &Config{
+		// 应用配置
+		AppName: getEnv("APP_NAME", "Claude Duck"),
+
 		// 数据库配置
 		DBHost:     getEnv("DB_HOST", ""),
 		DBPort:     getEnv("DB_PORT", ""),

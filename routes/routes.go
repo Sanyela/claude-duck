@@ -129,11 +129,6 @@ func SetupRoutes(r *gin.Engine) {
 		admin.POST("/announcements", handlers.HandleAdminCreateAnnouncement)
 		admin.PUT("/announcements/:id", handlers.HandleAdminUpdateAnnouncement)
 		admin.DELETE("/announcements/:id", handlers.HandleAdminDeleteAnnouncement)
-
-		// 对话日志管理
-		admin.GET("/conversation-logs", handlers.GetConversationLogs)           // 获取对话日志列表
-		admin.GET("/conversation-logs/stats", handlers.GetConversationLogStats) // 获取对话日志统计
-		admin.GET("/conversation-logs/:id", handlers.GetConversationLogDetail)  // 获取对话日志详情
 	}
 
 	// 静态文件服务 - 提供前端构建的静态资源

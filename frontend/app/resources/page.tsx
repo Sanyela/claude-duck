@@ -2,17 +2,23 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Download } from "lucide-react"
 import Link from "next/link"
+import { getAppName } from "@/lib/env"
 
-const resources = [
-  { 
-    title: "安装 Claude Duck 🦆", 
-    description: "安装Claude浏览器插件，获得更便捷的AI助手体验。", 
-    icon: Download, 
-    href: "https://swjqc4r0111.feishu.cn/docx/CJT6dbdUBofDlrxfwpNcp1klnCg"
-  }
-]
+const getResources = () => {
+  const appName = getAppName()
+  return [
+    { 
+      title: `安装 ${appName} 🦆`, 
+      description: "安装Claude浏览器插件，获得更便捷的AI助手体验。", 
+      icon: Download, 
+      href: "https://swjqc4r0111.feishu.cn/docx/CJT6dbdUBofDlrxfwpNcp1klnCg"
+    }
+  ]
+}
 
 export default function ResourcesPage() {
+  const resources = getResources()
+  
   return (
     <DashboardLayout>
       <div className="space-y-6">

@@ -6,6 +6,8 @@ import { TypingEffect } from "./TypingEffect"
 export function Greeting({ userName }: { userName: string }) {
   const [greeting, setGreeting] = useState("")
   const [displayText, setDisplayText] = useState("")
+  const [hitokoto, setHitokoto] = useState("")
+  const [showSource, setShowSource] = useState(false)
 
   useEffect(() => {
     const getCurrentGreeting = () => {

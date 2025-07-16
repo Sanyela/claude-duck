@@ -332,15 +332,19 @@ export default function AdminCodesPage() {
   })
 
   // 加载数据
-  const loadCodes = useCallback(async () => {
+  const loadCodes = useCallback(async (page?: number, pageSize?: number, search?: typeof searchParams) => {
     setLoading(true)
+    const currentPage = page ?? pagination.page
+    const currentPageSize = pageSize ?? pagination.pageSize
+    const currentSearch = search ?? searchParams
+    
     const params = {
-      page: pagination.page,
-      page_size: pagination.pageSize,
-      ...(searchParams.query && { 
-        [searchParams.type]: searchParams.query 
+      page: currentPage,
+      page_size: currentPageSize,
+      ...(currentSearch.query && { 
+        [currentSearch.type]: currentSearch.query 
       }),
-      ...(searchParams.status !== "all" && { status: searchParams.status }),
+      ...(currentSearch.status !== "all" && { status: currentSearch.status }),
     }
     
     const result = await adminAPI.getActivationCodes(params)
@@ -367,8 +371,8 @@ export default function AdminCodesPage() {
         ...prev,
         total: result.total || 0,
         totalPages: result.total_pages || 0,
-        page: result.page || 1,
-        pageSize: result.page_size || prev.pageSize
+        page: result.page || currentPage,
+        pageSize: result.page_size || currentPageSize
       }))
     } else {
       setData([])
@@ -379,7 +383,7 @@ export default function AdminCodesPage() {
       })
     }
     setLoading(false)
-  }, [pagination.page, pagination.pageSize, searchParams.query, searchParams.type, searchParams.status, toast])
+  }, [toast])
 
   const loadPlans = async () => {
     const result = await adminAPI.getSubscriptionPlans()
@@ -410,24 +414,24 @@ export default function AdminCodesPage() {
   }, [])
 
   useEffect(() => {
-    loadCodes()
-  }, [loadCodes, pagination.page, pagination.pageSize])
+    loadCodes(pagination.page, pagination.pageSize)
+  }, [pagination.page, pagination.pageSize, loadCodes])
 
   // 监听搜索参数变化
   useEffect(() => {
     // 重置到第一页并重新搜索
     if (pagination.page === 1) {
-      loadCodes()
+      loadCodes(1, pagination.pageSize, searchParams)
     } else {
       setPagination(prev => ({ ...prev, page: 1 }))
     }
-  }, [searchParams.query, searchParams.type, searchParams.status, loadCodes, pagination.page])
+  }, [searchParams.query, searchParams.type, searchParams.status, loadCodes, pagination.pageSize])
 
 
   // 搜索处理
   const handleSearch = () => {
     setPagination(prev => ({ ...prev, page: 1 }))
-    loadCodes()
+    loadCodes(1, pagination.pageSize, searchParams)
   }
 
   // 重置搜索
@@ -473,7 +477,7 @@ export default function AdminCodesPage() {
         count: 1,
         batch_number: ""
       })
-      loadCodes()
+      loadCodes(pagination.page, pagination.pageSize, searchParams)
     } else {
       toast({
         title: "创建失败",
@@ -490,7 +494,7 @@ export default function AdminCodesPage() {
     const result = await adminAPI.deleteActivationCode(codeId)
     if (result.success) {
       toast({ title: "删除成功", variant: "default" })
-      loadCodes()
+      loadCodes(pagination.page, pagination.pageSize, searchParams)
     } else {
       toast({
         title: "删除失败",
@@ -529,7 +533,7 @@ export default function AdminCodesPage() {
         variant: "default" 
       })
       setIsDailyLimitDialogOpen(false)
-      loadCodes()
+      loadCodes(pagination.page, pagination.pageSize, searchParams)
     } else {
       toast({
         title: "更新失败",

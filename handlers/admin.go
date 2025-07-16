@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -761,7 +760,7 @@ func HandleAdminToggleUserStatus(c *gin.Context) {
 // HandleAdminGetUserSubscriptions 获取用户的订阅列表
 func HandleAdminGetUserSubscriptions(c *gin.Context) {
 	userID := c.Param("id")
-	
+
 	// 转换userID为uint
 	uid, err := strconv.ParseUint(userID, 10, 32)
 	if err != nil {
@@ -785,23 +784,23 @@ func HandleAdminGetUserSubscriptions(c *gin.Context) {
 
 	// 构建响应数据
 	walletInfo := gin.H{
-		"wallet_id":                 wallet.UserID,
-		"status":                    wallet.Status,
-		"total_points":              wallet.TotalPoints,
-		"available_points":          wallet.AvailablePoints,
-		"used_points":               wallet.UsedPoints,
-		"wallet_expires_at":         wallet.WalletExpiresAt,
-		"daily_max_points":          wallet.DailyMaxPoints,
-		"degradation_guaranteed":    wallet.DegradationGuaranteed,
-		"daily_checkin_points":      wallet.DailyCheckinPoints,
-		"daily_checkin_points_max":  wallet.DailyCheckinPointsMax,
-		"last_checkin_date":         wallet.LastCheckinDate,
+		"wallet_id":                wallet.UserID,
+		"status":                   wallet.Status,
+		"total_points":             wallet.TotalPoints,
+		"available_points":         wallet.AvailablePoints,
+		"used_points":              wallet.UsedPoints,
+		"wallet_expires_at":        wallet.WalletExpiresAt,
+		"daily_max_points":         wallet.DailyMaxPoints,
+		"degradation_guaranteed":   wallet.DegradationGuaranteed,
+		"daily_checkin_points":     wallet.DailyCheckinPoints,
+		"daily_checkin_points_max": wallet.DailyCheckinPointsMax,
+		"last_checkin_date":        wallet.LastCheckinDate,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"wallet":           walletInfo,
+		"wallet":             walletInfo,
 		"redemption_records": records,
-		"total_records":    len(records),
+		"total_records":      len(records),
 	})
 }
 
@@ -866,7 +865,7 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 		return
 	}
 	adminID := adminIDInterface.(uint)
-	
+
 	// 从数据库获取管理员完整信息
 	var admin models.User
 	if err := database.DB.Where("id = ?", adminID).First(&admin).Error; err != nil {
@@ -1163,324 +1162,4 @@ func HandleAdminDashboard(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dashboardData)
-}
-
-// GetConversationLogs 获取对话日志列表
-func GetConversationLogs(c *gin.Context) {
-	// 获取分页参数
-	pagination := getPagination(c)
-	offset := (pagination.Page - 1) * pagination.PageSize
-
-	// 获取查询参数
-	userID := c.Query("user_id")
-	model := c.Query("model")
-	status := c.Query("status")
-	requestType := c.Query("request_type")
-	dateFrom := c.Query("date_from")
-	dateTo := c.Query("date_to")
-	keyword := c.Query("keyword") // 用于搜索响应内容
-
-	// 构建查询
-	query := database.DB.Model(&models.ConversationLog{}).Preload("User")
-
-	// 应用过滤条件
-	if userID != "" {
-		query = query.Where("user_id = ?", userID)
-	}
-	if model != "" {
-		query = query.Where("model = ?", model)
-	}
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-	if requestType != "" {
-		query = query.Where("request_type = ?", requestType)
-	}
-	if dateFrom != "" {
-		query = query.Where("created_at >= ?", dateFrom)
-	}
-	if dateTo != "" {
-		query = query.Where("created_at <= ?", dateTo)
-	}
-	if keyword != "" {
-		query = query.Where("response_text LIKE ? OR user_input LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
-	}
-
-	// 获取总数
-	var total int64
-	query.Count(&total)
-
-	// 获取数据
-	var logs []models.ConversationLog
-	result := query.Order("created_at DESC").
-		Offset(offset).
-		Limit(pagination.PageSize).
-		Find(&logs)
-
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询对话日志失败"})
-		return
-	}
-
-	// 构建响应数据，隐藏敏感信息
-	type ConversationLogResponse struct {
-		ID           uint      `json:"id"`
-		UserID       uint      `json:"user_id"`
-		Username     string    `json:"username"`
-		MessageID    string    `json:"message_id"`
-		Model        string    `json:"model"`
-		RequestType  string    `json:"request_type"`
-		InputTokens  int       `json:"input_tokens"`
-		OutputTokens int       `json:"output_tokens"`
-		TotalTokens  int       `json:"total_tokens"`
-		PointsUsed   int64     `json:"points_used"`
-		Duration     int       `json:"duration"`
-		Status       string    `json:"status"`
-		IsFreeModel  bool      `json:"is_free_model"`
-		CreatedAt    time.Time `json:"created_at"`
-		Preview      string    `json:"preview"` // 响应预览（前100字符）
-	}
-
-	var responseData []ConversationLogResponse
-	for _, log := range logs {
-		preview := log.ResponseText
-		if len(preview) > 100 {
-			preview = preview[:100] + "..."
-		}
-
-		responseData = append(responseData, ConversationLogResponse{
-			ID:           log.ID,
-			UserID:       log.UserID,
-			Username:     log.Username,
-			MessageID:    log.MessageID,
-			Model:        log.Model,
-			RequestType:  log.RequestType,
-			InputTokens:  log.InputTokens,
-			OutputTokens: log.OutputTokens,
-			TotalTokens:  log.TotalTokens,
-			PointsUsed:   log.PointsUsed,
-			Duration:     log.Duration,
-			Status:       log.Status,
-			IsFreeModel:  log.IsFreeModel,
-			CreatedAt:    log.CreatedAt,
-			Preview:      preview,
-		})
-	}
-
-	// 计算总页数
-	totalPages := int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize))
-
-	// 返回分页响应
-	c.JSON(http.StatusOK, PaginatedResponse{
-		Data:       responseData,
-		Total:      total,
-		Page:       pagination.Page,
-		PageSize:   pagination.PageSize,
-		TotalPages: totalPages,
-	})
-}
-
-// GetConversationLogDetail 获取对话日志详情
-func GetConversationLogDetail(c *gin.Context) {
-	// 获取日志ID
-	logID := c.Param("id")
-	if logID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少日志ID"})
-		return
-	}
-
-	// 查询日志详情
-	var log models.ConversationLog
-	result := database.DB.Preload("User").Where("id = ?", logID).First(&log)
-	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "对话日志不存在"})
-		return
-	}
-
-	// 解析JSON字段
-	var userInput map[string]interface{}
-	var aiResponse map[string]interface{}
-	var messages []interface{}
-	var tools []interface{}
-
-	if log.UserInput != "" {
-		json.Unmarshal([]byte(log.UserInput), &userInput)
-	}
-	if log.AIResponse != "" {
-		json.Unmarshal([]byte(log.AIResponse), &aiResponse)
-	}
-	if log.Messages != "" {
-		json.Unmarshal([]byte(log.Messages), &messages)
-	}
-	if log.Tools != "" {
-		json.Unmarshal([]byte(log.Tools), &tools)
-	}
-
-	// 构建详情响应
-	detailResponse := gin.H{
-		"id":           log.ID,
-		"user_id":      log.UserID,
-		"username":     log.Username,
-		"message_id":   log.MessageID,
-		"request_id":   log.RequestID,
-		"model":        log.Model,
-		"request_type": log.RequestType,
-		"ip":           log.IP,
-		"user_input":   userInput,
-		"system_prompt": log.SystemPrompt,
-		"messages":     messages,
-		"tools":        tools,
-		"temperature":  log.Temperature,
-		"max_tokens":   log.MaxTokens,
-		"top_p":        log.TopP,
-		"top_k":        log.TopK,
-		"ai_response":  aiResponse,
-		"response_text": log.ResponseText,
-		"stop_reason":  log.StopReason,
-		"stop_sequence": log.StopSequence,
-		"tokens": gin.H{
-			"input_tokens":                log.InputTokens,
-			"output_tokens":               log.OutputTokens,
-			"cache_creation_input_tokens": log.CacheCreationInputTokens,
-			"cache_read_input_tokens":     log.CacheReadInputTokens,
-			"total_tokens":                log.TotalTokens,
-		},
-		"billing": gin.H{
-			"input_multiplier":  log.InputMultiplier,
-			"output_multiplier": log.OutputMultiplier,
-			"cache_multiplier":  log.CacheMultiplier,
-			"points_used":       log.PointsUsed,
-		},
-		"performance": gin.H{
-			"duration":     log.Duration,
-			"service_tier": log.ServiceTier,
-		},
-		"status":       log.Status,
-		"error":        log.Error,
-		"is_free_model": log.IsFreeModel,
-		"created_at":   log.CreatedAt,
-		"updated_at":   log.UpdatedAt,
-	}
-
-	c.JSON(http.StatusOK, detailResponse)
-}
-
-// GetConversationLogStats 获取对话日志统计数据
-func GetConversationLogStats(c *gin.Context) {
-	// 获取时间范围参数
-	dateFrom := c.DefaultQuery("date_from", time.Now().AddDate(0, 0, -7).Format("2006-01-02"))
-	dateTo := c.DefaultQuery("date_to", time.Now().Format("2006-01-02"))
-
-	// 基础统计
-	type BasicStats struct {
-		TotalConversations int64 `json:"total_conversations"`
-		TotalUsers         int64 `json:"total_users"`
-		TotalTokens        int64 `json:"total_tokens"`
-		TotalPoints        int64 `json:"total_points"`
-		SuccessRate        float64 `json:"success_rate"`
-		AvgDuration        float64 `json:"avg_duration"`
-	}
-
-	var basicStats BasicStats
-
-	// 总对话数
-	database.DB.Model(&models.ConversationLog{}).
-		Where("created_at >= ? AND created_at <= ?", dateFrom, dateTo+" 23:59:59").
-		Count(&basicStats.TotalConversations)
-
-	// 活跃用户数
-	database.DB.Model(&models.ConversationLog{}).
-		Where("created_at >= ? AND created_at <= ?", dateFrom, dateTo+" 23:59:59").
-		Distinct("user_id").
-		Count(&basicStats.TotalUsers)
-
-	// 总token数和积分
-	database.DB.Model(&models.ConversationLog{}).
-		Where("created_at >= ? AND created_at <= ?", dateFrom, dateTo+" 23:59:59").
-		Select("SUM(total_tokens) as total_tokens, SUM(points_used) as total_points").
-		Scan(&basicStats)
-
-	// 成功率
-	var successCount int64
-	database.DB.Model(&models.ConversationLog{}).
-		Where("created_at >= ? AND created_at <= ? AND status = ?", dateFrom, dateTo+" 23:59:59", "success").
-		Count(&successCount)
-
-	if basicStats.TotalConversations > 0 {
-		basicStats.SuccessRate = float64(successCount) / float64(basicStats.TotalConversations) * 100
-	}
-
-	// 平均响应时间
-	database.DB.Model(&models.ConversationLog{}).
-		Where("created_at >= ? AND created_at <= ? AND status = ?", dateFrom, dateTo+" 23:59:59", "success").
-		Select("AVG(duration) as avg_duration").
-		Scan(&basicStats)
-
-	// 模型使用统计
-	type ModelStats struct {
-		Model string `json:"model"`
-		Count int64  `json:"count"`
-		Tokens int64 `json:"tokens"`
-	}
-
-	var modelStats []ModelStats
-	database.DB.Model(&models.ConversationLog{}).
-		Where("created_at >= ? AND created_at <= ?", dateFrom, dateTo+" 23:59:59").
-		Group("model").
-		Select("model, COUNT(*) as count, SUM(total_tokens) as tokens").
-		Order("count DESC").
-		Scan(&modelStats)
-
-	// 每日趋势
-	type DailyTrend struct {
-		Date          string `json:"date"`
-		Conversations int64  `json:"conversations"`
-		Users         int64  `json:"users"`
-		Tokens        int64  `json:"tokens"`
-	}
-
-	var dailyTrend []DailyTrend
-	database.DB.Raw(`
-		SELECT 
-			DATE(created_at) as date,
-			COUNT(*) as conversations,
-			COUNT(DISTINCT user_id) as users,
-			SUM(total_tokens) as tokens
-		FROM conversation_logs 
-		WHERE created_at >= ? AND created_at <= ?
-		GROUP BY DATE(created_at)
-		ORDER BY date
-	`, dateFrom, dateTo+" 23:59:59").Scan(&dailyTrend)
-
-	// 用户使用排行
-	type UserRanking struct {
-		UserID       uint   `json:"user_id"`
-		Username     string `json:"username"`
-		Conversations int64  `json:"conversations"`
-		Tokens       int64  `json:"tokens"`
-	}
-
-	var userRanking []UserRanking
-	database.DB.Model(&models.ConversationLog{}).
-		Where("created_at >= ? AND created_at <= ?", dateFrom, dateTo+" 23:59:59").
-		Group("user_id, username").
-		Select("user_id, username, COUNT(*) as conversations, SUM(total_tokens) as tokens").
-		Order("conversations DESC").
-		Limit(10).
-		Scan(&userRanking)
-
-	// 构建响应
-	statsResponse := gin.H{
-		"basic_stats":   basicStats,
-		"model_stats":   modelStats,
-		"daily_trend":   dailyTrend,
-		"user_ranking":  userRanking,
-		"date_range": gin.H{
-			"from": dateFrom,
-			"to":   dateTo,
-		},
-		"generated_at": time.Now().Format(time.RFC3339),
-	}
-
-	c.JSON(http.StatusOK, statsResponse)
 }

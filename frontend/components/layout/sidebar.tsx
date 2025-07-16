@@ -17,12 +17,12 @@ import {
   Megaphone,
   BarChart3,
   Smartphone,
-  MessageCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { Separator } from "@/components/ui/separator"
+import { getAppName } from "@/lib/env"
 
 // 用户功能导航项
 const userNavItems = [
@@ -97,12 +97,6 @@ const adminNavItems = [
     activeColor: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
   },
   {
-    href: "/admin/conversation-logs",
-    label: "对话日志",
-    icon: MessageCircle,
-    activeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300",
-  },
-  {
     href: "/admin/oauth",
     label: "OAuth 测试工具",
     icon: Shield,
@@ -128,7 +122,7 @@ export function Sidebar() {
     <aside className="hidden md:flex md:flex-col md:w-56 bg-background sticky top-0 h-screen">
       <div className="flex h-16 items-center justify-center px-4">
         <Link href="/" className="font-semibold text-lg text-foreground" prefetch={false}>
-          Claude Duck
+          {getAppName()}
         </Link>
       </div>
       
