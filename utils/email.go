@@ -50,9 +50,10 @@ func SendVerificationEmail(to, code, emailType string) error {
 
 	// 根据类型设置邮件标题和内容
 	var subject, body string
+	appName := config.AppConfig.AppName
 	switch emailType {
 	case "register":
-		subject = "Claude Duck 注册验证码"
+		subject = appName + " 注册验证码"
 		body = fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -63,13 +64,13 @@ func SendVerificationEmail(to, code, emailType string) error {
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
         <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #007bff;">Claude Duck</h1>
+            <h1 style="color: #007bff;">%s</h1>
             <h2 style="color: #666;">账户注册验证</h2>
         </div>
         
         <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
             <p>尊敬的用户，您好！</p>
-            <p>感谢您注册Claude Duck服务。为确保账户安全，请使用以下验证码完成注册：</p>
+            <p>感谢您注册%s服务。为确保账户安全，请使用以下验证码完成注册：</p>
             
             <div style="text-align: center; margin: 30px 0;">
                 <span style="font-size: 24px; font-weight: bold; color: #007bff; background-color: #e7f3ff; padding: 10px 20px; border-radius: 5px; letter-spacing: 2px;">%s</span>
@@ -84,13 +85,13 @@ func SendVerificationEmail(to, code, emailType string) error {
         
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">
             <p>此邮件由系统自动发送，请勿回复。</p>
-            <p>Claude Duck团队</p>
+            <p>%s团队</p>
         </div>
     </div>
 </body>
-</html>`, code, config.AppConfig.VerificationCodeExpireMinutes)
+</html>`, appName, appName, code, config.AppConfig.VerificationCodeExpireMinutes, appName)
 	case "login":
-		subject = "Claude Duck 登录验证码"
+		subject = appName + " 登录验证码"
 		body = fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -101,13 +102,13 @@ func SendVerificationEmail(to, code, emailType string) error {
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
         <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #007bff;">Claude Duck</h1>
+            <h1 style="color: #007bff;">%s</h1>
             <h2 style="color: #666;">账户登录验证</h2>
         </div>
         
         <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
             <p>尊敬的用户，您好！</p>
-            <p>您正在尝试登录Claude Duck服务。请使用以下验证码完成登录验证：</p>
+            <p>您正在尝试登录%s服务。请使用以下验证码完成登录验证：</p>
             
             <div style="text-align: center; margin: 30px 0;">
                 <span style="font-size: 24px; font-weight: bold; color: #28a745; background-color: #e8f5e8; padding: 10px 20px; border-radius: 5px; letter-spacing: 2px;">%s</span>
@@ -122,11 +123,11 @@ func SendVerificationEmail(to, code, emailType string) error {
         
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">
             <p>此邮件由系统自动发送，请勿回复。</p>
-            <p>Claude Duck团队</p>
+            <p>%s团队</p>
         </div>
     </div>
 </body>
-</html>`, code, config.AppConfig.VerificationCodeExpireMinutes)
+</html>`, appName, appName, code, config.AppConfig.VerificationCodeExpireMinutes, appName)
 	default:
 		return fmt.Errorf("unsupported email type: %s", emailType)
 	}

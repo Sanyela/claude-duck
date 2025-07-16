@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { LinkIcon, Copy, Check } from "lucide-react"
 import Link from "next/link"
+import { getAppName } from "@/lib/env"
 
 export function OAuthLinkGenerator() {
-  const [clientId, setClientId] = useState("Claude Duck")
+  const appName = getAppName()
+  const [clientId, setClientId] = useState(appName)
   const [redirectUri, setRedirectUri] = useState("http://localhost:3000/oauth/callback")
   const [state, setState] = useState("random_state_string")
   const [deviceFlow, setDeviceFlow] = useState(false)
@@ -41,21 +43,21 @@ export function OAuthLinkGenerator() {
   const presets = [
     {
       name: "ClaudeCode CLI (设备流程)",
-      clientId: "Claude Duck",
+      clientId: appName,
       redirectUri: "http://localhost:8080/oauth/callback",
       state: "cli_auth_state",
       deviceFlow: true
     },
     {
       name: "Web应用回调",
-      clientId: "Claude Duck", 
+      clientId: appName, 
       redirectUri: "http://localhost:3000/oauth/callback",
       state: "web_auth_state",
       deviceFlow: false
     },
     {
       name: "Postman测试",
-      clientId: "Claude Duck",
+      clientId: appName,
       redirectUri: "https://oauth.pstmn.io/v1/callback",
       state: "postman_test_state",
       deviceFlow: false
@@ -106,7 +108,7 @@ export function OAuthLinkGenerator() {
               id="client_id"
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              placeholder="例如：Claude Duck"
+              placeholder={`例如：${appName}`}
               className="bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600"
             />
           </div>

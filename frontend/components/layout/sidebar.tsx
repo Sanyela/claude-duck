@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { Separator } from "@/components/ui/separator"
+import { getAppName } from "@/lib/env"
 
 // 用户功能导航项
 const userNavItems = [
@@ -121,7 +122,7 @@ export function Sidebar() {
     <aside className="hidden md:flex md:flex-col md:w-56 bg-background sticky top-0 h-screen">
       <div className="flex h-16 items-center justify-center px-4">
         <Link href="/" className="font-semibold text-lg text-foreground" prefetch={false}>
-          Claude Duck
+          {getAppName()}
         </Link>
       </div>
       
