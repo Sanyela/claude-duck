@@ -228,15 +228,6 @@ func HandleGetActiveSubscription(c *gin.Context) {
 	})
 }
 
-// getSubscriptionPlanName 获取订阅计划名称
-func getSubscriptionPlanName(subscription models.Subscription) string {
-	if subscription.Plan.Title != "" {
-		return subscription.Plan.Title
-	}
-	// 如果没有预加载或者为空，返回默认名称
-	return fmt.Sprintf("套餐-%d", subscription.SubscriptionPlanID)
-}
-
 // HandleGetSubscriptionHistory 获取钱包兑换历史
 func HandleGetSubscriptionHistory(c *gin.Context) {
 	// 验证token并获取用户ID
@@ -730,12 +721,6 @@ func HandleDailyCheckin(c *gin.Context) {
 		Message:      fmt.Sprintf("签到成功！获得 %d 积分奖励", rewardPoints),
 		RewardPoints: rewardPoints,
 	})
-}
-
-// getUserCheckinPointsRange 获取用户的签到积分范围 (已弃用，使用getWalletCheckinPointsRange)
-func getUserCheckinPointsRange(userID uint) CheckinPointsRange {
-	// 此函数已被 getWalletCheckinPointsRange 替代
-	return getWalletCheckinPointsRange(userID)
 }
 
 // getWalletCheckinPointsRange 获取钱包签到积分范围

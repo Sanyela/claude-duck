@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -121,11 +122,8 @@ func HandleClaudeProxy(c *gin.Context) {
 	var freeModels []string
 	isFreeModel := false
 	if err := json.Unmarshal([]byte(freeModelsConfig), &freeModels); err == nil {
-		for _, freeModelName := range freeModels {
-			if model == freeModelName {
-				isFreeModel = true
-				break
-			}
+		if slices.Contains(freeModels, model) {
+			isFreeModel = true
 		}
 	}
 
@@ -214,15 +212,15 @@ func HandleClaudeProxy(c *gin.Context) {
 
 	// 如果是非流式响应，直接处理
 	if !isStream {
-		handleNonStreamResponse(c, resp, userID, user.Username, model, startTime, configMap, isFreeModel, requestData)
+		handleNonStreamResponse(c, resp, userID, user.Username, model, startTime, configMap, isFreeModel)
 	} else {
 		// 流式响应处理
-		handleStreamResponse(c, resp, userID, user.Username, model, startTime, configMap, isFreeModel, requestData)
+		handleStreamResponse(c, resp, userID, user.Username, model, startTime, configMap, isFreeModel)
 	}
 }
 
 // 处理非流式响应
-func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, username string, model string, startTime time.Time, configMap map[string]string, isFreeModel bool, requestData map[string]interface{}) {
+func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, username, model string, startTime time.Time, configMap map[string]string, isFreeModel bool) {
 	// 读取响应体
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -290,7 +288,7 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 }
 
 // 处理流式响应
-func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, username string, model string, startTime time.Time, configMap map[string]string, isFreeModel bool, requestData map[string]interface{}) {
+func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, username, model string, startTime time.Time, configMap map[string]string, isFreeModel bool) {
 	// 特殊处理429状态码
 	if resp.StatusCode == http.StatusTooManyRequests {
 		c.Header("Content-Type", "text/event-stream")
@@ -337,8 +335,8 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 		c.Writer.Flush()
 
 		// 解析SSE数据
-		if bytes.HasPrefix(line, []byte("data: ")) {
-			data := bytes.TrimPrefix(line, []byte("data: "))
+		if after, ok := bytes.CutPrefix(line, []byte("data: ")); ok {
+			data := after
 			data = bytes.TrimSpace(data)
 
 			if len(data) > 0 && !bytes.Equal(data, []byte("[DONE]")) {
@@ -517,4 +515,3 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	// 提交事务
 	tx.Commit()
 }
-
