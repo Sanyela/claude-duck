@@ -213,32 +213,33 @@ func AdminGiftToWallet(adminUserID, targetUserID uint, plan *models.Subscription
 		"total_points":     gorm.Expr("total_points + ?", pointsAmount),
 		"available_points": gorm.Expr("available_points + ?", pointsAmount),
 		"updated_at":       time.Now(),
+		"status":           "active",
 	}
 
-	// 如果钱包即将过期或已过期，更新过期时间和配置
-	if wallet.WalletExpiresAt.Before(time.Now()) || expiresAt.After(wallet.WalletExpiresAt) {
+	// 过期时间：取最大值
+	if expiresAt.After(wallet.WalletExpiresAt) {
 		updates["wallet_expires_at"] = expiresAt
-		updates["status"] = "active"
-		
-		// 更新配置为赠送的套餐配置
-		if dailyMaxPoints > wallet.DailyMaxPoints {
-			updates["daily_max_points"] = dailyMaxPoints
-		}
-		if plan.DegradationGuaranteed > wallet.DegradationGuaranteed {
-			updates["degradation_guaranteed"] = plan.DegradationGuaranteed
-		}
-		if plan.DailyCheckinPoints > wallet.DailyCheckinPoints {
-			updates["daily_checkin_points"] = plan.DailyCheckinPoints
-		}
-		if plan.DailyCheckinPointsMax > wallet.DailyCheckinPointsMax {
-			updates["daily_checkin_points_max"] = plan.DailyCheckinPointsMax
-		}
-		// 更新自动补给配置
-		if plan.AutoRefillEnabled {
-			updates["auto_refill_enabled"] = plan.AutoRefillEnabled
-			updates["auto_refill_threshold"] = plan.AutoRefillThreshold
-			updates["auto_refill_amount"] = plan.AutoRefillAmount
-		}
+	}
+
+	// 所有配置都采用"取最优值"策略，确保用户权益只增不减
+	if dailyMaxPoints > wallet.DailyMaxPoints {
+		updates["daily_max_points"] = dailyMaxPoints
+	}
+	if plan.DegradationGuaranteed > wallet.DegradationGuaranteed {
+		updates["degradation_guaranteed"] = plan.DegradationGuaranteed
+	}
+	if plan.DailyCheckinPoints > wallet.DailyCheckinPoints {
+		updates["daily_checkin_points"] = plan.DailyCheckinPoints
+	}
+	if plan.DailyCheckinPointsMax > wallet.DailyCheckinPointsMax {
+		updates["daily_checkin_points_max"] = plan.DailyCheckinPointsMax
+	}
+	
+	// 自动补给配置：只有当新配置更优时才更新
+	if plan.AutoRefillEnabled && plan.AutoRefillAmount > wallet.AutoRefillAmount {
+		updates["auto_refill_enabled"] = plan.AutoRefillEnabled
+		updates["auto_refill_threshold"] = plan.AutoRefillThreshold
+		updates["auto_refill_amount"] = plan.AutoRefillAmount
 	}
 
 	// 更新钱包
