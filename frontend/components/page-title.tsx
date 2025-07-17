@@ -12,7 +12,7 @@ const getPageTitles = (): Record<string, string> => {
     '/subscription': `${appName} - 订阅管理`,
     '/credits': `${appName} - 积分管理`,
     '/settings': `${appName} - 设置`,
-    '/resources': `${appName} - 资源中心`,
+    '/resources': `${appName} - 安装教程`,
     '/login': `${appName} - 登录`,
     '/oauth/authorize': `${appName} - 授权`,
     '/oauth/callback': `${appName} - 授权回调`

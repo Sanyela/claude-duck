@@ -46,7 +46,7 @@ const userNavItems = [
   },
   {
     href: "/resources",
-    label: "资源中心",
+    label: "安装教程",
     icon: BookOpen,
     activeColor: "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
   },
