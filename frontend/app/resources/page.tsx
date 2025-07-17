@@ -106,7 +106,7 @@ function ConfigSection() {
   const realConfig = `{
   "env": {
     "ANTHROPIC_API_KEY": "${jwtToken}",
-    "ANTHROPIC_BASE_URL": "${apiUrl}",
+    "ANTHROPIC_BASE_URL": "${apiUrl}/api/claude",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": 64000,
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1
   },
@@ -189,11 +189,11 @@ function ConfigSection() {
                 </span>{`",
     "ANTHROPIC_BASE_URL": "`}<span className="group/url">
                   <span className={`transition-opacity ${screenshotMode ? 'group-hover/url:hidden' : ''}`}>
-                    {screenshotMode ? "••••••••••••••••••••••••••••••" : apiUrl}
+                    {screenshotMode ? "••••••••••••••••••••••••••••••" : `${apiUrl}/api/claude`}
                   </span>
                   {screenshotMode && (
                     <span className="hidden group-hover/url:inline transition-opacity">
-                      {apiUrl}
+                      {`${apiUrl}/api/claude`}
                     </span>
                   )}
                 </span>{`",
