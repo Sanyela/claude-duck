@@ -17,6 +17,7 @@ import {
   Megaphone,
   BarChart3,
   Smartphone,
+  MessageCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -95,6 +96,12 @@ const adminNavItems = [
     label: "公告管理",
     icon: Megaphone,
     activeColor: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  },
+  {
+    href: "/admin/conversation-logs",
+    label: "对话日志",
+    icon: MessageCircle,
+    activeColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300",
   },
   {
     href: "/admin/oauth",
