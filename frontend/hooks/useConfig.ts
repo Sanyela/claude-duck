@@ -12,10 +12,14 @@ export const useConfig = () => {
     docsUrl: 'https://github.com/anthropics/claude-code',
     claudeUrl: 'https://api.anthropic.com'
   })
+  const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    getConfig().then(setConfig)
+    getConfig().then(newConfig => {
+      setConfig(newConfig)
+      setIsLoaded(true)
+    })
   }, [])
 
-  return config
+  return { ...config, isLoaded }
 }

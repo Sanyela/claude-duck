@@ -111,7 +111,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const { user } = useAuth()
-  const { appName } = useConfig()
+  const { appName, isLoaded } = useConfig()
 
   const currentTheme = theme || "light"
 

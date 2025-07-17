@@ -23,12 +23,13 @@ export const getServerClaudeUrl = (): string => {
 let configCache: { appName: string; apiUrl: string; installCommand: string; docsUrl: string; claudeUrl: string } | null = null
 
 export const getConfig = async () => {
-  if (configCache) return configCache
-  
+  // 移除缓存确保每次都获取最新配置
   try {
-    const response = await fetch('/api/config')
-    configCache = await response.json()
-    return configCache
+    const response = await fetch('/api/config', {
+      cache: 'no-store' // 禁用缓存
+    })
+    const config = await response.json()
+    return config
   } catch (error) {
     console.error('Failed to fetch config:', error)
     return {

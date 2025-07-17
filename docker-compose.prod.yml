@@ -30,6 +30,7 @@ services:
       - APP_NAME=Duck Code
       - INSTALL_COMMAND=npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com"=
       - DOCS_URL=https://swjqc4r0111.feishu.cn/docx/CJT6dbdUBofDlrxfwpNcp1klnCg
+      - CLAUDE_URL=https://api.duckcode.top/api/claude
     depends_on:
       - backend
     healthcheck:
