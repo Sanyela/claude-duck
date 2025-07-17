@@ -3,7 +3,7 @@
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Download, Copy, Terminal, Code2, Eye, EyeOff } from "lucide-react"
-import { getAppName, getApiUrl, getInstallCommand, getConfig } from "@/lib/env"
+import { getConfig } from "@/lib/env"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -105,7 +105,7 @@ function ConfigSection() {
   // 实际的配置（包含真实的JWT token）
   const realConfig = `{
   "env": {
-    "ANTHROPIC_API_KEY": "${jwtToken}",
+    "ANTHROPIC_AUTH_TOKEN": "${jwtToken}",
     "ANTHROPIC_BASE_URL": "${apiUrl}/api/claude",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": 64000,
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1
@@ -177,7 +177,7 @@ function ConfigSection() {
               <code>
 {`{
   "env": {
-    "ANTHROPIC_API_KEY": "`}<span className="group/token">
+    "ANTHROPIC_AUTH_TOKEN": "`}<span className="group/token">
                   <span className={`transition-opacity ${screenshotMode ? 'group-hover/token:hidden' : ''}`}>
                     {screenshotMode ? "••••••••••••••••••••" : jwtToken}
                   </span>

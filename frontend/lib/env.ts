@@ -36,9 +36,9 @@ export const getConfig = async () => {
   }
 }
 
-// 同步版本（用于兼容现有代码）
+// 同步版本（已废弃，建议使用 useConfig hook）
 export const getAppName = (): string => {
-  return 'Claude Duck' // 默认值，会被 useEffect 中的异步加载覆盖
+  return 'Claude Duck' // 默认值，建议使用 useConfig hook 获取实时数据
 }
 
 export const getApiUrl = (): string => {

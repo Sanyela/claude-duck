@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,11 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { LinkIcon, Copy, Check } from "lucide-react"
 import Link from "next/link"
-import { getAppName } from "@/lib/env"
+import { useConfig } from "@/hooks/useConfig"
 
 export function OAuthLinkGenerator() {
-  const appName = getAppName()
-  const [clientId, setClientId] = useState(appName)
+  const { appName } = useConfig()
+  const [clientId, setClientId] = useState("")
+
+  useEffect(() => {
+    setClientId(appName)
+  }, [appName])
   const [redirectUri, setRedirectUri] = useState("http://localhost:3000/oauth/callback")
   const [state, setState] = useState("random_state_string")
   const [deviceFlow, setDeviceFlow] = useState(false)
