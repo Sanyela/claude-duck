@@ -40,7 +40,7 @@ jobs:
           type=ref,event=tag
           type=raw,value=latest,enable={{is_default_branch}}
         labels: |
-          org.opencontainers.image.title=Claude Duck Backend
+          org.opencontainers.image.title=Duck Code Backend
           org.opencontainers.image.description=Claude AI Proxy Service Backend
           org.opencontainers.image.vendor=${{ github.repository_owner }}
           org.opencontainers.image.licenses=Private
@@ -87,7 +87,7 @@ jobs:
           type=ref,event=tag
           type=raw,value=latest,enable={{is_default_branch}}
         labels: |
-          org.opencontainers.image.title=Claude Duck Frontend
+          org.opencontainers.image.title=Duck Code Frontend
           org.opencontainers.image.description=Claude AI Proxy Service Frontend
           org.opencontainers.image.vendor=${{ github.repository_owner }}
           org.opencontainers.image.licenses=Private

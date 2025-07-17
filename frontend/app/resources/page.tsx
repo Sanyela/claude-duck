@@ -85,6 +85,7 @@ function ConfigSection() {
   const [jwtToken, setJwtToken] = useState("your-jwt-token-here")
   const [screenshotMode, setScreenshotMode] = useState(false)
   const [apiUrl, setApiUrl] = useState("http://localhost:9998")
+  const [claudeUrl, setClaudeUrl] = useState("https://api.anthropic.com")
   
   // 获取JWT token和API URL
   useEffect(() => {
@@ -98,6 +99,7 @@ function ConfigSection() {
       
       const config = await getConfig()
       setApiUrl(config.apiUrl)
+      setClaudeUrl(config.claudeUrl)
     }
     loadData()
   }, [])
@@ -106,7 +108,7 @@ function ConfigSection() {
   const realConfig = `{
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "${jwtToken}",
-    "ANTHROPIC_BASE_URL": "${apiUrl}/api/claude",
+    "ANTHROPIC_BASE_URL": "${claudeUrl}",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": 64000,
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1
   },
@@ -189,11 +191,11 @@ function ConfigSection() {
                 </span>{`",
     "ANTHROPIC_BASE_URL": "`}<span className="group/url">
                   <span className={`transition-opacity ${screenshotMode ? 'group-hover/url:hidden' : ''}`}>
-                    {screenshotMode ? "••••••••••••••••••••••••••••••" : `${apiUrl}/api/claude`}
+                    {screenshotMode ? "••••••••••••••••••••••••••••••" : claudeUrl}
                   </span>
                   {screenshotMode && (
                     <span className="hidden group-hover/url:inline transition-opacity">
-                      {`${apiUrl}/api/claude`}
+                      {claudeUrl}
                     </span>
                   )}
                 </span>{`",
@@ -231,7 +233,7 @@ function ConfigSection() {
 }
 
 export default function ResourcesPage() {
-  const [appName, setAppName] = useState('Claude Duck')
+  const [appName, setAppName] = useState('Duck Code')
   const [installCommand, setInstallCommand] = useState('npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com')
   const [docsUrl, setDocsUrl] = useState('https://github.com/anthropics/claude-code')
   

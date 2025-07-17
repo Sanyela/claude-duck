@@ -266,7 +266,7 @@ paths:
               properties:
                 client_id:
                   type: string
-                  example: Claude Duck
+                  example: Duck Code
                 scope:
                   type: string
                   example: api
@@ -316,7 +316,7 @@ paths:
               properties:
                 client_id:
                   type: string
-                  example: Claude Duck
+                  example: Duck Code
                 client_secret:
                   type: string
                   example: 2935467f5e0e1d383a51a467c9680091dc29015291245dbb6b440adcaf9e1011
@@ -367,7 +367,7 @@ paths:
               properties:
                 client_id:
                   type: string
-                  example: Claude Duck
+                  example: Duck Code
                 client_secret:
                   type: string
                   example: 2935467f5e0e1d383a51a467c9680091dc29015291245dbb6b440adcaf9e1011

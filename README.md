@@ -1,4 +1,4 @@
-# Claude Duck 部署脚本
+# Duck Code 部署脚本
 
 ## 自动化部署流程
 
