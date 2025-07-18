@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useId } from "react";
 import { User, getUserInfo } from "@/api/auth";
 import { useRouter } from "next/navigation";
 
@@ -31,21 +31,28 @@ interface AuthProviderProps {
 
 // 认证提供者组件
 export const AuthProvider = ({ children }: AuthProviderProps) => {
+  // 使用 useId 确保每个组件实例唯一，防止SSR状态泄露
+  const instanceId = useId();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
 
   // 登录方法
   const login = (token: string, userData: User) => {
-    localStorage.setItem("auth_token", token);
-    localStorage.setItem("user_data", JSON.stringify(userData));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("auth_token", token);
+      localStorage.setItem("user_data", JSON.stringify(userData));
+    }
     setUser(userData);
   };
 
   // 登出方法
   const logout = () => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("user_data");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("user_data");
+    }
     setUser(null);
     router.push("/login");
   };
@@ -58,7 +65,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       if (response.success && response.user) {
         setUser(response.user);
-        localStorage.setItem("user_data", JSON.stringify(response.user));
+        if (typeof window !== "undefined") {
+          localStorage.setItem("user_data", JSON.stringify(response.user));
+        }
       } else {
         throw new Error("获取用户信息失败");
       }
@@ -73,7 +82,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // 页面加载时初始化认证状态
   useEffect(() => {
-    // 从本地存储中获取认证数据
+    // 防止在SSR中执行，避免状态泄露
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    // 防止重复初始化
+    if (isInitialized) {
+      return;
+    }
+
     const initAuth = async () => {
       setIsLoading(true);
       
@@ -106,13 +124,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(null);
       } finally {
         setIsLoading(false);
+        setIsInitialized(true);
       }
     };
 
-    // 当在客户端环境时，初始化认证状态
-    if (typeof window !== "undefined") {
-      initAuth();
-    } else {
+    initAuth();
+  }, [isInitialized]); // 添加依赖项防止重复执行
+
+  // SSR 安全性：确保服务端不处理用户状态
+  useEffect(() => {
+    if (typeof window === "undefined") {
       setIsLoading(false);
     }
   }, []);

@@ -16,12 +16,14 @@ export const request = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
-    // 从localStorage获取token
-    const token = localStorage.getItem("auth_token");
-    
-    // 如果存在token，则在请求头中添加
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // 仅在客户端环境中获取token，防止SSR状态泄露
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("auth_token");
+      
+      // 如果存在token，则在请求头中添加
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     
     return config;
@@ -45,11 +47,12 @@ request.interceptors.response.use(
     // 如果是401未授权错误，清除本地token并重定向到登录页
     if (response && response.status === 401) {
       console.warn("登录已过期，请重新登录");
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("user_data");
       
-      // 判断当前是否在客户端环境
+      // 仅在客户端环境中操作localStorage和location
       if (typeof window !== "undefined") {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("user_data");
+        
         // 避免无限重定向，如果当前不是登录页，才重定向到登录页
         const currentPath = window.location.pathname;
         if (!currentPath.includes("/login")) {

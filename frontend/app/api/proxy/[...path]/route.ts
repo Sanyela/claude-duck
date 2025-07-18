@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.API_URL || 'http://localhost:9998';
+// 动态获取API_URL，支持环境变量配置
+const getApiBaseUrl = () => {
+  const apiUrl = process.env.API_URL;
+  if (!apiUrl) {
+    console.warn('API_URL environment variable not set, using default');
+    return 'http://localhost:9998';
+  }
+  return apiUrl;
+};
 
 export async function GET(
   request: NextRequest,
@@ -52,7 +60,10 @@ async function proxyRequest(
     const url = new URL(request.url);
     const queryString = url.search;
     
+    const API_BASE_URL = getApiBaseUrl();
     const targetUrl = `${API_BASE_URL}/${path}${queryString}`;
+    
+    console.log(`[API Proxy] ${method} ${targetUrl}`);
     
     // 准备请求头，排除一些不需要的头
     const headers = new Headers();
@@ -95,7 +106,7 @@ async function proxyRequest(
     });
     
   } catch (error) {
-    console.error('API Proxy Error:', error);
+    console.error('[API Proxy] Error:', error);
     return NextResponse.json(
       { error: 'Internal Server Error', message: 'Failed to proxy request' },
       { status: 500 }
