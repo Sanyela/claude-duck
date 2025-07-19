@@ -9,14 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // SSR 配置优化，防止状态泄露
-  experimental: {
-    // 禁用内存缓存，防止用户状态混乱
-    isrMemoryCacheSize: 0,
-  },
-  // 禁用ETag生成，确保每次请求独立处理
   generateEtags: false,
-  // 生产环境缓存配置
   headers: async () => {
     return [
       {

@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { LinkIcon, Copy, Check } from "lucide-react"
 import Link from "next/link"
 import { useConfig } from "@/hooks/useConfig"
+import { copyToClipboard } from "@/lib/clipboard"
 
 export function OAuthLinkGenerator() {
   const { appName } = useConfig()
@@ -35,13 +36,14 @@ export function OAuthLinkGenerator() {
     setIsCopied(false)
   }
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!generatedUrl) return
     const fullUrl = window.location.origin + generatedUrl
-    navigator.clipboard.writeText(fullUrl).then(() => {
+    const success = await copyToClipboard(fullUrl)
+    if (success) {
       setIsCopied(true)
       setTimeout(() => setIsCopied(false), 2000)
-    })
+    }
   }
 
   const presets = [

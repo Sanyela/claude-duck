@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { copyToClipboard } from "@/lib/clipboard"
 
 function StepCard({ 
   stepNumber, 
@@ -52,10 +53,12 @@ function StepCard({
 function CodeBlock({ code, language = "bash" }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false)
   
-  const copyCode = () => {
-    navigator.clipboard.writeText(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copyCode = async () => {
+    const success = await copyToClipboard(code)
+    if (success) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
   
   return (
@@ -120,10 +123,12 @@ function ConfigSection() {
   }
 }`
   
-  const copyConfig = () => {
-    navigator.clipboard.writeText(realConfig)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copyConfig = async () => {
+    const success = await copyToClipboard(realConfig)
+    if (success) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
   
   return (
