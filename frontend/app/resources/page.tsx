@@ -2,11 +2,12 @@
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Download, Copy, Terminal, Code2, Eye, EyeOff } from "lucide-react"
+import { Download, Copy, Terminal, Code2, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react"
 import { getConfig } from "@/lib/env"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 function StepCard({ 
   stepNumber, 
@@ -115,8 +116,7 @@ function ConfigSection() {
   "permissions": {
     "allow": [],
     "deny": []
-  },
-  "apiKeyHelper": "echo '${jwtToken}'"
+  }
 }`
   
   const copyConfig = () => {
@@ -205,28 +205,12 @@ function ConfigSection() {
   "permissions": {
     "allow": [],
     "deny": []
-  },
-  "apiKeyHelper": "echo '`}<span className="group/helper">
-                  <span className={`transition-opacity ${screenshotMode ? 'group-hover/helper:hidden' : ''}`}>
-                    {screenshotMode ? "••••••••••••••••••••" : jwtToken}
-                  </span>
-                  {screenshotMode && (
-                    <span className="hidden group-hover/helper:inline transition-opacity">
-                      {jwtToken}
-                    </span>
-                  )}
-                </span>{`'"
+  }
 }`}
               </code>
             </pre>
           </div>
         </div>
-        
-        <Alert className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 mt-3">
-          <AlertDescription className="text-red-700 dark:text-red-300">
-            <strong>重要提示：</strong> 如果使用 Opus 模型，请将 <code className="bg-red-100 dark:bg-red-900/50 px-1 rounded">CLAUDE_CODE_MAX_OUTPUT_TOKENS</code> 设置为 <code className="bg-red-100 dark:bg-red-900/50 px-1 rounded">32000</code>
-          </AlertDescription>
-        </Alert>
       </div>
     </div>
   )
@@ -236,6 +220,24 @@ export default function ResourcesPage() {
   const [appName, setAppName] = useState('Duck Code')
   const [installCommand, setInstallCommand] = useState('npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com')
   const [docsUrl, setDocsUrl] = useState('https://github.com/anthropics/claude-code')
+  const [isOfficialClientOpen, setIsOfficialClientOpen] = useState(false)
+  const [isOneClickOpen, setIsOneClickOpen] = useState(true) // 默认展开方式一
+  
+  // 当官方客户端展开时，自动折叠一键包
+  const handleOfficialClientToggle = (open: boolean) => {
+    setIsOfficialClientOpen(open)
+    if (open) {
+      setIsOneClickOpen(false)
+    }
+  }
+  
+  // 当一键包展开时，自动折叠官方客户端
+  const handleOneClickToggle = (open: boolean) => {
+    setIsOneClickOpen(open)
+    if (open) {
+      setIsOfficialClientOpen(false)
+    }
+  }
   
   useEffect(() => {
     const loadConfig = async () => {
@@ -254,62 +256,130 @@ export default function ResourcesPage() {
           <h1 className="text-3xl font-bold mb-2">{appName} 安装教程</h1>
         </div>
 
-        <div className="space-y-6">
-          {/* 步骤 1: 安装一键包 */}
-          <StepCard
-            stepNumber={1}
-            title={
-              <>
-                安装 {appName} 一键包（
-                <a 
-                  href={docsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  官方文档
-                </a>
-                ）
-              </>
-            }
-            description={`安装 ${appName} 专用一键包`}
-            icon={Download}
-            cardColor="bg-amber-100 dark:bg-amber-900/20"
-          >
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                使用 npm 全局安装 {appName} 一键包，确保您的网络连接正常
-              </p>
-              <CodeBlock 
-                code={installCommand}
-              />
+        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1 space-y-6">
+          {/* 方式一: 安装一键包 */}
+          <div className="relative">
+            <div className="absolute -top-3 left-4 bg-amber-500 text-white px-3 py-1 rounded-full text-sm font-semibold z-10">
+              方式一：推荐
             </div>
-          </StepCard>
+            <Collapsible open={isOneClickOpen} onOpenChange={handleOneClickToggle}>
+              <Card className={`shadow-lg bg-amber-100 dark:bg-amber-900/20 text-card-foreground border-border hover:shadow-xl transition-all pt-6 pb-6 ${
+                !isOneClickOpen 
+                  ? 'hover:bg-amber-50 dark:hover:bg-amber-900/30' 
+                  : ''
+              }`}>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="pb-6 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-500 text-white">
+                        <Download className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1">
+                        <CardTitle className="text-xl flex items-center gap-2">
+                          安装 {appName} 一键包
+                          <a 
+                            href={docsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 hover:underline text-base"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            (官方文档)
+                          </a>
+                        </CardTitle>
+                        <CardDescription className="text-sm text-muted-foreground">
+                          快速安装，配置简单，适合大多数用户{!isOneClickOpen && '（点击展开查看详细步骤）'}
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center">
+                        {isOneClickOpen ? (
+                          <ChevronDown className="h-5 w-5 text-amber-500 dark:text-amber-400" />
+                        ) : (
+                          <ChevronRight className="h-5 w-5 text-amber-500 dark:text-amber-400" />
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        使用 npm 全局安装 {appName} 一键包，确保您的网络连接正常
+                      </p>
+                      <CodeBlock 
+                        code={installCommand}
+                      />
+                    </div>
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          </div>
 
-          {/* 步骤 2: 安装官方客户端 */}
-          <StepCard
-            stepNumber={2}
-            title="安装官方客户端"
-            description="安装 Claude Code 官方客户端并配置"
-            icon={Terminal}
-            cardColor="bg-sky-200 dark:bg-sky-900/20"
-          >
-            <div className="space-y-6">
-              <div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  安装 Claude Code 官方客户端：
-                </p>
-                <CodeBlock 
-                  code="npm install -g @anthropic-ai/claude-code"
-                />
-              </div>
-              
-              <div>
-                <h4 className="font-semibold mb-3">配置客户端</h4>
-                <ConfigSection />
-              </div>
+          {/* 方式二: 安装官方客户端 */}
+          <div className="relative">
+            <div className="absolute -top-3 left-4 bg-sky-500 text-white px-3 py-1 rounded-full text-sm font-semibold z-10">
+              方式二：高级用户
             </div>
-          </StepCard>
+          <Collapsible open={isOfficialClientOpen} onOpenChange={handleOfficialClientToggle}>
+            <Card className={`shadow-lg bg-sky-200 dark:bg-sky-900/20 text-card-foreground border-border hover:shadow-xl transition-all pt-6 pb-6 ${
+              !isOfficialClientOpen 
+                ? 'hover:bg-sky-100 dark:hover:bg-sky-900/30' 
+                : ''
+            }`}>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="pb-6 cursor-pointer transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-sky-500 text-white">
+                      <Terminal className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <CardTitle className="text-xl flex items-center gap-2">
+                        安装官方 Claude Code 客户端
+                      </CardTitle>
+                      <CardDescription className="text-sm text-muted-foreground">
+                        需要手动配置，适合有经验的开发者（点击展开查看详细步骤）
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center">
+                      {isOfficialClientOpen ? (
+                        <ChevronDown className="h-5 w-5 text-sky-500 dark:text-sky-400" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-sky-500 dark:text-sky-400" />
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <div className="space-y-6">
+                    <Alert className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                      <AlertDescription className="text-blue-700 dark:text-blue-300">
+                        <strong>注意：</strong> 此方式需要手动配置，如果您不熟悉配置文件，建议使用方式一的一键包安装
+                      </AlertDescription>
+                    </Alert>
+                    
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        安装 Claude Code 官方客户端：
+                      </p>
+                      <CodeBlock 
+                        code="npm install -g @anthropic-ai/claude-code"
+                      />
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-semibold mb-3">配置客户端</h4>
+                      <ConfigSection />
+                    </div>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+          </div>
         </div>
       </div>
     </DashboardLayout>
