@@ -19,8 +19,14 @@ tags:
     description: 用户订阅管理接口
   - name: user-credits
     description: 用户积分管理接口
+  - name: user-checkin
+    description: 用户签到相关接口
+  - name: user-devices
+    description: 用户设备管理接口
   - name: claude-api
     description: Claude API 代理接口
+  - name: public
+    description: 公共接口
   
   # 管理员接口标签
   - name: admin-users
@@ -31,8 +37,56 @@ tags:
     description: 管理员激活码管理接口
   - name: admin-system
     description: 管理员系统配置接口
+  - name: admin-announcements
+    description: 管理员公告管理接口
 
 paths:
+  #============================================
+  # 公共接口
+  #============================================
+  
+  /health:
+    get:
+      tags:
+        - public
+      summary: 健康检查
+      description: 服务健康状态检查
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: claude-code-api
+
+  /bing:
+    get:
+      tags:
+        - public
+      summary: 获取Bing每日图片
+      description: 获取Bing搜索引擎的每日背景图片
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    example: https://bing.com/th?id=...
+                  title:
+                    type: string
+                    example: 每日图片标题
+
   #============================================
   # 用户接口
   #============================================
@@ -242,6 +296,211 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/check-email:
+    post:
+      tags:
+        - auth
+      summary: 检查邮箱是否已注册
+      description: 检查指定邮箱是否已经注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exists:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 邮箱已注册
+
+  /auth/send-verification-code:
+    post:
+      tags:
+        - auth
+      summary: 发送邮箱验证码
+      description: 向指定邮箱发送验证码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+      responses:
+        '200':
+          description: 验证码发送成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 验证码发送成功
+
+  /auth/register-with-code:
+    post:
+      tags:
+        - auth
+      summary: 验证码注册
+      description: 使用邮箱验证码进行用户注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - verification_code
+              properties:
+                username:
+                  type: string
+                  example: user123
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                verification_code:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 注册成功
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: '#/components/schemas/UserData'
+
+  /auth/login-with-code:
+    post:
+      tags:
+        - auth
+      summary: 验证码登录
+      description: 使用邮箱验证码进行登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - verification_code
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                verification_code:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 登录成功
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: '#/components/schemas/UserData'
+
+  /auth/email-auth:
+    post:
+      tags:
+        - auth
+      summary: 邮箱一键登录/注册
+      description: 使用邮箱验证码进行一键登录或注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - verification_code
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                verification_code:
+                  type: string
+                  example: "123456"
+                username:
+                  type: string
+                  example: user123
+                  description: 注册时使用的用户名（可选）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 登录成功
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: '#/components/schemas/UserData'
   
   #--------------------------------------------
   # SSO认证接口
@@ -453,6 +712,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
                 
+  /subscription/redeem/preview:
+    post:
+      tags:
+        - user-subscription
+      summary: 激活码预检查
+      description: 预检查激活码的有效性和详细信息
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - couponCode
+              properties:
+                couponCode:
+                  type: string
+                  example: ABCD1234
+      responses:
+        '200':
+          description: 预检查结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: true
+                  planInfo:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                        example: 标准套餐
+                      point_amount:
+                        type: integer
+                        example: 10000
+                      validity_days:
+                        type: integer
+                        example: 30
+        '400':
+          description: 无效的激活码
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /subscription/redeem:
     post:
       tags:
@@ -578,11 +887,197 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
                 
-  /credits/history:
+  /credits/pricing-table:
     get:
       tags:
         - user-credits
-      summary: 获取积分使用历史
+      summary: 获取定价表
+      description: 获取积分套餐的定价信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plans:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: PLAN-001
+                        title:
+                          type: string
+                          example: 标准套餐
+                        price:
+                          type: number
+                          example: 9.99
+                        currency:
+                          type: string
+                          example: USD
+                        point_amount:
+                          type: integer
+                          example: 10000
+                        features:
+                          type: array
+                          items:
+                            type: string
+                          example: ["特性1", "特性2"]
+
+  /credits/daily-usage:
+    get:
+      tags:
+        - user-credits
+      summary: 获取每日使用统计
+      description: 获取用户每日积分使用统计信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dailyUsage:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                          example: "2024-01-15"
+                        usage:
+                          type: integer
+                          example: 500
+                        requests:
+                          type: integer
+                          example: 25
+
+  #--------------------------------------------
+  # 设备管理接口
+  #--------------------------------------------
+  /devices:
+    get:
+      tags:
+        - user-devices
+      summary: 获取设备列表
+      description: 获取用户的所有已登录设备
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+    delete:
+      tags:
+        - user-devices
+      summary: 下线其他设备
+      description: 下线除当前设备外的所有其他设备
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 其他设备已下线
+
+  /devices/{deviceId}:
+    delete:
+      tags:
+        - user-devices
+      summary: 下线指定设备
+      description: 下线指定的设备
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 设备ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 设备已下线
+
+  /devices/force:
+    delete:
+      tags:
+        - user-devices
+      summary: 强制下线所有设备
+      description: 强制下线用户的所有设备（包括当前设备）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 所有设备已强制下线
+
+  /devices/stats:
+    get:
+      tags:
+        - user-devices
+      summary: 获取设备统计
+      description: 获取用户设备的统计信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    example: 5
+                  active:
+                    type: integer
+                    example: 3
+                  lastActive:
+                    type: string
+                    format: date-time
+                    example: '2024-01-15T10:30:00Z'
+
+  /credits/history:
       description: 获取用户的积分使用记录
       security:
         - BearerAuth: []
@@ -741,11 +1236,9 @@ paths:
   /announcements:
     get:
       tags:
-        - user-subscription
+        - public
       summary: 获取公告
-      description: 获取系统公告信息
-      security:
-        - BearerAuth: []
+      description: 获取系统公告信息（公共接口，无需认证）
       parameters:
         - name: language
           in: query
@@ -764,29 +1257,7 @@ paths:
                   announcements:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                          example: 1
-                        type:
-                          type: string
-                          example: info
-                        title:
-                          type: string
-                          example: 系统升级通知
-                        description:
-                          type: string
-                          example: 系统将于明天进行升级维护
-                        language:
-                          type: string
-                          example: zh
-        '401':
-          description: 未授权
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                      $ref: '#/components/schemas/Announcement'
   
   #============================================
   # 管理员接口
@@ -1448,6 +1919,482 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   #--------------------------------------------
+  # 管理员数据看板接口
+  #--------------------------------------------
+  /admin/dashboard:
+    get:
+      tags:
+        - admin-system
+      summary: 管理员仪表板
+      description: 获取管理员仪表板数据
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 1000
+                      active:
+                        type: integer
+                        example: 800
+                  credits:
+                    type: object
+                    properties:
+                      totalUsed:
+                        type: integer
+                        example: 500000
+                      totalIssued:
+                        type: integer
+                        example: 1000000
+                  subscriptions:
+                    type: object
+                    properties:
+                      active:
+                        type: integer
+                        example: 200
+                      expired:
+                        type: integer
+                        example: 50
+
+  #--------------------------------------------
+  # 管理员用户状态管理接口
+  #--------------------------------------------
+  /admin/users/{id}/status:
+    put:
+      tags:
+        - admin-users
+      summary: 切换用户状态
+      description: 启用或禁用用户账户
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 用户ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, disabled]
+                  example: active
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 用户状态已更新
+
+  /admin/users/{id}/subscriptions:
+    get:
+      tags:
+        - admin-users
+      summary: 获取用户订阅
+      description: 获取指定用户的订阅信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 用户ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SubscriptionData'
+
+  /admin/users/{id}/subscriptions/{subscription_id}/limit:
+    put:
+      tags:
+        - admin-users
+      summary: 更新用户订阅限制
+      description: 更新指定用户订阅的使用限制
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 用户ID
+        - name: subscription_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 订阅ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                daily_limit:
+                  type: integer
+                  example: 1000
+                monthly_limit:
+                  type: integer
+                  example: 30000
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 订阅限制已更新
+
+  /admin/users/{id}/gift:
+    post:
+      tags:
+        - admin-users
+      summary: 赠送用户订阅
+      description: 管理员向用户赠送订阅或积分
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 用户ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                gift_type:
+                  type: string
+                  enum: [subscription, credits]
+                  example: credits
+                amount:
+                  type: integer
+                  example: 1000
+                reason:
+                  type: string
+                  example: 活动赠送
+      responses:
+        '200':
+          description: 赠送成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 赠送成功
+
+  #--------------------------------------------
+  # 管理员赠送记录管理接口
+  #--------------------------------------------
+  /admin/gift-records:
+    get:
+      tags:
+        - admin-users
+      summary: 获取赠送记录
+      description: 获取管理员的赠送记录
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        user_id:
+                          type: integer
+                          example: 123
+                        gift_type:
+                          type: string
+                          example: credits
+                        amount:
+                          type: integer
+                          example: 1000
+                        reason:
+                          type: string
+                          example: 活动赠送
+                        created_at:
+                          type: string
+                          format: date-time
+
+  #--------------------------------------------
+  # 管理员激活码每日限制接口
+  #--------------------------------------------
+  /admin/activation-codes/{id}/daily-limit:
+    get:
+      tags:
+        - admin-activation-codes
+      summary: 获取激活码每日限制
+      description: 获取指定激活码的每日使用限制
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 激活码ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  daily_limit:
+                    type: integer
+                    example: 100
+    put:
+      tags:
+        - admin-activation-codes
+      summary: 更新激活码每日限制
+      description: 更新指定激活码的每日使用限制
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 激活码ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - daily_limit
+              properties:
+                daily_limit:
+                  type: integer
+                  example: 100
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 每日限制已更新
+
+  #--------------------------------------------
+  # 管理员公告管理接口
+  #--------------------------------------------
+  /admin/announcements:
+    get:
+      tags:
+        - admin-announcements
+      summary: 获取公告列表
+      description: 管理员获取所有公告
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Announcement'
+                  total:
+                    type: integer
+                    example: 50
+    post:
+      tags:
+        - admin-announcements
+      summary: 创建公告
+      description: 管理员创建新公告
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - description
+                - type
+              properties:
+                title:
+                  type: string
+                  example: 系统升级通知
+                description:
+                  type: string
+                  example: 系统将于明天进行升级维护
+                type:
+                  type: string
+                  enum: [info, warning, error, success]
+                  example: info
+                language:
+                  type: string
+                  default: zh
+                  example: zh
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+
+  /admin/announcements/{id}:
+    put:
+      tags:
+        - admin-announcements
+      summary: 更新公告
+      description: 管理员更新公告
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 公告ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: 系统升级通知
+                description:
+                  type: string
+                  example: 系统将于明天进行升级维护
+                type:
+                  type: string
+                  enum: [info, warning, error, success]
+                  example: info
+                language:
+                  type: string
+                  example: zh
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 公告已更新
+    delete:
+      tags:
+        - admin-announcements
+      summary: 删除公告
+      description: 管理员删除公告
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 公告ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 公告已删除
+
+  #--------------------------------------------
   # 签到相关接口
   #--------------------------------------------
   /checkin/status:
@@ -1502,6 +2449,87 @@ components:
       bearerFormat: JWT
       
   schemas:
+    UserData:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: user123
+        email:
+          type: string
+          example: user@example.com
+        is_admin:
+          type: boolean
+          example: false
+
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          example: device-12345
+        device_name:
+          type: string
+          example: iPhone 14
+        device_type:
+          type: string
+          example: mobile
+        ip:
+          type: string
+          example: 192.168.1.100
+        location:
+          type: string
+          example: 北京, 中国
+        source:
+          type: string
+          example: web
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        last_active:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        expires_at:
+          type: string
+          format: date-time
+          example: '2024-02-15T10:30:00Z'
+        is_current:
+          type: boolean
+          example: true
+
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: 系统升级通知
+        description:
+          type: string
+          example: 系统将于明天进行升级维护
+        type:
+          type: string
+          enum: [info, warning, error, success]
+          example: info
+        language:
+          type: string
+          example: zh
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+
     ErrorResponse:
       type: object
       properties:
