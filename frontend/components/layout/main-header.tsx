@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePathname } from "next/navigation"
-import { getAppName } from "@/lib/env"
+import { useConfig } from "@/hooks/useConfig"
 
 const navItems = [
   {
@@ -44,6 +44,7 @@ const navItems = [
 
 export function MainHeader() {
   const pathname = usePathname()
+  const { appName, isLoaded } = useConfig()
   return (
     <header className="sticky top-0 z-30 flex h-12 items-center gap-4 bg-background/80 backdrop-blur-sm px-4 md:px-6">
       <Sheet>
@@ -64,7 +65,7 @@ export function MainHeader() {
               className="font-semibold text-lg text-card-foreground"
               prefetch={false}
             >
-              {getAppName()}
+              {appName}
             </Link>
           </div>
           <nav className="grid gap-2 text-lg font-medium p-4">

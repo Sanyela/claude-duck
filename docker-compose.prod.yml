@@ -1,11 +1,15 @@
 version: '3.8'
 
+networks:
+  app-network:
+    driver: bridge
+
 services:
   backend:
     image: ghcr.io/cloxl/claude-duck-backend:latest
     container_name: claude-duck-backend
     restart: unless-stopped
-    network_mode: host
+    network_mode: host  # backend使用host模式访问宿主机MySQL
     environment:
       - TZ=Asia/Shanghai
       - PORT=9998
@@ -23,15 +27,17 @@ services:
     image: ghcr.io/cloxl/claude-duck-frontend:latest
     container_name: claude-duck-frontend
     restart: unless-stopped
-    network_mode: host
+    networks:
+      - app-network  # frontend使用bridge网络
+    ports:
+      - "3000:3000"  # 映射端口到宿主机
     environment:
       - TZ=Asia/Shanghai
-      - API_URL=http://localhost:9998
-      - APP_NAME=Claude Duck
-      - INSTALL_COMMAND="npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com"
+      - API_URL=http://host.docker.internal:9998  # 通过host.docker.internal访问backend
+      - APP_NAME=Duck Code
+      - INSTALL_COMMAND=npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com
       - DOCS_URL=https://swjqc4r0111.feishu.cn/docx/CJT6dbdUBofDlrxfwpNcp1klnCg
-    depends_on:
-      - backend
+      - CLAUDE_URL=https://api.duckcode.top/api/claude
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
       interval: 30s

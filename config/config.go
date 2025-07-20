@@ -73,7 +73,7 @@ func LoadConfig() {
 
 	AppConfig = &Config{
 		// 应用配置
-		AppName: getEnv("APP_NAME", "Claude Duck"),
+		AppName: getEnv("APP_NAME", "Duck Code"),
 
 		// 数据库配置
 		DBHost:     getEnv("DB_HOST", ""),

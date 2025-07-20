@@ -1,6 +1,8 @@
 import React from 'react'
 import { DocsThemeConfig } from 'nextra-theme-docs'
-import { getAppName } from './lib/env'
+import { getServerAppName } from './lib/env'
+
+const appName = getServerAppName()
 
 const config: DocsThemeConfig = {
   logo: (
@@ -12,7 +14,7 @@ const config: DocsThemeConfig = {
       WebkitTextFillColor: 'transparent',
       backgroundClip: 'text'
     }}>
-      {getAppName()} 安装教程
+      {appName} 安装教程
     </span>
   ),
   project: {
@@ -27,7 +29,7 @@ const config: DocsThemeConfig = {
       <span>
         © 2024{' '}
         <a href="https://anthropic.com" target="_blank">
-          {getAppName()}
+          {appName}
         </a>
         . 保留所有权利。
       </span>
@@ -35,13 +37,13 @@ const config: DocsThemeConfig = {
   },
   useNextSeoProps() {
     return {
-      titleTemplate: `%s – ${getAppName()} 安装教程`
+      titleTemplate: `%s – ${appName} 安装教程`
     }
   },
   head: (
     <>
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <meta property="og:title" content={`${getAppName()} 安装教程`} />
+      <meta property="og:title" content={`${appName} 安装教程`} />
       <meta property="og:description" content="详细的安装和配置指南" />
       <style jsx global>{`
         /* macOS 风格自定义样式 */

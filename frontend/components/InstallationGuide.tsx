@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { getAppName } from '@/lib/env'
+import { useConfig } from '@/hooks/useConfig'
 
 interface InstallationGuideProps {
   markdownContent: string
@@ -9,12 +9,12 @@ interface InstallationGuideProps {
 
 export function InstallationGuide({ markdownContent }: InstallationGuideProps) {
   const [processedContent, setProcessedContent] = useState('')
+  const { appName } = useConfig()
 
   useEffect(() => {
-    const appName = getAppName()
     const processed = markdownContent.replace(/\{\{ appName \}\}/g, appName)
     setProcessedContent(processed)
-  }, [markdownContent])
+  }, [markdownContent, appName])
 
   return (
     <div className="nextra-content">

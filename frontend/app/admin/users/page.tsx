@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { copyToClipboard } from "@/lib/clipboard"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -225,7 +226,12 @@ export default function AdminUsersPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>操作</DropdownMenuLabel>
               <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(user.email)}
+                onClick={async () => {
+                  const success = await copyToClipboard(user.email)
+                  if (!success) {
+                    alert("无法复制邮箱，请手动复制。")
+                  }
+                }}
               >
                 复制邮箱
               </DropdownMenuItem>

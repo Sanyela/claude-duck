@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { copyToClipboard } from "@/lib/clipboard"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -291,7 +292,12 @@ export default function AdminCodesPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>操作</DropdownMenuLabel>
               <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(code.code)}
+                onClick={async () => {
+                  const success = await copyToClipboard(code.code)
+                  if (!success) {
+                    alert("无法复制激活码，请手动复制。")
+                  }
+                }}
               >
                 复制激活码
               </DropdownMenuItem>
@@ -619,13 +625,21 @@ export default function AdminCodesPage() {
   // 处理复制批次号
   const handleCopyBatchNumber = async () => {
     try {
-      await navigator.clipboard.writeText(generatedBatchNumber)
-      toast({
-        title: "复制成功",
-        description: "批次号已复制到剪贴板",
-        variant: "default"
-      })
-      setIsCopyDialogOpen(false)
+      const success = await copyToClipboard(generatedBatchNumber)
+      if (success) {
+        toast({
+          title: "复制成功",
+          description: "批次号已复制到剪贴板",
+          variant: "default"
+        })
+        setIsCopyDialogOpen(false)
+      } else {
+        toast({
+          title: "复制失败",
+          description: "请手动选择批次号文本进行复制",
+          variant: "destructive"
+        })
+      }
     } catch {
       toast({
         title: "复制失败",

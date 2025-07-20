@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { Separator } from "@/components/ui/separator"
-import { getAppName } from "@/lib/env"
+import { useConfig } from "@/hooks/useConfig"
 
 // 用户功能导航项
 const userNavItems = [
@@ -118,6 +118,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const { user } = useAuth()
+  const { appName, isLoaded } = useConfig()
 
   const currentTheme = theme || "light"
 
@@ -129,7 +130,7 @@ export function Sidebar() {
     <aside className="hidden md:flex md:flex-col md:w-56 bg-background sticky top-0 h-screen">
       <div className="flex h-16 items-center justify-center px-4">
         <Link href="/" className="font-semibold text-lg text-foreground" prefetch={false}>
-          {getAppName()}
+          {appName}
         </Link>
       </div>
       

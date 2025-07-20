@@ -4,8 +4,9 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { AuthGuard } from '@/components/auth/auth-guard'
 import { Toaster } from '@/components/ui/toaster'
+import { getServerAppName } from '@/lib/env'
 
-const appName = process.env.APP_NAME || 'Claude Duck'
+const appName = getServerAppName()
 
 export const metadata: Metadata = {
   title: appName,

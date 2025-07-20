@@ -8,6 +8,7 @@ import { useEffect, useState } from "react"
 import { ShieldCheck, Copy, AlertTriangle, ExternalLink } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { authorize } from "@/api/auth"
+import { copyToClipboard } from "@/lib/clipboard"
 
 export function AuthorizeFlow() {
   const searchParams = useSearchParams()
@@ -133,9 +134,13 @@ export function AuthorizeFlow() {
   const handleCopyCode = async () => {
     if (!authCode) return
     try {
-      await navigator.clipboard.writeText(authCode)
-      setShowCodeCopied(true)
-      setTimeout(() => setShowCodeCopied(false), 2000)
+      const success = await copyToClipboard(authCode)
+      if (success) {
+        setShowCodeCopied(true)
+        setTimeout(() => setShowCodeCopied(false), 2000)
+      } else {
+        alert("无法复制授权码，请手动复制。")
+      }
     } catch (err) {
       console.error("无法复制授权码: ", err)
       alert("无法复制授权码，请手动复制。")
@@ -200,8 +205,12 @@ export function AuthorizeFlow() {
               size="icon"
               className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-sky-500 dark:text-slate-400 dark:hover:text-sky-400"
               onClick={async () => {
-                await navigator.clipboard.writeText(token)
-                alert("Token 已复制!")
+                const success = await copyToClipboard(token)
+                if (success) {
+                  alert("Token 已复制!")
+                } else {
+                  alert("无法复制Token，请手动复制。")
+                }
               }}
             >
               <Copy className="h-5 w-5" />
