@@ -80,6 +80,7 @@ func HandleClaudeProxy(c *gin.Context) {
 		return
 	}
 
+	
 	// 读取请求体
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -212,15 +213,15 @@ func HandleClaudeProxy(c *gin.Context) {
 
 	// 如果是非流式响应，直接处理
 	if !isStream {
-		handleNonStreamResponse(c, resp, userID, user.Username, model, startTime, configMap, isFreeModel)
+		handleNonStreamResponse(c, resp, userID, user.Username, model, startTime, configMap, isFreeModel, requestData)
 	} else {
 		// 流式响应处理
-		handleStreamResponse(c, resp, userID, user.Username, model, startTime, configMap, isFreeModel)
+		handleStreamResponse(c, resp, userID, user.Username, model, startTime, configMap, isFreeModel, requestData)
 	}
 }
 
 // 处理非流式响应
-func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, username, model string, startTime time.Time, configMap map[string]string, isFreeModel bool) {
+func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, username, model string, startTime time.Time, configMap map[string]string, isFreeModel bool, requestData map[string]interface{}) {
 	// 读取响应体
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -292,7 +293,7 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 }
 
 // 处理流式响应
-func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, username, model string, startTime time.Time, configMap map[string]string, isFreeModel bool) {
+func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, username, model string, startTime time.Time, configMap map[string]string, isFreeModel bool, requestData map[string]interface{}) {
 	// 特殊处理429状态码
 	if resp.StatusCode == http.StatusTooManyRequests {
 		c.Header("Content-Type", "text/event-stream")
