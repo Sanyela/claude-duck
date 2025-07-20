@@ -74,6 +74,7 @@ func Migrate() error {
 		&models.UserWallet{},
 		&models.RedemptionRecord{},
 		&models.UserDailyUsage{},
+		&models.OAuthAccount{},
 	)
 
 	if err != nil {
@@ -168,6 +169,11 @@ func initDefaultConfigs() {
 			ConfigKey:   "daily_checkin_multi_subscription_strategy",
 			ConfigValue: "highest",
 			Description: "多个订阅时的签到积分策略（highest=最高，lowest=最低）",
+		},
+		{
+			ConfigKey:   "registration_plan_mapping",
+			ConfigValue: `{"default": -1, "linux_do": -1, "github": -1, "google": -1}`,
+			Description: "用户注册套餐映射，JSON格式：{\"注册方式\": 套餐ID}，default为普通注册，-1表示不赠送",
 		},
 	}
 

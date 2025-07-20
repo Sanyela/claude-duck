@@ -933,7 +933,7 @@ func HandleAdminGiftSubscription(c *gin.Context) {
 
 	// 创建赠送记录（用于管理追踪）
 	giftRecord := models.GiftRecord{
-		FromAdminID:        admin.ID,
+		FromAdminID:        &admin.ID,
 		ToUserID:           uint(uid),
 		SubscriptionPlanID: requestData.SubscriptionPlanID,
 		PointsAmount:       pointsAmount,

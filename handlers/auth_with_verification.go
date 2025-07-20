@@ -246,6 +246,12 @@ func HandleRegisterWithCode(c *gin.Context) {
 		return
 	}
 
+	// 处理新用户注册套餐赠送
+	if err := utils.ProcessRegistrationPlanGift(user.ID, "default"); err != nil {
+		log.Printf("新用户套餐赠送失败: user_id=%d, error=%v", user.ID, err)
+		// 套餐赠送失败不影响注册，继续处理
+	}
+
 	c.JSON(http.StatusOK, AuthResponse{
 		Success: true,
 		Message: "注册成功",
@@ -446,6 +452,12 @@ func HandleEmailOnlyAuth(c *gin.Context) {
 		// 删除已使用的验证码
 		registerVerificationKey := fmt.Sprintf("email_verification:%s:register", req.Email)
 		redisClientForAuth.Del(ctx, registerVerificationKey)
+
+		// 处理新用户注册套餐赠送
+		if err := utils.ProcessRegistrationPlanGift(user.ID, "default"); err != nil {
+			log.Printf("新用户套餐赠送失败: user_id=%d, error=%v", user.ID, err)
+			// 套餐赠送失败不影响注册，继续处理
+		}
 	}
 
 	// 生成访问令牌

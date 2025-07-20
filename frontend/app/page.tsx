@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,18 +14,81 @@ import { AnimatedNumber } from "@/components/ui/animated-number"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
+import { useToast } from "@/components/ui/use-toast"
 import { dashboardAPI, type DashboardData } from "@/api/dashboard"
 import { creditsAPI, type CreditBalance } from "@/api/credits"
 import { announcementsAPI, type PublicAnnouncement } from "@/api/announcements"
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, login: authLogin } = useAuth();
+  const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [creditData, setCreditData] = useState<CreditBalance | null>(null);
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0); // 刷新触发器
+  
+  // 处理OAuth回调
+  useEffect(() => {
+    const authStatus = searchParams.get('auth');
+    const token = searchParams.get('token');
+    const message = searchParams.get('message');
+
+    if (authStatus === 'success' && token) {
+      // 保存token到本地存储，使用正确的key名称
+      localStorage.setItem('auth_token', token);
+      
+      // 获取用户信息并更新AuthContext
+      const fetchUserAndLogin = async () => {
+        try {
+          // 临时设置token，以便API调用能正常工作
+          const response = await fetch('/api/proxy/api/auth/user', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          const userData = await response.json();
+          
+          if (response.ok && userData.success && userData.user) {
+            // 使用AuthContext的login方法更新状态
+            authLogin(token, userData.user);
+            
+            // 显示成功消息
+            toast({
+              title: "登录成功",
+              description: decodeURIComponent(message || '登录成功'),
+              variant: "default",
+            });
+          } else {
+            throw new Error('获取用户信息失败');
+          }
+        } catch (error) {
+          console.error('OAuth登录处理失败:', error);
+          toast({
+            title: "登录失败",
+            description: "获取用户信息失败，请重试",
+            variant: "destructive",
+          });
+          // 清理token
+          localStorage.removeItem('auth_token');
+        }
+      };
+      
+      fetchUserAndLogin();
+
+      // 清理URL参数，保持简洁的URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('auth');
+      url.searchParams.delete('token');
+      url.searchParams.delete('message');
+      router.replace(url.pathname + (url.search || ''));
+    }
+  }, [searchParams, router, toast, authLogin]);
   
   // 加载仪表盘数据
   const loadDashboardData = async () => {

@@ -61,6 +61,14 @@ type Config struct {
 
 	// 验证码配置
 	VerificationCodeExpireMinutes int
+
+	// Linux Do OAuth配置
+	LinuxDoClientID     string
+	LinuxDoClientSecret string
+	LinuxDoBaseURL      string
+	
+	// 前端域名配置
+	FrontendURL         string
 }
 
 var AppConfig *Config
@@ -118,6 +126,14 @@ func LoadConfig() {
 
 		// 验证码配置
 		VerificationCodeExpireMinutes: getEnvAsInt("VERIFICATION_CODE_EXPIRE_MINUTES", 10),
+
+		// Linux Do OAuth配置
+		LinuxDoClientID:     getEnv("LINUX_DO_CLIENT_ID", ""),
+		LinuxDoClientSecret: getEnv("LINUX_DO_CLIENT_SECRET", ""),
+		LinuxDoBaseURL:      getEnv("LINUX_DO_BASE_URL", "https://connect.linux.do"),
+		
+		// 前端域名配置
+		FrontendURL:         getEnv("FRONTEND_URL", "https://www.duckcode.top"),
 	}
 }
 

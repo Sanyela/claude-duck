@@ -216,7 +216,7 @@ func (DailyPointsUsage) TableName() string {
 // GiftRecord 卡密赠送记录
 type GiftRecord struct {
 	ID                 uint             `gorm:"primarykey" json:"id"`
-	FromAdminID        uint             `gorm:"not null;index" json:"from_admin_id"` // 赠送的管理员ID
+	FromAdminID        *uint            `gorm:"index" json:"from_admin_id"`             // 赠送的管理员ID，NULL表示系统赠送
 	FromAdmin          User             `gorm:"foreignKey:FromAdminID" json:"from_admin,omitempty"`
 	ToUserID           uint             `gorm:"not null;index" json:"to_user_id"` // 接收的用户ID
 	ToUser             User             `gorm:"foreignKey:ToUserID" json:"to_user,omitempty"`
@@ -358,4 +358,44 @@ type UserDailyUsage struct {
 // 添加表名方法
 func (UserDailyUsage) TableName() string {
 	return "user_daily_usage"
+}
+
+// OAuthAccount OAuth第三方账号关联表
+type OAuthAccount struct {
+	ID       uint `gorm:"primarykey" json:"id"`
+	UserID   uint `gorm:"not null;index" json:"user_id"`           // 关联的本地用户ID
+	User     User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+
+	// OAuth基本信息
+	Provider    string `gorm:"not null;index" json:"provider"`     // oauth提供商：linux_do, github, google等
+	ProviderUID string `gorm:"not null;index" json:"provider_uid"` // 第三方用户唯一ID
+	Email       string `gorm:"type:varchar(191)" json:"email"`     // 第三方邮箱
+
+	// Linux Do Connect 特有字段
+	Username        string `gorm:"type:varchar(191)" json:"username"`         // 论坛用户名
+	Name            string `gorm:"type:varchar(191)" json:"name"`              // 论坛用户昵称
+	AvatarTemplate  string `gorm:"type:varchar(500)" json:"avatar_template"`  // 头像模板URL
+	Active          bool   `gorm:"default:true" json:"active"`                 // 账号活跃状态
+	TrustLevel      int    `gorm:"default:0" json:"trust_level"`               // 信任等级（0-4）
+	Silenced        bool   `gorm:"default:false" json:"silenced"`              // 禁言状态
+	ExternalIDs     string `gorm:"type:text" json:"external_ids"`              // 外部ID关联信息（JSON）
+	APIKey          string `gorm:"type:varchar(255)" json:"api_key"`           // API访问密钥
+
+	// OAuth令牌信息
+	AccessToken  string     `gorm:"type:text" json:"access_token"`   // 访问令牌
+	RefreshToken string     `gorm:"type:text" json:"refresh_token"`  // 刷新令牌  
+	TokenExpiry  *time.Time `json:"token_expiry"`                    // 令牌过期时间
+
+	// 同步信息
+	LastSyncAt  *time.Time `json:"last_sync_at"`                    // 最后同步时间
+	SyncEnabled bool       `gorm:"default:true" json:"sync_enabled"` // 是否启用数据同步
+
+	CreatedAt time.Time      `gorm:"index" json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// 添加表名方法
+func (OAuthAccount) TableName() string {
+	return "oauth_accounts"
 }

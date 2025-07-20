@@ -238,6 +238,14 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 		return
 	}
 
+	// 特殊处理400状态码 - 检查是否是没有可用token的错误
+	if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(responseBody), "没有可用token") {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "号池暂无可用账号，请等待管理员添加账号...",
+		})
+		return
+	}
+
 	// 复制响应头
 	for key, values := range resp.Header {
 		for _, value := range values {
@@ -298,6 +306,23 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 		c.Writer.Write([]byte("data: {\"error\": \"我们的API服务正在历经高负载请求,请稍等一分钟后重试(此条消息可忽略)\"}\n\n"))
 		c.Writer.Flush()
 		return
+	}
+
+	// 特殊处理400状态码 - 检查是否是没有可用token的错误
+	if resp.StatusCode == http.StatusBadRequest {
+		// 读取响应体以检查错误内容
+		tempBody, err := io.ReadAll(resp.Body)
+		if err == nil && strings.Contains(string(tempBody), "没有可用token") {
+			c.Header("Content-Type", "text/event-stream")
+			c.Header("Cache-Control", "no-cache")
+			c.Header("Connection", "keep-alive")
+			c.Status(http.StatusBadRequest)
+			c.Writer.Write([]byte("data: {\"error\": \"号池暂无可用账号，请等待管理员添加账号...\"}\n\n"))
+			c.Writer.Flush()
+			return
+		}
+		// 如果不是没有可用token的错误，需要重新创建body给后续处理
+		resp.Body = io.NopCloser(bytes.NewReader(tempBody))
 	}
 
 	// 设置SSE相关头
