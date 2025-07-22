@@ -48,7 +48,7 @@ export default function AdminConfigsPage() {
       title: "系统配置",
       icon: Zap,
       color: "bg-orange-500",
-      configs: ["free_models_list", "default_degradation_guaranteed", "registration_plan_mapping"]
+      configs: ["free_models_list", "model_redirect_map", "model_multiplier_map", "default_degradation_guaranteed", "registration_plan_mapping"]
     }
   }
 
@@ -149,6 +149,46 @@ export default function AdminConfigsPage() {
         return <span className="text-muted-foreground">格式错误</span>
       }
     }
+    if (config.config_key === "model_redirect_map") {
+      try {
+        const redirectMap = JSON.parse(value)
+        const entries = Object.entries(redirectMap)
+        if (entries.length === 0) {
+          return <Badge variant="secondary" className="text-xs">未设置重定向</Badge>
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {entries.map(([from, to]: [string, any], idx: number) => (
+              <Badge key={idx} variant="outline" className="text-xs">
+                {from} → {to}
+              </Badge>
+            ))}
+          </div>
+        )
+      } catch {
+        return <span className="text-muted-foreground">格式错误</span>
+      }
+    }
+    if (config.config_key === "model_multiplier_map") {
+      try {
+        const multiplierMap = JSON.parse(value)
+        const entries = Object.entries(multiplierMap)
+        if (entries.length === 0) {
+          return <Badge variant="secondary" className="text-xs">未设置模型倍率</Badge>
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {entries.map(([model, multiplier]: [string, any], idx: number) => (
+              <Badge key={idx} variant="outline" className="text-xs">
+                {model}: {multiplier}×
+              </Badge>
+            ))}
+          </div>
+        )
+      } catch {
+        return <span className="text-muted-foreground">格式错误</span>
+      }
+    }
     return <span className="font-mono text-sm">{value}</span>
   }
 
@@ -186,6 +226,28 @@ export default function AdminConfigsPage() {
           placeholder='{"default": -1, "linux_do": 1, "github": 2}'
           className="font-mono text-sm"
           rows={4}
+        />
+      )
+    }
+    if (config.config_key === "model_redirect_map") {
+      return (
+        <Textarea
+          value={config.config_value}
+          onChange={(e) => setEditingConfig({...config, config_value: e.target.value})}
+          placeholder='{"claude-3-opus-20240229": "claude-3-5-sonnet-20241022", "claude-3-sonnet-20240229": "claude-3-5-haiku-20241022"}'
+          className="font-mono text-sm"
+          rows={5}
+        />
+      )
+    }
+    if (config.config_key === "model_multiplier_map") {
+      return (
+        <Textarea
+          value={config.config_value}
+          onChange={(e) => setEditingConfig({...config, config_value: e.target.value})}
+          placeholder='{"claude-3-opus-20240229": 2.0, "claude-3-5-sonnet-20241022": 1.5}'
+          className="font-mono text-sm"
+          rows={5}
         />
       )
     }
@@ -448,6 +510,21 @@ export default function AdminConfigsPage() {
                   {editingConfig.config_key === "free_models_list" && (
                     <p className="text-xs text-muted-foreground">
                       格式：JSON 数组，例如 ["model1", "model2"]
+                    </p>
+                  )}
+                  {editingConfig.config_key === "model_redirect_map" && (
+                    <p className="text-xs text-muted-foreground">
+                      格式：JSON 对象，例如 {`{"原始模型": "目标模型"}`}，空对象 {`{}`} 表示不重定向
+                    </p>
+                  )}
+                  {editingConfig.config_key === "model_multiplier_map" && (
+                    <p className="text-xs text-muted-foreground">
+                      格式：JSON 对象，例如 {`{"模型名": 倍率}`}，倍率为数值类型，空对象 {`{}`} 表示不应用额外倍率
+                    </p>
+                  )}
+                  {editingConfig.config_key === "registration_plan_mapping" && (
+                    <p className="text-xs text-muted-foreground">
+                      格式：JSON 对象，例如 {`{"platform": planId}`}，-1 表示不赠送套餐
                     </p>
                   )}
                   {editingConfig.config_key.includes("multiplier") && (

@@ -98,11 +98,12 @@ func HandleClaudeProxy(c *gin.Context) {
 		return
 	}
 
-	// 获取模型名称
-	model, _ := requestData["model"].(string)
-	if model == "" {
-		model = "unknown"
+	// 获取模型名称（原始请求模型）
+	originalModel, _ := requestData["model"].(string)
+	if originalModel == "" {
+		originalModel = "unknown"
 	}
+	model := originalModel // 用于数据库记录的模型名
 
 	// 获取系统配置
 	var configs []models.SystemConfig
@@ -110,6 +111,24 @@ func HandleClaudeProxy(c *gin.Context) {
 	configMap := make(map[string]string)
 	for _, cfg := range configs {
 		configMap[cfg.ConfigKey] = cfg.ConfigValue
+	}
+
+	// 处理模型重定向
+	modelRedirectConfig := configMap["model_redirect_map"]
+	var actualModel string = originalModel // 实际发送给API的模型名
+	if modelRedirectConfig != "" {
+		var redirectMap map[string]string
+		if err := json.Unmarshal([]byte(modelRedirectConfig), &redirectMap); err == nil {
+			if redirectedModel, exists := redirectMap[originalModel]; exists {
+				actualModel = redirectedModel
+				// 修改请求体中的模型参数
+				requestData["model"] = actualModel
+				// 重新序列化请求体
+				if newBody, err := json.Marshal(requestData); err == nil {
+					body = newBody
+				}
+			}
+		}
 	}
 
 	// 获取免费模型列表配置
@@ -473,8 +492,23 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 
 	totalWeightedTokens := cacheTokensWeighted + inputTokensWeighted + outputTokensWeighted
 
+	// 应用模型倍率
+	modelMultiplierConfig := configMap["model_multiplier_map"]
+	modelMultiplier := 1.0 // 默认倍率为1
+	if modelMultiplierConfig != "" {
+		var multiplierMap map[string]float64
+		if err := json.Unmarshal([]byte(modelMultiplierConfig), &multiplierMap); err == nil {
+			if multiplier, exists := multiplierMap[model]; exists && multiplier > 0 {
+				modelMultiplier = multiplier
+			}
+		}
+	}
+	
+	// 应用模型倍率到总加权token
+	finalWeightedTokens := totalWeightedTokens * modelMultiplier
+
 	// 使用新的累计token计费逻辑
-	err := utils.AccumulateTokensAndDeduct(userID, int64(totalWeightedTokens))
+	err := utils.AccumulateTokensAndDeduct(userID, int64(finalWeightedTokens))
 
 	// 开始数据库事务
 	tx := database.DB.Begin()
@@ -494,6 +528,7 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 			InputMultiplier:          inputMultiplier,
 			OutputMultiplier:         outputMultiplier,
 			CacheMultiplier:          cacheMultiplier,
+			ModelMultiplier:          modelMultiplier,
 			PointsUsed:               0, // 扣费失败时记录为0
 			IP:                       ip,
 			UID:                      fmt.Sprintf("%d", userID),
@@ -522,6 +557,7 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 		InputMultiplier:          inputMultiplier,
 		OutputMultiplier:         outputMultiplier,
 		CacheMultiplier:          cacheMultiplier,
+		ModelMultiplier:          modelMultiplier,
 		PointsUsed:               0, // 累计token计费模式下，这里记录为0，实际扣费由AccumulateTokensAndDeduct处理
 		IP:                       ip,
 		UID:                      fmt.Sprintf("%d", userID),

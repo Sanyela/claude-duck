@@ -163,6 +163,7 @@ type APITransaction struct {
 	InputMultiplier  float64 `gorm:"not null" json:"input_multiplier"`    // 输入token倍率 (原prompt_multiplier)
 	OutputMultiplier float64 `gorm:"not null" json:"output_multiplier"`   // 输出token倍率 (原completion_multiplier)
 	CacheMultiplier  float64 `gorm:"default:1.0" json:"cache_multiplier"` // 缓存token倍率
+	ModelMultiplier  float64 `gorm:"default:1.0" json:"model_multiplier"` // 模型倍率
 	PointsUsed       int64   `gorm:"not null" json:"points_used"`         // 消耗的积分
 
 	// 请求详情
