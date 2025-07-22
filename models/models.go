@@ -27,7 +27,7 @@ type User struct {
 // DeviceCode 设备码模型
 type DeviceCode struct {
 	ID        uint      `gorm:"primarykey" json:"id"`
-	Code      string    `gorm:"type:varchar(191);uniqueIndex;not null" json:"code"`
+	代码      string    `gorm:"type:varchar(191);uniqueIndex;not null" json:"code"`
 	UserID    uint      `gorm:"not null" json:"user_id"`
 	User      User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Used      bool      `gorm:"default:false" json:"used"`
@@ -38,8 +38,8 @@ type DeviceCode struct {
 // Announcement 公告模型
 type Announcement struct {
 	ID          uint           `gorm:"primarykey" json:"id"`
-	Type        string         `gorm:"not null" json:"type"` // info, warning, error, success
-	Title       string         `gorm:"not null" json:"title"`
+	请键入        string         `gorm:"not null" json:"type"` // info, warning, error, success
+	标题       string         `gorm:"not null" json:"title"`
 	Description string         `gorm:"type:text" json:"description"` // 支持HTML
 	Language    string         `gorm:"default:'en'" json:"language"` // 语言标识
 	Active      bool           `gorm:"default:true" json:"active"`   // 是否启用
@@ -61,7 +61,7 @@ type AccessToken struct {
 // SubscriptionPlan 订阅计划模型
 type SubscriptionPlan struct {
 	ID                    uint           `gorm:"primarykey" json:"id"`
-	Title                 string         `gorm:"not null" json:"title"`        // 标题
+	标题                 string         `gorm:"not null" json:"title"`        // 标题
 	Description           string         `gorm:"type:text" json:"description"` // 描述
 	PointAmount           int64          `gorm:"not null" json:"point_amount"` // 套餐包含的积分数
 	Price                 float64        `gorm:"not null" json:"price"`        // 套餐价格
@@ -399,7 +399,8 @@ type OAuthAccount struct {
 // 添加表名方法
 func (OAuthAccount) TableName() string {
 	return "oauth_accounts"
-  
+}
+
 // ConversationLog 对话记录表 - 记录完整的用户输入和AI输出
 type ConversationLog struct {
 	ID     uint `gorm:"primarykey" json:"id"`
@@ -449,8 +450,8 @@ type ConversationLog struct {
 	// 请求性能信息
 	Duration    int    `gorm:"not null" json:"duration"`     // 请求耗时(毫秒)
 	ServiceTier string `gorm:"default:'standard'" json:"service_tier"` // 服务等级
-	Status      string `gorm:"not null;index" json:"status"` // success/failed/partial
-	Error       string `gorm:"type:text" json:"error"`       // 错误信息(如果有)
+	状态      string `gorm:"not null;index" json:"status"` // success/failed/partial
+	错误       string `gorm:"type:text" json:"error"`       // 错误信息(如果有)
 
 	// 是否为免费模型请求
 	IsFreeModel bool `gorm:"default:false" json:"is_free_model"`
