@@ -75,6 +75,7 @@ func Migrate() error {
 		&models.RedemptionRecord{},
 		&models.UserDailyUsage{},
 		&models.OAuthAccount{},
+		&models.ConversationLog{},
 	)
 
 	if err != nil {
