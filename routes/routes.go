@@ -42,6 +42,27 @@ func SetupRoutes(r *gin.Engine) {
 		auth.POST("/email-auth", handlers.HandleEmailOnlyAuth) // 邮箱验证码一键登录/注册
 	}
 
+	// OAuth相关路由
+	oauth := r.Group("/api/oauth")
+	{
+		// Linux Do OAuth - 只保留必要的API路由
+		linuxdo := oauth.Group("/linux-do")
+		{
+			linuxdo.GET("/config", handlers.HandleLinuxDoConfig)       // 获取配置状态
+			linuxdo.GET("/authorize", handlers.HandleLinuxDoAuthorize) // 生成授权URL
+		}
+	}
+
+	// OAuth辅助路由（无需认证）
+	oauthHelper := r.Group("/api/oauth/linuxdo")
+	{
+		oauthHelper.GET("/temp-user", handlers.HandleGetTemporaryLinuxDoUser)          // 获取临时用户信息
+		oauthHelper.POST("/complete-registration", handlers.HandleCompleteLinuxDoRegistration) // 完成注册
+	}
+
+	// Linux Do固定回调路径 - 直接在根路由处理
+	r.GET("/oauth/linuxdo", handlers.HandleLinuxDoCallback)
+
 	// SSO相关路由
 	sso := r.Group("/api/sso")
 	{

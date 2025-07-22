@@ -10,7 +10,8 @@ const nextConfig = {
     unoptimized: true,
   },
   generateEtags: false,
-  headers: async () => {
+
+  async headers() {
     return [
       {
         source: '/api/:path*',
@@ -29,8 +30,17 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, max-age=0',
+          },
+        ],
+      },
     ];
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;

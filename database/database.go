@@ -74,7 +74,8 @@ func Migrate() error {
 		&models.UserWallet{},
 		&models.RedemptionRecord{},
 		&models.UserDailyUsage{},
-		&models.ConversationLog{}, // 新增对话日志表
+		&models.OAuthAccount{},
+		&models.ConversationLog{},
 	)
 
 	if err != nil {
@@ -169,6 +170,21 @@ func initDefaultConfigs() {
 			ConfigKey:   "daily_checkin_multi_subscription_strategy",
 			ConfigValue: "highest",
 			Description: "多个订阅时的签到积分策略（highest=最高，lowest=最低）",
+		},
+		{
+			ConfigKey:   "registration_plan_mapping",
+			ConfigValue: `{"default": -1, "linux_do": -1, "github": -1, "google": -1}`,
+			Description: "用户注册套餐映射，JSON格式：{\"注册方式\": 套餐ID}，default为普通注册，-1表示不赠送",
+		},
+		{
+			ConfigKey:   "model_redirect_map",
+			ConfigValue: `{}`,
+			Description: "模型重定向映射，JSON格式：{\"原始模型\": \"目标模型\"}，空对象表示不重定向",
+		},
+		{
+			ConfigKey:   "model_multiplier_map",
+			ConfigValue: `{}`,
+			Description: "模型倍率映射，JSON格式：{\"模型名\": 倍率}，在现有计费基础上乘以对应倍率，空对象表示不应用额外倍率",
 		},
 	}
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { KeyRound, Mail, Timer, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { login, sendVerificationCode, registerWithCode, emailOnlyAuth, checkEmail } from "@/api/auth"
+import { login, sendVerificationCode, registerWithCode, emailOnlyAuth, checkEmail, getLinuxDoConfig, getLinuxDoAuthorizeUrl } from "@/api/auth"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { getEmailValidationError, getSupportedDomainsText } from "@/lib/email-validator"
@@ -62,10 +62,71 @@ export function LoginForm() {
     showUsernameField: false
   })
 
+  // Linux Do配置状态
+  const [linuxDoConfig, setLinuxDoConfig] = useState<{
+    available: boolean
+    loading: boolean
+  }>({
+    available: false,
+    loading: true
+  })
+
   // 清除错误信息
   const clearErrors = () => {
     setErrors({})
   }
+
+  // 检查当前域名是否支持Linux Do登录
+  const isLinuxDoSupportedDomain = () => {
+    if (typeof window === 'undefined') return false
+    
+    const hostname = window.location.hostname
+    const protocol = window.location.protocol
+    
+    // 只在特定域名的HTTPS下显示Linux Do登录
+    // localhost和非目标域名都不显示
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return false
+    }
+    
+    if (protocol !== 'https:') {
+      return false
+    }
+    
+    // 只在指定域名下显示
+    const allowedDomains = ['www.duckcode.top', 'duckcode.top']
+    return allowedDomains.includes(hostname)
+  }
+
+  // 检查Linux Do配置
+  React.useEffect(() => {
+    const checkLinuxDoConfig = async () => {
+      // 首先检查域名是否支持
+      if (!isLinuxDoSupportedDomain()) {
+        setLinuxDoConfig({
+          available: false,
+          loading: false
+        })
+        return
+      }
+
+      try {
+        const response = await getLinuxDoConfig()
+        setLinuxDoConfig({
+          available: response.success && response.available,
+          loading: false
+        })
+      } catch (error) {
+        console.error("检查Linux Do配置失败:", error)
+        setLinuxDoConfig({
+          available: false,
+          loading: false
+        })
+      }
+    }
+
+    checkLinuxDoConfig()
+  }, [])
 
   // 验证验证码格式 (6位数字)
   const validateVerificationCode = (code: string): boolean => {
@@ -166,6 +227,35 @@ export function LoginForm() {
       console.error("检查邮箱失败:", error)
     }
     return null
+  }
+
+  // 处理Linux Do登录
+  const handleLinuxDoLogin = async () => {
+    setIsLoading(true)
+    clearErrors()
+    
+    try {
+      const response = await getLinuxDoAuthorizeUrl()
+      if (response.success && response.auth_url) {
+        // 重定向到Linux Do授权页面
+        window.location.href = response.auth_url
+      } else {
+        toast({
+          title: "授权失败",
+          description: response.message || "无法生成授权链接",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Linux Do登录失败:", error)
+      toast({
+        title: "授权失败",
+        description: "连接Linux Do服务失败，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // 倒计时功能
@@ -702,6 +792,43 @@ export function LoginForm() {
                   )}
                 </Button>
               </form>
+              
+              {/* Linux Do登录按钮 - 放在登录/注册按钮下方，密码登录选项上方 */}
+              {linuxDoConfig.available && (
+                <div className="mt-4">
+                  {/* 分割线 */}
+                  <div className="relative mb-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">或</span>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    className="w-full h-11 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-900/20"
+                    onClick={handleLinuxDoLogin}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        连接中...
+                      </>
+                    ) : (
+                      <>
+                        <div className="mr-2 h-4 w-4 rounded bg-blue-600 flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">L</span>
+                        </div>
+                        使用 Linux Do 登录
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
               
               {/* 不起眼的密码登录选项 */}
               <div className="text-center mt-4">

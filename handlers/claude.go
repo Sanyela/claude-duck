@@ -99,11 +99,12 @@ func HandleClaudeProxy(c *gin.Context) {
 		return
 	}
 
-	// 获取模型名称
-	model, _ := requestData["model"].(string)
-	if model == "" {
-		model = "unknown"
+	// 获取模型名称（原始请求模型）
+	originalModel, _ := requestData["model"].(string)
+	if originalModel == "" {
+		originalModel = "unknown"
 	}
+	model := originalModel // 用于数据库记录的模型名
 
 	// 获取系统配置
 	var configs []models.SystemConfig
@@ -111,6 +112,24 @@ func HandleClaudeProxy(c *gin.Context) {
 	configMap := make(map[string]string)
 	for _, cfg := range configs {
 		configMap[cfg.ConfigKey] = cfg.ConfigValue
+	}
+
+	// 处理模型重定向
+	modelRedirectConfig := configMap["model_redirect_map"]
+	var actualModel string = originalModel // 实际发送给API的模型名
+	if modelRedirectConfig != "" {
+		var redirectMap map[string]string
+		if err := json.Unmarshal([]byte(modelRedirectConfig), &redirectMap); err == nil {
+			if redirectedModel, exists := redirectMap[originalModel]; exists {
+				actualModel = redirectedModel
+				// 修改请求体中的模型参数
+				requestData["model"] = actualModel
+				// 重新序列化请求体
+				if newBody, err := json.Marshal(requestData); err == nil {
+					body = newBody
+				}
+			}
+		}
 	}
 
 	// 获取免费模型列表配置
@@ -239,6 +258,14 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 		return
 	}
 
+	// 特殊处理400状态码 - 检查是否是没有可用token的错误
+	if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(responseBody), "没有可用token") {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "号池暂无可用账号，请等待管理员添加账号...",
+		})
+		return
+	}
+
 	// 复制响应头
 	for key, values := range resp.Header {
 		for _, value := range values {
@@ -303,6 +330,23 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 		c.Writer.Write([]byte("data: {\"error\": \"我们的API服务正在历经高负载请求,请稍等一分钟后重试(此条消息可忽略)\"}\n\n"))
 		c.Writer.Flush()
 		return
+	}
+
+	// 特殊处理400状态码 - 检查是否是没有可用token的错误
+	if resp.StatusCode == http.StatusBadRequest {
+		// 读取响应体以检查错误内容
+		tempBody, err := io.ReadAll(resp.Body)
+		if err == nil && strings.Contains(string(tempBody), "没有可用token") {
+			c.Header("Content-Type", "text/event-stream")
+			c.Header("Cache-Control", "no-cache")
+			c.Header("Connection", "keep-alive")
+			c.Status(http.StatusBadRequest)
+			c.Writer.Write([]byte("data: {\"error\": \"号池暂无可用账号，请等待管理员添加账号...\"}\n\n"))
+			c.Writer.Flush()
+			return
+		}
+		// 如果不是没有可用token的错误，需要重新创建body给后续处理
+		resp.Body = io.NopCloser(bytes.NewReader(tempBody))
 	}
 
 	// 设置SSE相关头
@@ -457,8 +501,23 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 
 	totalWeightedTokens := cacheTokensWeighted + inputTokensWeighted + outputTokensWeighted
 
+	// 应用模型倍率
+	modelMultiplierConfig := configMap["model_multiplier_map"]
+	modelMultiplier := 1.0 // 默认倍率为1
+	if modelMultiplierConfig != "" {
+		var multiplierMap map[string]float64
+		if err := json.Unmarshal([]byte(modelMultiplierConfig), &multiplierMap); err == nil {
+			if multiplier, exists := multiplierMap[model]; exists && multiplier > 0 {
+				modelMultiplier = multiplier
+			}
+		}
+	}
+	
+	// 应用模型倍率到总加权token
+	finalWeightedTokens := totalWeightedTokens * modelMultiplier
+
 	// 使用新的累计token计费逻辑
-	err := utils.AccumulateTokensAndDeduct(userID, int64(totalWeightedTokens))
+	err := utils.AccumulateTokensAndDeduct(userID, int64(finalWeightedTokens))
 
 	// 开始数据库事务
 	tx := database.DB.Begin()
@@ -478,6 +537,7 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 			InputMultiplier:          inputMultiplier,
 			OutputMultiplier:         outputMultiplier,
 			CacheMultiplier:          cacheMultiplier,
+			ModelMultiplier:          modelMultiplier,
 			PointsUsed:               0, // 扣费失败时记录为0
 			IP:                       ip,
 			UID:                      fmt.Sprintf("%d", userID),
@@ -506,6 +566,7 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 		InputMultiplier:          inputMultiplier,
 		OutputMultiplier:         outputMultiplier,
 		CacheMultiplier:          cacheMultiplier,
+		ModelMultiplier:          modelMultiplier,
 		PointsUsed:               0, // 累计token计费模式下，这里记录为0，实际扣费由AccumulateTokensAndDeduct处理
 		IP:                       ip,
 		UID:                      fmt.Sprintf("%d", userID),

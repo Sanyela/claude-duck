@@ -282,3 +282,46 @@ export const checkEmail = async (data: CheckEmailRequest): Promise<CheckEmailRes
     };
   }
 };
+
+// Linux Do OAuth相关接口
+export interface LinuxDoConfigResponse {
+  success: boolean;
+  available: boolean;
+  message?: string;
+}
+
+export interface LinuxDoAuthorizeResponse {
+  success: boolean;
+  auth_url?: string;
+  state?: string;
+  message?: string;
+}
+
+// 获取Linux Do配置状态
+export const getLinuxDoConfig = async (): Promise<LinuxDoConfigResponse> => {
+  try {
+    const response = await request.get("/api/oauth/linux-do/config");
+    return response.data;
+  } catch (error: any) {
+    console.error("获取Linux Do配置失败:", error);
+    return {
+      success: false,
+      available: false,
+      message: error.response?.data?.message || "获取配置失败"
+    };
+  }
+};
+
+// 生成Linux Do授权URL
+export const getLinuxDoAuthorizeUrl = async (): Promise<LinuxDoAuthorizeResponse> => {
+  try {
+    const response = await request.get("/api/oauth/linux-do/authorize");
+    return response.data;
+  } catch (error: any) {
+    console.error("生成Linux Do授权URL失败:", error);
+    return {
+      success: false,
+      message: error.response?.data?.message || "生成授权URL失败"
+    };
+  }
+};
