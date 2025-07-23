@@ -75,6 +75,7 @@ func Migrate() error {
 		&models.RedemptionRecord{},
 		&models.UserDailyUsage{},
 		&models.OAuthAccount{},
+		&models.FrozenPointsRecord{}, // 新增积分冻结记录表
 	)
 
 	if err != nil {

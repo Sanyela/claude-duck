@@ -52,6 +52,33 @@ export interface ActivationCode {
   expires_at?: string;
   batch_number: string;
   created_at: string;
+  // 积分相关信息
+  subscription?: {
+    total_points: number;
+    used_points: number;
+    available_points: number;
+  };
+}
+
+// 冻结积分记录类型
+export interface FrozenPointsRecord {
+  id: number;
+  user_id: number;
+  user?: AdminUser;
+  banned_activation_code: string;
+  banned_code_id: number;
+  frozen_points: number;
+  frozen_benefits: string;
+  before_ban_wallet_state: string;
+  before_ban_benefits: string;
+  calculation_method: string;
+  estimated_usage: number;
+  status: "frozen" | "restored";
+  ban_reason: string;
+  admin_user_id?: number;
+  admin_user?: AdminUser;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Announcement {
@@ -531,6 +558,131 @@ export const adminAPI = {
       return {
         success: false,
         message: error.response?.data?.error || "获取数据看板失败"
+      };
+    }
+  },
+
+  // ===== 激活码封禁管理相关接口 =====
+
+  // 预览封禁激活码的影响
+  previewBanActivationCode: async (data: {
+    user_id: number;
+    activation_code: string;
+  }): Promise<{ 
+    success: boolean; 
+    current_wallet?: any;
+    ban_impact?: any;
+    consumption_details?: any[];
+    target_card?: any;
+    benefits_change?: any;
+    message?: string;
+  }> => {
+    try {
+      const response = await request.post("/api/admin/activation-codes/ban-preview", data);
+      return {
+        success: true,
+        ...response.data  // 返回后端响应的所有字段
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "获取封禁预览失败"
+      };
+    }
+  },
+
+  // 封禁激活码
+  banActivationCode: async (data: {
+    user_id: number;
+    activation_code: string;
+    reason?: string;
+  }): Promise<{ success: boolean; message?: string }> => {
+    try {
+      await request.post("/api/admin/activation-codes/ban", data);
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "封禁激活码失败"
+      };
+    }
+  },
+
+  // 解禁激活码
+  unbanActivationCode: async (data: {
+    user_id: number;
+    activation_code: string;
+  }): Promise<{ success: boolean; message?: string }> => {
+    try {
+      await request.post("/api/admin/activation-codes/unban", data);
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "解禁激活码失败"
+      };
+    }
+  },
+
+  // 获取冻结记录列表
+  getFrozenRecords: async (params?: {
+    page?: number;
+    page_size?: number;
+    user_id?: number;
+    status?: string;
+    activation_code?: string;
+  }): Promise<{ 
+    success: boolean; 
+    data?: FrozenPointsRecord[];
+    total?: number;
+    page?: number;
+    page_size?: number;
+    total_pages?: number;
+    message?: string;
+  }> => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append('page', params.page.toString());
+      if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+      if (params?.user_id) queryParams.append('user_id', params.user_id.toString());
+      if (params?.status) queryParams.append('status', params.status);
+      if (params?.activation_code) queryParams.append('activation_code', params.activation_code);
+
+      const url = `/api/admin/frozen-records${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      const response = await request.get(url);
+      
+      return {
+        success: true,
+        data: response.data?.data || [],
+        total: response.data?.total || 0,
+        page: response.data?.page || 1,
+        page_size: response.data?.page_size || 10,
+        total_pages: response.data?.total_pages || 0
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "获取冻结记录失败"
+      };
+    }
+  },
+
+  // 获取冻结记录详情
+  getFrozenRecordDetail: async (recordId: number): Promise<{ 
+    success: boolean; 
+    data?: FrozenPointsRecord;
+    message?: string;
+  }> => {
+    try {
+      const response = await request.get(`/api/admin/frozen-records/${recordId}`);
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.error || "获取冻结记录详情失败"
       };
     }
   }

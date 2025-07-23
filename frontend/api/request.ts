@@ -7,7 +7,7 @@ const getBaseURL = () => {
 // 创建axios实例
 export const request = axios.create({
   baseURL: getBaseURL(),
-  timeout: 10000,
+  timeout: 300000, // 增加到30秒
   headers: {
     "Content-Type": "application/json",
   },

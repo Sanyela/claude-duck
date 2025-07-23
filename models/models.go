@@ -400,3 +400,40 @@ type OAuthAccount struct {
 func (OAuthAccount) TableName() string {
 	return "oauth_accounts"
 }
+
+// FrozenPointsRecord 积分冻结记录表
+type FrozenPointsRecord struct {
+	ID                    uint      `gorm:"primarykey" json:"id"`
+	UserID                uint      `gorm:"not null;index" json:"user_id"`
+	User                  User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	
+	// 被封禁的卡密信息
+	BannedActivationCode  string    `gorm:"type:varchar(191);not null;index" json:"banned_activation_code"`
+	BannedCodeID          uint      `gorm:"not null;index" json:"banned_code_id"`
+	
+	// 冻结的积分和权益
+	FrozenPoints          int64     `gorm:"not null;default:0" json:"frozen_points"`    // 冻结的积分数量
+	FrozenBenefits        string    `gorm:"type:json" json:"frozen_benefits"`           // 冻结的权益配置(JSON)
+	
+	// 封禁前的状态快照
+	BeforeBanWalletState  string    `gorm:"type:json" json:"before_ban_wallet_state"`   // 封禁前钱包状态
+	BeforeBanBenefits     string    `gorm:"type:json" json:"before_ban_benefits"`       // 封禁前权益状态
+	
+	// 计算信息  
+	CalculationMethod     string    `gorm:"type:text" json:"calculation_method"`        // 计算过程记录
+	EstimatedUsage        int64     `gorm:"default:0" json:"estimated_usage"`           // 估算已使用积分
+	
+	// 封禁状态和原因
+	Status                string    `gorm:"default:'frozen';index" json:"status"`       // frozen, restored
+	BanReason             string    `gorm:"type:text" json:"ban_reason"`                // 封禁原因
+	AdminUserID           *uint     `json:"admin_user_id"`                              // 操作管理员ID
+	AdminUser             *User     `gorm:"foreignKey:AdminUserID" json:"admin_user,omitempty"`
+	
+	CreatedAt             time.Time `gorm:"index" json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+}
+
+// 添加表名方法
+func (FrozenPointsRecord) TableName() string {
+	return "frozen_points_records"
+}

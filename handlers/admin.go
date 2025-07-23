@@ -1163,3 +1163,300 @@ func HandleAdminDashboard(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dashboardData)
 }
+
+// ===== 激活码封禁管理相关接口 =====
+
+// HandleBanActivationCode 封禁激活码
+func HandleBanActivationCode(c *gin.Context) {
+	var request struct {
+		UserID         uint   `json:"user_id" binding:"required"`
+		ActivationCode string `json:"activation_code" binding:"required"`
+		Reason         string `json:"reason"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 获取操作管理员ID
+	adminUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无法获取管理员信息"})
+		return
+	}
+
+	// 执行封禁操作
+	err := utils.BanActivationCode(request.UserID, request.ActivationCode, request.Reason, adminUserID.(uint))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "激活码封禁成功",
+	})
+}
+
+// HandleUnbanActivationCode 解禁激活码
+func HandleUnbanActivationCode(c *gin.Context) {
+	var request struct {
+		UserID         uint   `json:"user_id" binding:"required"`
+		ActivationCode string `json:"activation_code" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 获取操作管理员ID
+	adminUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无法获取管理员信息"})
+		return
+	}
+
+	// 执行解禁操作
+	err := utils.UnbanActivationCode(request.UserID, request.ActivationCode, adminUserID.(uint))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "激活码解禁成功",
+	})
+}
+
+// HandleGetFrozenRecords 获取冻结记录列表
+func HandleGetFrozenRecords(c *gin.Context) {
+	pagination := getPagination(c)
+	var frozenRecords []models.FrozenPointsRecord
+	var total int64
+
+	query := database.DB.Model(&models.FrozenPointsRecord{}).Preload("User").Preload("AdminUser")
+
+	// 可选过滤参数
+	if userID := c.Query("user_id"); userID != "" {
+		query = query.Where("user_id = ?", userID)
+	}
+	if status := c.Query("status"); status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if activationCode := c.Query("activation_code"); activationCode != "" {
+		query = query.Where("banned_activation_code LIKE ?", "%"+activationCode+"%")
+	}
+
+	query.Count(&total)
+
+	offset := (pagination.Page - 1) * pagination.PageSize
+	query.Offset(offset).Limit(pagination.PageSize).Order("created_at DESC").Find(&frozenRecords)
+
+	c.JSON(http.StatusOK, PaginatedResponse{
+		Data:       frozenRecords,
+		Total:      total,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: int((total + int64(pagination.PageSize) - 1) / int64(pagination.PageSize)),
+	})
+}
+
+// HandleGetFrozenRecordDetail 获取冻结记录详情
+func HandleGetFrozenRecordDetail(c *gin.Context) {
+	recordID := c.Param("id")
+
+	var frozenRecord models.FrozenPointsRecord
+	if err := database.DB.Preload("User").Preload("AdminUser").First(&frozenRecord, recordID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "冻结记录不存在"})
+		return
+	}
+
+	c.JSON(http.StatusOK, frozenRecord)
+}
+
+// HandlePreviewBanActivationCode 预览封禁激活码的影响
+func HandlePreviewBanActivationCode(c *gin.Context) {
+	var request struct {
+		UserID         uint   `json:"user_id" binding:"required"`
+		ActivationCode string `json:"activation_code" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 获取用户钱包
+	wallet, err := utils.GetOrCreateUserWallet(request.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "获取用户钱包失败"})
+		return
+	}
+
+	// 获取所有兑换记录
+	var allRedemptions []models.RedemptionRecord
+	if err := database.DB.Where("user_id = ?", request.UserID).Find(&allRedemptions).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "获取兑换记录失败"})
+		return
+	}
+
+	// 计算虚拟消费情况
+	calculator := &utils.VirtualConsumptionCalculator{
+		UserID:          request.UserID,
+		AllRedemptions:  allRedemptions,
+		TotalUsedPoints: wallet.UsedPoints,
+	}
+
+	consumptionResult, err := calculator.CalculateCardConsumption(request.ActivationCode)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 计算封禁后的权益变化
+	newBenefits, err := calculateRemainingBenefitsForPreview(request.UserID, request.ActivationCode, consumptionResult.AllCards)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "计算权益变化失败: " + err.Error()})
+		return
+	}
+
+	// 当前权益状态
+	currentBenefits := gin.H{
+		"daily_max_points":         wallet.DailyMaxPoints,
+		"degradation_guaranteed":   wallet.DegradationGuaranteed,
+		"daily_checkin_points":     wallet.DailyCheckinPoints,
+		"daily_checkin_points_max": wallet.DailyCheckinPointsMax,
+		"auto_refill_enabled":      wallet.AutoRefillEnabled,
+		"auto_refill_threshold":    wallet.AutoRefillThreshold,
+		"auto_refill_amount":       wallet.AutoRefillAmount,
+	}
+
+	// 检查封禁后是否还有有效卡密
+	hasRemainingCards := false
+	for _, card := range consumptionResult.AllCards {
+		if card.CardCode != request.ActivationCode && card.RemainingPoints > 0 {
+			hasRemainingCards = true
+			break
+		}
+	}
+
+	// 返回预览结果
+	c.JSON(http.StatusOK, gin.H{
+		"current_wallet": gin.H{
+			"total_points":     wallet.TotalPoints,
+			"available_points": wallet.AvailablePoints,
+			"used_points":      wallet.UsedPoints,
+		},
+		"ban_impact": gin.H{
+			"frozen_points":    consumptionResult.RemainingPoints,
+			"consumed_points":  consumptionResult.ConsumedPoints,
+			"new_total_points": wallet.TotalPoints - consumptionResult.RemainingPoints,
+		},
+		"consumption_details": consumptionResult.AllCards,
+		"target_card": gin.H{
+			"code":             consumptionResult.TargetCard.SourceID,
+			"original_points":  consumptionResult.TargetCard.PointsAmount,
+			"remaining_points": consumptionResult.RemainingPoints,
+			"consumed_points":  consumptionResult.ConsumedPoints,
+		},
+		"benefits_change": gin.H{
+			"current_benefits":    currentBenefits,
+			"new_benefits":        newBenefits,
+			"has_remaining_cards": hasRemainingCards,
+			"will_reset_to_initial": !hasRemainingCards,
+		},
+	})
+}
+
+// calculateRemainingBenefitsForPreview 计算封禁预览的权益变化（不执行实际更新）
+func calculateRemainingBenefitsForPreview(userID uint, bannedCode string, allCards []utils.CardUsageDetail) (map[string]interface{}, error) {
+	// 找出所有还有剩余积分的卡密（除了被封禁的）
+	remainingCards := make([]utils.CardUsageDetail, 0)
+	for _, card := range allCards {
+		if card.CardCode != bannedCode && card.RemainingPoints > 0 {
+			remainingCards = append(remainingCards, card)
+		}
+	}
+
+	if len(remainingCards) == 0 {
+		// 没有剩余卡密，恢复到初始状态
+		return map[string]interface{}{
+			"daily_max_points":         int64(0),
+			"degradation_guaranteed":   0,
+			"daily_checkin_points":     int64(0),
+			"daily_checkin_points_max": int64(0),
+			"auto_refill_enabled":      false,
+			"auto_refill_threshold":    int64(0),
+			"auto_refill_amount":       int64(0),
+		}, nil
+	}
+
+	// 有剩余卡密，计算综合权益（取最优配置）
+	benefits := map[string]interface{}{
+		"daily_max_points":         int64(0),
+		"degradation_guaranteed":   0,
+		"daily_checkin_points":     int64(0),
+		"daily_checkin_points_max": int64(0),
+		"auto_refill_enabled":      false,
+		"auto_refill_threshold":    int64(0),
+		"auto_refill_amount":       int64(0),
+	}
+
+	for _, card := range remainingCards {
+		cardBenefits, err := getCardBenefitsForPreview(card.CardCode)
+		if err != nil {
+			continue // 跳过获取失败的卡密
+		}
+
+		// 取最大值策略
+		if dailyMax, ok := cardBenefits["daily_max_points"].(int64); ok && dailyMax > benefits["daily_max_points"].(int64) {
+			benefits["daily_max_points"] = dailyMax
+		}
+		if degradation, ok := cardBenefits["degradation_guaranteed"].(int); ok && degradation > benefits["degradation_guaranteed"].(int) {
+			benefits["degradation_guaranteed"] = degradation
+		}
+		if checkinMin, ok := cardBenefits["daily_checkin_points"].(int64); ok && checkinMin > benefits["daily_checkin_points"].(int64) {
+			benefits["daily_checkin_points"] = checkinMin
+		}
+		if checkinMax, ok := cardBenefits["daily_checkin_points_max"].(int64); ok && checkinMax > benefits["daily_checkin_points_max"].(int64) {
+			benefits["daily_checkin_points_max"] = checkinMax
+		}
+
+		// 布尔值取或操作
+		if autoRefill, ok := cardBenefits["auto_refill_enabled"].(bool); ok && autoRefill {
+			benefits["auto_refill_enabled"] = true
+			if threshold, ok := cardBenefits["auto_refill_threshold"].(int64); ok {
+				benefits["auto_refill_threshold"] = threshold
+			}
+			if amount, ok := cardBenefits["auto_refill_amount"].(int64); ok {
+				benefits["auto_refill_amount"] = amount
+			}
+		}
+	}
+
+	return benefits, nil
+}
+
+// getCardBenefitsForPreview 获取卡密的权益配置（预览用）
+func getCardBenefitsForPreview(cardCode string) (map[string]interface{}, error) {
+	var redemption models.RedemptionRecord
+	err := database.DB.Where("source_id = ? AND source_type = 'activation_code'", cardCode).First(&redemption).Error
+	if err != nil {
+		return nil, err
+	}
+
+	benefits := map[string]interface{}{
+		"daily_max_points":         redemption.DailyMaxPoints,
+		"degradation_guaranteed":   redemption.DegradationGuaranteed,
+		"daily_checkin_points":     redemption.DailyCheckinPoints,
+		"daily_checkin_points_max": redemption.DailyCheckinPointsMax,
+		"auto_refill_enabled":      redemption.AutoRefillEnabled,
+		"auto_refill_threshold":    redemption.AutoRefillThreshold,
+		"auto_refill_amount":       redemption.AutoRefillAmount,
+	}
+
+	return benefits, nil
+}
