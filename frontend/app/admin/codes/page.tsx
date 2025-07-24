@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   ColumnDef,
   flexRender,
@@ -8,7 +8,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal, Key, Plus, Download, Search, Copy, Settings } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Key, Plus, Download, Search, Copy, Settings, Ban, ShieldOff, Eye, AlertTriangle } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,7 +37,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { adminAPI, type ActivationCode, type SubscriptionPlan } from "@/api/admin"
+import { adminAPI, type ActivationCode, type SubscriptionPlan, type FrozenPointsRecord } from "@/api/admin"
 import { getUserInfo, type User } from "@/api/auth"
 
 // 数据类型定义
@@ -82,7 +82,7 @@ export default function AdminCodesPage() {
     totalPages: 0
   })
   // 搜索类型定义
-  type SearchType = "batch_number" | "code" | "username"
+  type SearchType = "batch_number" | "code" | "username" | "frozen_records"
   
   const [searchParams, setSearchParams] = useState({
     query: "",
@@ -90,10 +90,25 @@ export default function AdminCodesPage() {
     status: "all" as "all" | "unused" | "used" | "expired" | "depleted"
   })
   
+  // 防抖用的ref
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isManualSearchRef = useRef(false)
+  
   // 对话框状态
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false)
   const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false)
   const [isDailyLimitDialogOpen, setIsDailyLimitDialogOpen] = useState(false)
+  
+  // 封禁相关对话框状态
+  const [isBanPreviewDialogOpen, setIsBanPreviewDialogOpen] = useState(false)
+  const [isBanDialogOpen, setIsBanDialogOpen] = useState(false)
+  const [banPreviewData, setBanPreviewData] = useState<any>(null)
+  const [selectedCodeForBan, setSelectedCodeForBan] = useState<ActivationCodeRow | null>(null)
+  const [banReason, setBanReason] = useState("")
+  
+  // 冻结记录数据
+  const [frozenRecords, setFrozenRecords] = useState<FrozenPointsRecord[]>([])
+  const [showingFrozenRecords, setShowingFrozenRecords] = useState(false)
   const [generatedBatchNumber, setGeneratedBatchNumber] = useState("")
   const [newCodeData, setNewCodeData] = useState({
     subscription_plan_id: 0,
@@ -299,9 +314,32 @@ export default function AdminCodesPage() {
                   }
                 }}
               >
+                <Copy className="mr-2 h-4 w-4" />
                 复制激活码
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              
+              {/* 封禁相关操作 */}
+              {code.status === "used" && code.used_by_username && (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => handleBanPreview(code)}
+                    className="text-orange-600"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    预览封禁影响
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleBanCode(code)}
+                    className="text-red-600"
+                  >
+                    <Ban className="mr-2 h-4 w-4" />
+                    封禁激活码
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              
               <DropdownMenuItem
                 onClick={() => handleEditDailyLimit(code)}
                 disabled={code.status !== "used"}
@@ -323,9 +361,167 @@ export default function AdminCodesPage() {
     },
   ]
 
+  // 冻结记录的列定义
+  const frozenRecordsColumns: ColumnDef<FrozenPointsRecord>[] = [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="全选"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="选择行"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "banned_activation_code",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            被封禁激活码
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
+      cell: ({ row }) => (
+        <div className="font-mono text-sm">{row.getValue("banned_activation_code")}</div>
+      ),
+    },
+    {
+      accessorKey: "user",
+      header: "受影响用户",
+      cell: ({ row }) => {
+        const user = row.original.user
+        return <div>{user?.username || `用户ID: ${row.original.user_id}`}</div>
+      },
+    },
+    {
+      accessorKey: "frozen_points",
+      header: "冻结积分",
+      cell: ({ row }) => (
+        <div className="text-red-600 font-medium">
+          {row.getValue<number>("frozen_points").toLocaleString()}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "状态",
+      cell: ({ row }) => {
+        const status = row.getValue("status") as string
+        return (
+          <Badge variant={status === "frozen" ? "destructive" : "secondary"}>
+            {status === "frozen" ? "已冻结" : "已恢复"}
+          </Badge>
+        )
+      },
+    },
+    {
+      accessorKey: "ban_reason",
+      header: "封禁原因",
+      cell: ({ row }) => {
+        const reason = row.getValue("ban_reason") as string
+        return (
+          <div className="max-w-xs truncate" title={reason}>
+            {reason || "未填写"}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "admin_user",
+      header: "操作管理员",
+      cell: ({ row }) => {
+        const admin = row.original.admin_user
+        return <div>{admin?.username || "系统"}</div>
+      },
+    },
+    {
+      accessorKey: "created_at",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            创建时间
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
+      cell: ({ row }) => {
+        const date = new Date(row.getValue("created_at"))
+        return <div>{date.toLocaleDateString()}</div>
+      },
+    },
+    {
+      id: "actions",
+      enableHiding: false,
+      cell: ({ row }) => {
+        const record = row.original
+        
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">打开菜单</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>操作</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={async () => {
+                  const success = await copyToClipboard(record.banned_activation_code)
+                  if (!success) {
+                    alert("无法复制激活码，请手动复制。")
+                  }
+                }}
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                复制激活码
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              
+              {/* 解禁操作 */}
+              {record.status === "frozen" && (
+                <DropdownMenuItem
+                  onClick={() => handleUnbanCode(record)}
+                  className="text-green-600"
+                >
+                  <ShieldOff className="mr-2 h-4 w-4" />
+                  解禁激活码
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
+    },
+  ]
+
+  // 根据当前显示的数据类型选择对应的表格
+  const currentColumns = showingFrozenRecords ? frozenRecordsColumns : columns
+  const currentData = showingFrozenRecords ? frozenRecords : data
+
   const table = useReactTable({
-    data,
-    columns,
+    data: currentData,
+    columns: currentColumns,
     getCoreRowModel: getCoreRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
@@ -344,52 +540,90 @@ export default function AdminCodesPage() {
     const currentPageSize = pageSize ?? pagination.pageSize
     const currentSearch = search ?? searchParams
     
-    const params = {
-      page: currentPage,
-      page_size: currentPageSize,
-      ...(currentSearch.query && { 
-        [currentSearch.type]: currentSearch.query 
-      }),
-      ...(currentSearch.status !== "all" && { status: currentSearch.status }),
-    }
-    
-    const result = await adminAPI.getActivationCodes(params)
-    if (result.success && result.codes) {
-      const codes = Array.isArray(result.codes) ? result.codes : []
-      const transformedData: ActivationCodeRow[] = codes.map((code: ActivationCode) => ({
-        id: code.id,
-        code: code.code,
-        status: code.status as "unused" | "used" | "expired" | "depleted",
-        plan_title: code.plan?.title || "未知计划",
-        used_by_username: code.used_by?.username || null,
-        batch_number: code.batch_number || "",
-        created_at: code.created_at,
-        used_at: code.used_at || null,
-        // 积分信息 - 如果后端返回了subscription信息则使用，否则使用默认值
-        total_points: code.subscription?.total_points || code.plan?.point_amount || 0,
-        used_points: code.subscription?.used_points || 0,
-        available_points: code.subscription?.available_points || 0,
-      }))
-      setData(transformedData)
+    // 如果选择的是冻结记录，则加载冻结记录数据
+    if (currentSearch.type === "frozen_records") {
+      setShowingFrozenRecords(true)
       
-      // 更新分页信息
-      setPagination(prev => ({
-        ...prev,
-        total: result.total || 0,
-        totalPages: result.total_pages || 0,
-        page: result.page || currentPage,
-        pageSize: result.page_size || currentPageSize
-      }))
+      const params = {
+        page: currentPage,
+        page_size: currentPageSize,
+        ...(currentSearch.query && { activation_code: currentSearch.query }),
+        ...(currentSearch.status !== "all" && { status: currentSearch.status === "used" ? "frozen" : currentSearch.status }),
+      }
+      
+      const result = await adminAPI.getFrozenRecords(params)
+      if (result.success && result.data) {
+        setFrozenRecords(result.data)
+        setData([]) // 清空激活码数据
+        
+        // 更新分页信息
+        setPagination(prev => ({
+          ...prev,
+          total: result.total || 0,
+          totalPages: result.total_pages || 0,
+          page: result.page || currentPage,
+          pageSize: result.page_size || currentPageSize
+        }))
+      } else {
+        setFrozenRecords([])
+        toast({
+          title: "加载失败",
+          description: result.message,
+          variant: "destructive"
+        })
+      }
     } else {
-      setData([])
-      toast({
-        title: "加载失败",
-        description: result.message,
-        variant: "destructive"
-      })
+      // 加载激活码数据
+      setShowingFrozenRecords(false)
+      
+      const params = {
+        page: currentPage,
+        page_size: currentPageSize,
+        ...(currentSearch.query && { 
+          [currentSearch.type]: currentSearch.query 
+        }),
+        ...(currentSearch.status !== "all" && { status: currentSearch.status }),
+      }
+      
+      const result = await adminAPI.getActivationCodes(params)
+      if (result.success && result.codes) {
+        const codes = Array.isArray(result.codes) ? result.codes : []
+        const transformedData: ActivationCodeRow[] = codes.map((code: ActivationCode) => ({
+          id: code.id,
+          code: code.code,
+          status: code.status as "unused" | "used" | "expired" | "depleted",
+          plan_title: code.plan?.title || "未知计划",
+          used_by_username: code.used_by?.username || null,
+          batch_number: code.batch_number || "",
+          created_at: code.created_at,
+          used_at: code.used_at || null,
+          // 积分信息 - 如果后端返回了subscription信息则使用，否则使用默认值
+          total_points: code.subscription?.total_points || code.plan?.point_amount || 0,
+          used_points: code.subscription?.used_points || 0,
+          available_points: code.subscription?.available_points || 0,
+        }))
+        setData(transformedData)
+        setFrozenRecords([]) // 清空冻结记录数据
+        
+        // 更新分页信息
+        setPagination(prev => ({
+          ...prev,
+          total: result.total || 0,
+          totalPages: result.total_pages || 0,
+          page: result.page || currentPage,
+          pageSize: result.page_size || currentPageSize
+        }))
+      } else {
+        setData([])
+        toast({
+          title: "加载失败",
+          description: result.message,
+          variant: "destructive"
+        })
+      }
     }
     setLoading(false)
-  }, [toast])
+  }, [])
 
   const loadPlans = async () => {
     const result = await adminAPI.getSubscriptionPlans()
@@ -409,7 +643,7 @@ export default function AdminCodesPage() {
   // 初始化时从本地存储读取搜索类型偏好
   useEffect(() => {
     const savedSearchType = localStorage.getItem('activationCode_searchType') as SearchType | null
-    if (savedSearchType && ['batch_number', 'code', 'username'].includes(savedSearchType)) {
+    if (savedSearchType && ['batch_number', 'code', 'username', 'frozen_records'].includes(savedSearchType)) {
       setSearchParams(prev => ({ ...prev, type: savedSearchType }))
     }
   }, [])
@@ -423,25 +657,62 @@ export default function AdminCodesPage() {
     loadCodes(pagination.page, pagination.pageSize)
   }, [pagination.page, pagination.pageSize, loadCodes])
 
-  // 监听搜索参数变化
+  // 监听搜索类型和状态变化（立即触发）
   useEffect(() => {
-    // 重置到第一页并重新搜索
+    // 搜索类型或状态变化时立即重置到第一页并搜索
     if (pagination.page === 1) {
       loadCodes(1, pagination.pageSize, searchParams)
     } else {
       setPagination(prev => ({ ...prev, page: 1 }))
     }
-  }, [searchParams.query, searchParams.type, searchParams.status, loadCodes, pagination.pageSize])
+  }, [searchParams.type, searchParams.status, loadCodes, pagination.pageSize])
+
+  // 监听搜索查询变化（防抖处理）
+  useEffect(() => {
+    // 清除之前的定时器
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current)
+    }
+
+    // 如果是手动搜索或查询为空，立即执行
+    if (isManualSearchRef.current || searchParams.query === '') {
+      isManualSearchRef.current = false // 重置标志
+      if (pagination.page === 1) {
+        loadCodes(1, pagination.pageSize, searchParams)
+      } else {
+        setPagination(prev => ({ ...prev, page: 1 }))
+      }
+      return
+    }
+
+    // 设置防抖定时器
+    debounceTimeoutRef.current = setTimeout(() => {
+      if (pagination.page === 1) {
+        loadCodes(1, pagination.pageSize, searchParams)
+      } else {
+        setPagination(prev => ({ ...prev, page: 1 }))
+      }
+    }, 500) // 500ms 防抖延迟
+
+    // 清理函数
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
+    }
+  }, [searchParams.query, loadCodes, pagination.pageSize])
 
 
   // 搜索处理
   const handleSearch = () => {
+    isManualSearchRef.current = true // 设置手动搜索标志
     setPagination(prev => ({ ...prev, page: 1 }))
     loadCodes(1, pagination.pageSize, searchParams)
   }
 
   // 重置搜索
   const handleResetSearch = () => {
+    isManualSearchRef.current = true // 设置手动搜索标志
     setSearchParams({ query: "", type: searchParams.type, status: "all" })
   }
 
@@ -505,6 +776,168 @@ export default function AdminCodesPage() {
       toast({
         title: "删除失败",
         description: result.message,
+        variant: "destructive"
+      })
+    }
+  }
+
+  // ===== 封禁相关处理函数 =====
+
+  // 处理封禁预览
+  const handleBanPreview = async (code: ActivationCodeRow) => {
+    if (!code.used_by_username) {
+      toast({
+        title: "无法预览",
+        description: "该激活码未被使用",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setSelectedCodeForBan(code)
+    setLoading(true)
+    
+    try {
+      // 通过用户名获取用户信息
+      const userResult = await adminAPI.getUsers({ search: code.used_by_username })
+      if (!userResult.success || !userResult.users || userResult.users.length === 0) {
+        toast({
+          title: "预览失败",
+          description: "无法找到对应的用户信息",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      const user = userResult.users.find(u => u.username === code.used_by_username)
+      if (!user) {
+        toast({
+          title: "预览失败",
+          description: "无法找到对应的用户",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      const result = await adminAPI.previewBanActivationCode({
+        user_id: user.id,
+        activation_code: code.code
+      })
+      
+      if (result.success) {
+        setBanPreviewData(result)
+        setIsBanPreviewDialogOpen(true)
+      } else {
+        toast({
+          title: "预览失败",
+          description: result.message,
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "预览失败",
+        description: "获取封禁预览信息时发生错误",
+        variant: "destructive"
+      })
+    }
+    
+    setLoading(false)
+  }
+
+  // 处理封禁激活码
+  const handleBanCode = (code: ActivationCodeRow) => {
+    setSelectedCodeForBan(code)
+    setBanReason("")
+    setIsBanDialogOpen(true)
+  }
+
+  // 执行封禁操作
+  const handleExecuteBan = async () => {
+    if (!selectedCodeForBan) return
+    
+    setLoading(true)
+    try {
+      // 通过用户名获取用户信息
+      const userResult = await adminAPI.getUsers({ search: selectedCodeForBan.used_by_username! })
+      if (!userResult.success || !userResult.users || userResult.users.length === 0) {
+        toast({
+          title: "封禁失败",
+          description: "无法找到对应的用户信息",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      const user = userResult.users.find(u => u.username === selectedCodeForBan.used_by_username)
+      if (!user) {
+        toast({
+          title: "封禁失败",
+          description: "无法找到对应的用户",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      const result = await adminAPI.banActivationCode({
+        user_id: user.id,
+        activation_code: selectedCodeForBan.code,
+        reason: banReason
+      })
+      
+      if (result.success) {
+        toast({
+          title: "封禁成功",
+          description: "激活码已被封禁",
+          variant: "default"
+        })
+        setIsBanDialogOpen(false)
+        loadCodes(pagination.page, pagination.pageSize, searchParams)
+      } else {
+        toast({
+          title: "封禁失败",
+          description: result.message,
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "封禁失败",
+        description: "执行封禁操作时发生错误",
+        variant: "destructive"
+      })
+    }
+    setLoading(false)
+  }
+
+  // 处理解禁激活码 (从冻结记录中解禁)
+  const handleUnbanCode = async (record: FrozenPointsRecord) => {
+    if (!confirm("确定要解禁此激活码吗？")) return
+    
+    try {
+      const result = await adminAPI.unbanActivationCode({
+        user_id: record.user_id,
+        activation_code: record.banned_activation_code
+      })
+      
+      if (result.success) {
+        toast({
+          title: "解禁成功",
+          description: "激活码已被解禁",
+          variant: "default"
+        })
+        loadCodes(pagination.page, pagination.pageSize, searchParams)
+      } else {
+        toast({
+          title: "解禁失败",
+          description: result.message,
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "解禁失败",
+        description: "执行解禁操作时发生错误",
         variant: "destructive"
       })
     }
@@ -677,6 +1110,7 @@ export default function AdminCodesPage() {
                     <SelectItem value="batch_number">批次号</SelectItem>
                     <SelectItem value="code">激活码</SelectItem>
                     <SelectItem value="username">用户名</SelectItem>
+                    <SelectItem value="frozen_records">冻结记录</SelectItem>
                   </SelectContent>
                 </Select>
                 <div className="relative">
@@ -685,11 +1119,17 @@ export default function AdminCodesPage() {
                     placeholder={
                       searchParams.type === "batch_number" ? "输入批次号搜索..." :
                       searchParams.type === "code" ? "输入激活码搜索..." :
-                      "输入用户名搜索..."
+                      searchParams.type === "username" ? "输入用户名搜索..." :
+                      "输入激活码搜索冻结记录..."
                     }
                     value={searchParams.query}
                     onChange={(e) => setSearchParams({...searchParams, query: e.target.value})}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        isManualSearchRef.current = true // 设置手动搜索标志
+                        handleSearch()
+                      }
+                    }}
                     className="pl-8 max-w-sm"
                   />
                 </div>
@@ -747,13 +1187,27 @@ export default function AdminCodesPage() {
                               column.toggleVisibility(!!value)
                             }
                           >
-                            {column.id === "code" && "激活码"}
-                            {column.id === "status" && "状态"}
-                            {column.id === "plan_title" && "关联计划"}
-                            {column.id === "used_by_username" && "使用者"}
-                            {column.id === "batch_number" && "批次号"}
-                            {column.id === "points_info" && "积分信息"}
-                            {column.id === "created_at" && "创建时间"}
+                            {showingFrozenRecords ? (
+                              // 冻结记录表的列名
+                              column.id === "banned_activation_code" ? "被封禁激活码" :
+                              column.id === "user" ? "受影响用户" :
+                              column.id === "frozen_points" ? "冻结积分" :
+                              column.id === "status" ? "状态" :
+                              column.id === "ban_reason" ? "封禁原因" :
+                              column.id === "admin_user" ? "操作管理员" :
+                              column.id === "created_at" ? "创建时间" :
+                              column.id
+                            ) : (
+                              // 激活码表的列名
+                              column.id === "code" ? "激活码" :
+                              column.id === "status" ? "状态" :
+                              column.id === "plan_title" ? "关联计划" :
+                              column.id === "used_by_username" ? "使用者" :
+                              column.id === "batch_number" ? "批次号" :
+                              column.id === "points_info" ? "积分信息" :
+                              column.id === "created_at" ? "创建时间" :
+                              column.id
+                            )}
                           </DropdownMenuCheckboxItem>
                         )
                       })}
@@ -855,8 +1309,9 @@ export default function AdminCodesPage() {
             {/* 分页控制 */}
             <div className="flex items-center justify-between space-x-2 py-4">
               <div className="flex-1 text-sm text-muted-foreground">
-                {table.getSelectedRowModel().rows.length} / {data.length} 行已选择
+                {table.getSelectedRowModel().rows.length} / {currentData.length} 行已选择
                 <span className="ml-4">共 {pagination.total} 条记录</span>
+                {showingFrozenRecords && <span className="ml-2 text-orange-600">（冻结记录）</span>}
               </div>
               <div className="flex items-center space-x-6 lg:space-x-8">
                 <div className="flex items-center space-x-2">
@@ -1033,6 +1488,306 @@ export default function AdminCodesPage() {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDailyLimitDialogOpen(false)}>取消</Button>
                 <Button onClick={handleUpdateDailyLimit}>保存</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* 封禁预览对话框 */}
+          <Dialog open={isBanPreviewDialogOpen} onOpenChange={setIsBanPreviewDialogOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Eye className="h-5 w-5 text-orange-500" />
+                  封禁影响预览
+                </DialogTitle>
+                <DialogDescription>
+                  预览封禁激活码 &quot;{selectedCodeForBan?.code}&quot; 对用户的影响
+                </DialogDescription>
+              </DialogHeader>
+              {banPreviewData && (
+                <div className="space-y-4">
+                  {/* 当前钱包状态 */}
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-blue-900 mb-2">当前用户钱包状态</h4>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">总积分：</span>
+                        <span className="font-medium">{banPreviewData.current_wallet?.total_points?.toLocaleString() || 0}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">可用积分：</span>
+                        <span className="font-medium text-green-600">{banPreviewData.current_wallet?.available_points?.toLocaleString() || 0}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">已用积分：</span>
+                        <span className="font-medium text-orange-600">{banPreviewData.current_wallet?.used_points?.toLocaleString() || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 封禁影响 */}
+                  <div className="bg-red-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-red-900 mb-2">封禁后影响</h4>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">将冻结积分：</span>
+            <span className="font-medium text-red-600">{banPreviewData.ban_impact?.frozen_points?.toLocaleString() || 0}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">已消费积分：</span>
+                        <span className="font-medium">{banPreviewData.ban_impact?.consumed_points?.toLocaleString() || 0}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">封禁后总积分：</span>
+                        <span className="font-medium">{banPreviewData.ban_impact?.new_total_points?.toLocaleString() || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 目标卡密信息 */}
+                  {banPreviewData.target_card && (
+                    <div className="bg-yellow-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-yellow-900 mb-2">目标激活码信息</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">激活码：</span>
+                          <span className="font-mono font-medium">{banPreviewData.target_card.code}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">原始积分：</span>
+                          <span className="font-medium">{banPreviewData.target_card.original_points?.toLocaleString() || 0}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">剩余积分：</span>
+                          <span className="font-medium text-green-600">{banPreviewData.target_card.remaining_points?.toLocaleString() || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 消费详情 */}
+                  {banPreviewData.consumption_details && banPreviewData.consumption_details.length > 0 && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 mb-2">虚拟消费计算详情</h4>
+                      <div className="max-h-32 overflow-y-auto space-y-2">
+                        {banPreviewData.consumption_details.map((card: any, index: number) => (
+                          <div key={index} className="flex justify-between items-center text-xs bg-white p-2 rounded">
+                            <div className="flex flex-col">
+                              <span className="font-mono text-sm">{card.card_code}</span>
+                              <span className="text-gray-500 text-xs">原始: {card.original_points.toLocaleString()}积分</span>
+                            </div>
+                            <div className="text-right">
+                              {card.status === "fully_consumed" ? (
+                                <span className="text-red-600 font-medium">已全部消费</span>
+                              ) : card.consumed_points > 0 ? (
+                                <div className="text-orange-600">
+                                  <div>消费: {card.consumed_points.toLocaleString()}</div>
+                                  <div className="text-green-600">剩余: {card.remaining_points.toLocaleString()}</div>
+                                </div>
+                              ) : (
+                                <span className="text-green-600">剩余: {card.remaining_points.toLocaleString()}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 权益变化预览 */}
+                  {banPreviewData.benefits_change && (
+                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 mt-4">
+                      <h4 className="font-medium text-orange-900 mb-3">
+                        ⚖️ 权益变化预览
+                      </h4>
+                      
+                      {/* 特殊警告：无剩余卡密 */}
+                      {banPreviewData.benefits_change.will_reset_to_initial && (
+                        <div className="bg-red-100 p-3 rounded-lg border border-red-300 mb-4">
+                          <div className="flex items-center gap-2 text-red-800 mb-2">
+                            <span className="text-lg">⚠️</span>
+                            <span className="font-medium">重要警告</span>
+                          </div>
+                          <p className="text-red-700 text-sm font-medium">
+                            封禁此激活码后，用户将没有任何有效的激活码，所有权益将重置为初始状态（即钱包过期状态）！
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="bg-white rounded-lg border overflow-hidden">
+                        <div className="px-4 py-3 bg-blue-50 border-b border-blue-200">
+                          <h5 className="font-semibold text-blue-800 text-sm">权益对比详情</h5>
+                        </div>
+                        <div className="p-4">
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            {/* 表头 */}
+                            <div className="font-medium text-gray-600">权益项目</div>
+                            <div className="font-medium text-green-600 text-center">当前状态</div>
+                            <div className="font-medium text-blue-600 text-center">封禁后状态</div>
+                            
+                            {/* 分隔线 */}
+                            <div className="col-span-3 border-t border-gray-200 my-2"></div>
+                            
+                            {/* 每日限额 */}
+                            <div className="text-gray-700">📊 每日限额</div>
+                            <div className="text-center text-green-600 font-medium">
+                              {banPreviewData.benefits_change?.current_benefits?.daily_max_points > 0 
+                                ? `${banPreviewData.benefits_change.current_benefits.daily_max_points.toLocaleString()}积分` 
+                                : '无限制'}
+                            </div>
+                            <div className="text-center font-medium">
+                              {banPreviewData.benefits_change?.new_benefits?.daily_max_points > 0 
+                                ? `${banPreviewData.benefits_change.new_benefits.daily_max_points.toLocaleString()}积分` 
+                                : (
+                                  <span className="text-red-600">无限制</span>
+                                )}
+                            </div>
+                            
+                            {/* 签到奖励 */}
+                            <div className="text-gray-700">🎁 签到奖励</div>
+                            <div className="text-center text-green-600 font-medium">
+                              {banPreviewData.benefits_change?.current_benefits?.daily_checkin_points > 0 ? (
+                                banPreviewData.benefits_change.current_benefits.daily_checkin_points === banPreviewData.benefits_change.current_benefits.daily_checkin_points_max ? 
+                                  `${banPreviewData.benefits_change.current_benefits.daily_checkin_points}积分` : 
+                                  `${banPreviewData.benefits_change.current_benefits.daily_checkin_points}-${banPreviewData.benefits_change.current_benefits.daily_checkin_points_max}积分`
+                              ) : '未配置'}
+                            </div>
+                            <div className="text-center font-medium">
+                              {banPreviewData.benefits_change?.new_benefits?.daily_checkin_points > 0 ? (
+                                banPreviewData.benefits_change.new_benefits.daily_checkin_points === banPreviewData.benefits_change.new_benefits.daily_checkin_points_max ? 
+                                  `${banPreviewData.benefits_change.new_benefits.daily_checkin_points}积分` : 
+                                  `${banPreviewData.benefits_change.new_benefits.daily_checkin_points}-${banPreviewData.benefits_change.new_benefits.daily_checkin_points_max}积分`
+                              ) : (
+                                <span className="text-red-600">未配置</span>
+                              )}
+                            </div>
+                            
+                            {/* 自动补给 */}
+                            <div className="text-gray-700">🔄 自动补给</div>
+                            <div className="text-center text-green-600 font-medium">
+                              {banPreviewData.benefits_change?.current_benefits?.auto_refill_enabled 
+                                ? `${banPreviewData.benefits_change.current_benefits.auto_refill_amount}积分` 
+                                : '未启用'}
+                            </div>
+                            <div className="text-center font-medium">
+                              {banPreviewData.benefits_change?.new_benefits?.auto_refill_enabled 
+                                ? `${banPreviewData.benefits_change.new_benefits.auto_refill_amount}积分` 
+                                : (
+                                  <span className="text-red-600">未启用</span>
+                                )}
+                            </div>
+                            
+                            {/* 降智保护 */}
+                            <div className="text-gray-700">🛡️ 降智保护</div>
+                            <div className="text-center text-green-600 font-medium">
+                              {banPreviewData.benefits_change?.current_benefits?.degradation_guaranteed > 0 
+                                ? `等级 ${banPreviewData.benefits_change.current_benefits.degradation_guaranteed}` 
+                                : '无保护'}
+                            </div>
+                            <div className="text-center font-medium">
+                              {banPreviewData.benefits_change?.new_benefits?.degradation_guaranteed > 0 
+                                ? `等级 ${banPreviewData.benefits_change.new_benefits.degradation_guaranteed}` 
+                                : (
+                                  <span className="text-red-600">无保护</span>
+                                )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* 权益变化说明 */}
+                      <div className="mt-3 text-xs text-blue-700 bg-blue-100 p-2 rounded">
+                        <p className="font-medium mb-1">权益计算说明：</p>
+                        <ul className="space-y-1 ml-2">
+                          {banPreviewData.benefits_change.has_remaining_cards ? (
+                            <li>• 系统将基于剩余有效激活码重新计算最优权益配置</li>
+                          ) : (
+                            <li>• 封禁后用户将没有任何有效激活码，权益将重置为初始状态</li>
+                          )}
+                          <li>• 权益变化在封禁操作执行后立即生效</li>
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsBanPreviewDialogOpen(false)}>关闭预览</Button>
+                <Button 
+                  onClick={() => {
+                    setIsBanPreviewDialogOpen(false)
+                    if (selectedCodeForBan) {
+                      setIsBanDialogOpen(true)
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <Ban className="mr-2 h-4 w-4" />
+                  继续封禁
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* 封禁操作对话框 */}
+          <Dialog open={isBanDialogOpen} onOpenChange={setIsBanDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  确认封禁激活码
+                </DialogTitle>
+                <DialogDescription>
+                  此操作将封禁激活码 &quot;{selectedCodeForBan?.code}&quot; 并冻结相应的积分，操作不可撤销。
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                  <div className="flex items-center gap-2 text-red-800 mb-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="font-medium">警告</span>
+                  </div>
+                  <p className="text-red-700 text-sm">
+                    封禁操作将：
+                  </p>
+                  <ul className="text-red-700 text-sm mt-1 ml-4 list-disc">
+                    <li>立即冻结该激活码对应的剩余积分</li>
+                    <li>降级用户的相关权益</li>
+                    <li>创建不可逆的冻结记录</li>
+                  </ul>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>封禁原因 (可选)</Label>
+                  <Input
+                    value={banReason}
+                    onChange={(e) => setBanReason(e.target.value)}
+                    placeholder="请输入封禁原因..."
+                    maxLength={200}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    封禁原因将被记录在冻结记录中
+                  </p>
+                </div>
+                
+                {selectedCodeForBan && (
+                  <div className="bg-muted p-3 rounded text-sm">
+                    <p className="font-medium mb-1">即将封禁的激活码：</p>
+                    <p>激活码: <span className="font-mono">{selectedCodeForBan.code}</span></p>
+                    <p>使用者: {selectedCodeForBan.used_by_username}</p>
+                    <p>关联计划: {selectedCodeForBan.plan_title}</p>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsBanDialogOpen(false)}>取消</Button>
+                <Button 
+                  onClick={handleExecuteBan}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  disabled={loading}
+                >
+                  {loading ? "封禁中..." : "确认封禁"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

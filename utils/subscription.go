@@ -345,11 +345,24 @@ func maxTime(a, b time.Time) time.Time {
 	return b
 }
 
-// GetWalletActiveRedemptionRecords 获取钱包有效的兑换记录
+// GetWalletActiveRedemptionRecords 获取钱包有效的兑换记录（排除被封禁的激活码）
 func GetWalletActiveRedemptionRecords(userID uint) ([]models.RedemptionRecord, error) {
 	var records []models.RedemptionRecord
-	err := database.DB.Where("user_id = ? AND expires_at > ?", userID, time.Now()).
-		Order("created_at DESC").Find(&records).Error
+	
+	// 获取被封禁的激活码列表
+	var bannedCodes []string
+	database.DB.Table("frozen_points_records").
+		Where("user_id = ? AND status = 'frozen'", userID).
+		Pluck("banned_activation_code", &bannedCodes)
+	
+	query := database.DB.Where("user_id = ? AND expires_at > ?", userID, time.Now())
+	
+	// 排除被封禁的激活码记录
+	if len(bannedCodes) > 0 {
+		query = query.Where("NOT (source_type = 'activation_code' AND source_id IN ?)", bannedCodes)
+	}
+	
+	err := query.Order("created_at DESC").Find(&records).Error
 	return records, err
 }
 

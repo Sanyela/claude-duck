@@ -145,6 +145,13 @@ func SetupRoutes(r *gin.Engine) {
 		admin.GET("/activation-codes/:id/daily-limit", handlers.HandleGetActivationCodeDailyLimit)
 		admin.PUT("/activation-codes/:id/daily-limit", handlers.HandleUpdateActivationCodeDailyLimit)
 
+		// 激活码封禁管理
+		admin.POST("/activation-codes/ban", handlers.HandleBanActivationCode)
+		admin.POST("/activation-codes/unban", handlers.HandleUnbanActivationCode)
+		admin.POST("/activation-codes/ban-preview", handlers.HandlePreviewBanActivationCode)
+		admin.GET("/frozen-records", handlers.HandleGetFrozenRecords)
+		admin.GET("/frozen-records/:id", handlers.HandleGetFrozenRecordDetail)
+
 		// 公告管理
 		admin.GET("/announcements", handlers.HandleAdminGetAnnouncements)
 		admin.POST("/announcements", handlers.HandleAdminCreateAnnouncement)
