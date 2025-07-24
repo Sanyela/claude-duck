@@ -105,9 +105,9 @@ func (calc *VirtualConsumptionCalculator) getSortedActiveCards() []models.Redemp
 
 	// 找到最后一次同级兑换的时间
 	for _, record := range calc.AllRedemptions {
-		if record.SourceType == "activation_code" && 
-		   strings.Contains(record.Reason, "same_level服务") &&
-		   record.ActivatedAt.After(lastSameLevelTime) {
+		if record.SourceType == "activation_code" &&
+			strings.Contains(record.Reason, "same_level服务") &&
+			record.ActivatedAt.After(lastSameLevelTime) {
 			lastSameLevelTime = record.ActivatedAt
 		}
 	}
@@ -208,10 +208,28 @@ func BanActivationCode(userID uint, activationCode string, reason string, adminU
 		// 8. 更新钱包权益
 		updateWalletBenefits(wallet, newBenefits)
 
-		// 9. 生成计算日志
+		// 9. 检查是否没有剩余有效卡密，如果是，清空钱包并设为过期
+		hasRemainingCards := false
+		for _, card := range consumptionResult.AllCards {
+			if card.CardCode != activationCode && card.RemainingPoints > 0 {
+				hasRemainingCards = true
+				break
+			}
+		}
+
+		if !hasRemainingCards {
+			// 没有剩余有效卡密，清空钱包积分并设为过期状态
+			wallet.AvailablePoints = 0
+			wallet.TotalPoints = 0
+			wallet.UsedPoints = 0
+			wallet.Status = "expired"
+			wallet.WalletExpiresAt = time.Now()
+		}
+
+		// 10. 生成计算日志
 		calculationLog := generateCalculationLog(consumptionResult)
 
-		// 10. 创建冻结记录
+		// 11. 创建冻结记录
 		frozenRecord := &models.FrozenPointsRecord{
 			UserID:               userID,
 			BannedActivationCode: activationCode,
@@ -227,7 +245,7 @@ func BanActivationCode(userID uint, activationCode string, reason string, adminU
 			Status:               "frozen",
 		}
 
-		// 11. 更新数据库
+		// 12. 更新数据库
 		if err := tx.Save(wallet).Error; err != nil {
 			return fmt.Errorf("更新钱包失败: %w", err)
 		}
@@ -265,7 +283,7 @@ func UnbanActivationCode(userID uint, activationCode string, adminUserID uint) e
 		wallet.TotalPoints += frozenRecord.FrozenPoints
 
 		// 4. 重新计算包含该卡密的权益
-		newBenefits, err := recalculateBenefitsWithUnbannedCard(userID, activationCode, frozenRecord, tx)
+		newBenefits, err := recalculateBenefitsWithUnbannedCard(userID, activationCode, tx)
 		if err != nil {
 			return fmt.Errorf("重新计算权益失败: %w", err)
 		}
@@ -462,7 +480,7 @@ func updateWalletBenefits(wallet *models.UserWallet, benefits map[string]interfa
 }
 
 // recalculateBenefitsWithUnbannedCard 重新计算包含解禁卡密的权益
-func recalculateBenefitsWithUnbannedCard(userID uint, unbannedCode string, frozenRecord models.FrozenPointsRecord, tx *gorm.DB) (map[string]interface{}, error) {
+func recalculateBenefitsWithUnbannedCard(userID uint, unbannedCode string, tx *gorm.DB) (map[string]interface{}, error) {
 	// 1. 获取所有有效的兑换记录（包括刚解禁的）
 	var allRedemptions []models.RedemptionRecord
 	if err := tx.Where("user_id = ? AND source_type = 'activation_code'", userID).Find(&allRedemptions).Error; err != nil {

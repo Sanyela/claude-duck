@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   ColumnDef,
   flexRender,
@@ -89,6 +89,10 @@ export default function AdminCodesPage() {
     type: "batch_number" as SearchType,
     status: "all" as "all" | "unused" | "used" | "expired" | "depleted"
   })
+  
+  // 防抖用的ref
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isManualSearchRef = useRef(false)
   
   // 对话框状态
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false)
@@ -619,7 +623,7 @@ export default function AdminCodesPage() {
       }
     }
     setLoading(false)
-  }, [toast])
+  }, [])
 
   const loadPlans = async () => {
     const result = await adminAPI.getSubscriptionPlans()
@@ -653,25 +657,62 @@ export default function AdminCodesPage() {
     loadCodes(pagination.page, pagination.pageSize)
   }, [pagination.page, pagination.pageSize, loadCodes])
 
-  // 监听搜索参数变化
+  // 监听搜索类型和状态变化（立即触发）
   useEffect(() => {
-    // 重置到第一页并重新搜索
+    // 搜索类型或状态变化时立即重置到第一页并搜索
     if (pagination.page === 1) {
       loadCodes(1, pagination.pageSize, searchParams)
     } else {
       setPagination(prev => ({ ...prev, page: 1 }))
     }
-  }, [searchParams.query, searchParams.type, searchParams.status, loadCodes, pagination.pageSize])
+  }, [searchParams.type, searchParams.status, loadCodes, pagination.pageSize])
+
+  // 监听搜索查询变化（防抖处理）
+  useEffect(() => {
+    // 清除之前的定时器
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current)
+    }
+
+    // 如果是手动搜索或查询为空，立即执行
+    if (isManualSearchRef.current || searchParams.query === '') {
+      isManualSearchRef.current = false // 重置标志
+      if (pagination.page === 1) {
+        loadCodes(1, pagination.pageSize, searchParams)
+      } else {
+        setPagination(prev => ({ ...prev, page: 1 }))
+      }
+      return
+    }
+
+    // 设置防抖定时器
+    debounceTimeoutRef.current = setTimeout(() => {
+      if (pagination.page === 1) {
+        loadCodes(1, pagination.pageSize, searchParams)
+      } else {
+        setPagination(prev => ({ ...prev, page: 1 }))
+      }
+    }, 500) // 500ms 防抖延迟
+
+    // 清理函数
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
+    }
+  }, [searchParams.query, loadCodes, pagination.pageSize])
 
 
   // 搜索处理
   const handleSearch = () => {
+    isManualSearchRef.current = true // 设置手动搜索标志
     setPagination(prev => ({ ...prev, page: 1 }))
     loadCodes(1, pagination.pageSize, searchParams)
   }
 
   // 重置搜索
   const handleResetSearch = () => {
+    isManualSearchRef.current = true // 设置手动搜索标志
     setSearchParams({ query: "", type: searchParams.type, status: "all" })
   }
 
@@ -1083,7 +1124,12 @@ export default function AdminCodesPage() {
                     }
                     value={searchParams.query}
                     onChange={(e) => setSearchParams({...searchParams, query: e.target.value})}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        isManualSearchRef.current = true // 设置手动搜索标志
+                        handleSearch()
+                      }
+                    }}
                     className="pl-8 max-w-sm"
                   />
                 </div>
