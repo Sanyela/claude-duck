@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server';
 
 // 动态获取API_URL，支持环境变量配置

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { AuthorizeFlow } from "@/components/oauth/authorize-flow"
 import { Suspense } from "react"
 

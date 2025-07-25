@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { OAuthLinkGenerator } from "@/components/tools/oauth-link-generator"
 import { Card } from "@/components/ui/card"
