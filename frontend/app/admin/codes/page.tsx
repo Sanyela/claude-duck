@@ -563,7 +563,7 @@ export default function AdminCodesPage() {
           ...prev,
           total: result.total || 0,
           totalPages: result.total_pages || 0,
-          page: result.page || currentPage,
+          page: currentPage, // 使用当前请求的页码，避免后端返回不一致的页码
           pageSize: result.page_size || currentPageSize
         }))
       } else {
@@ -612,7 +612,7 @@ export default function AdminCodesPage() {
           ...prev,
           total: result.total || 0,
           totalPages: result.total_pages || 0,
-          page: result.page || currentPage,
+          page: currentPage, // 使用当前请求的页码，避免后端返回不一致的页码
           pageSize: result.page_size || currentPageSize
         }))
       } else {
@@ -667,7 +667,7 @@ export default function AdminCodesPage() {
     } else {
       setPagination(prev => ({ ...prev, page: 1 }))
     }
-  }, [searchParams.type, searchParams.status, loadCodes, pagination.pageSize])
+  }, [searchParams.type, searchParams.status, pagination.pageSize, loadCodes])
 
   // 监听搜索查询变化（防抖处理）
   useEffect(() => {
@@ -702,7 +702,7 @@ export default function AdminCodesPage() {
         clearTimeout(debounceTimeoutRef.current)
       }
     }
-  }, [searchParams.query, loadCodes, pagination.pageSize])
+  }, [searchParams.query, pagination.pageSize, loadCodes])
 
 
   // 搜索处理

@@ -280,6 +280,30 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 
 	// 如果请求成功，解析响应并记录
 	if resp.StatusCode == http.StatusOK {
+		// 检查响应中是否包含 is_error 字段
+		var responseCheck map[string]interface{}
+		if err := json.Unmarshal(responseBody, &responseCheck); err == nil {
+			if isError, exists := responseCheck["is_error"]; exists && isError == true {
+				// 如果检测到 is_error，记录失败请求但不扣费
+				apiTransaction := models.APITransaction{
+					UserID:      userID,
+					RequestID:   fmt.Sprintf("req_%d_%d", userID, time.Now().UnixNano()),
+					Model:       model,
+					RequestType: "api",
+					IP:          c.ClientIP(),
+					UID:         fmt.Sprintf("%d", userID),
+					Username:    username,
+					Status:      "claude_error",
+					Error:       "Claude API returned is_error: true",
+					Duration:    int(time.Since(startTime).Milliseconds()),
+					ServiceTier: "standard",
+					CreatedAt:   time.Now(),
+				}
+				database.DB.Create(&apiTransaction)
+				return
+			}
+		}
+
 		var claudeResp ClaudeResponse
 		if err := json.Unmarshal(responseBody, &claudeResp); err == nil {
 			// 记录成功的请求并扣费
@@ -360,6 +384,7 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 	var totalInputTokens, totalOutputTokens int
 	var streamError error
 	var finalClaudeResp *ClaudeResponse
+	var hasError bool = false // 标记是否检测到错误
 
 	// 创建读取器
 	reader := bufio.NewReader(resp.Body)
@@ -384,6 +409,15 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 			data = bytes.TrimSpace(data)
 
 			if len(data) > 0 && !bytes.Equal(data, []byte("[DONE]")) {
+				// 首先检查是否包含 is_error 字段
+				var errorCheck map[string]interface{}
+				if err := json.Unmarshal(data, &errorCheck); err == nil {
+					if isError, exists := errorCheck["is_error"]; exists && isError == true {
+						hasError = true
+						// 继续写入数据给客户端，但标记为错误
+					}
+				}
+
 				var event ClaudeStreamEvent
 				if err := json.Unmarshal(data, &event); err == nil {
 					// 记录消息开始事件
@@ -408,8 +442,8 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 	}
 
 	// 记录流式请求的使用情况
-	if messageID != "" && resp.StatusCode == http.StatusOK && streamError == nil {
-		// 成功的流式请求
+	if messageID != "" && resp.StatusCode == http.StatusOK && streamError == nil && !hasError {
+		// 成功的流式请求，没有错误
 		recordUsage(userID, username, model, messageID,
 			totalInputTokens, totalOutputTokens,
 			0, 0, // 流式响应暂时没有缓存信息
@@ -418,7 +452,15 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 			c.ClientIP(), startTime, configMap, isFreeModel)
 
 	} else if messageID != "" {
-		// 失败的流式请求，记录但不扣费
+		// 失败的流式请求或检测到 is_error，记录但不扣费
+		status := "failed"
+		errorMsg := fmt.Sprintf("HTTP %d or stream error", resp.StatusCode)
+		
+		if hasError {
+			status = "claude_error"
+			errorMsg = "Claude API returned is_error: true in stream"
+		}
+		
 		apiTransaction := models.APITransaction{
 			UserID:       userID,
 			MessageID:    messageID,
@@ -430,8 +472,8 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 			IP:           c.ClientIP(),
 			UID:          fmt.Sprintf("%d", userID),
 			Username:     username,
-			Status:       "failed",
-			Error:        fmt.Sprintf("HTTP %d or stream error", resp.StatusCode),
+			Status:       status,
+			Error:        errorMsg,
 			Duration:     int(time.Since(startTime).Milliseconds()),
 			ServiceTier:  "standard",
 			CreatedAt:    time.Now(),
