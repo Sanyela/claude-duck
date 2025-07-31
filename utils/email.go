@@ -144,14 +144,24 @@ Content-Transfer-Encoding: 8bit
 
 	msg := []byte(headers)
 
-	// 根据端口选择连接方式
+	// 根据端口和配置选择连接方式
 	switch port {
 	case "465":
-		// 使用SSL连接
-		return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		// 使用SSL连接（如果启用TLS）
+		if config.AppConfig.SMTPTLSEnabled {
+			return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		} else {
+			log.Printf("TLS未启用，使用标准SMTP连接")
+			return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
 	case "587":
-		// 使用STARTTLS连接
-		return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		// 使用STARTTLS连接（如果启用STARTTLS）
+		if config.AppConfig.SMTPSTARTTLSEnabled {
+			return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		} else {
+			log.Printf("STARTTLS未启用，使用标准SMTP连接")
+			return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
 	default:
 		// 使用标准SMTP连接（25端口）
 		return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
@@ -263,14 +273,24 @@ Content-Transfer-Encoding: 8bit
 
 	msg := []byte(headers)
 
-	// 根据端口选择连接方式
+	// 根据端口和配置选择连接方式
 	switch port {
 	case "465":
-		// 使用SSL连接
-		return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		// 使用SSL连接（如果启用TLS）
+		if config.AppConfig.SMTPTLSEnabled {
+			return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		} else {
+			log.Printf("TLS未启用，使用标准SMTP连接")
+			return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
 	case "587":
-		// 使用STARTTLS连接
-		return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		// 使用STARTTLS连接（如果启用STARTTLS）
+		if config.AppConfig.SMTPSTARTTLSEnabled {
+			return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		} else {
+			log.Printf("STARTTLS未启用，使用标准SMTP连接")
+			return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
 	default:
 		// 使用标准SMTP连接（25端口）
 		return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)

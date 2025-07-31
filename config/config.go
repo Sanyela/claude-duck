@@ -55,6 +55,10 @@ type Config struct {
 	SMTPUser     string
 	SMTPPassword string
 	SMTPFrom     string
+	
+	// SMTP安全连接配置
+	SMTPTLSEnabled      bool
+	SMTPSTARTTLSEnabled bool
 
 	// 允许注册的邮箱域名
 	AllowedEmailDomains []string
@@ -120,6 +124,10 @@ func LoadConfig() {
 		SMTPUser:     getEnv("SMTP_USER", ""),
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:     getEnv("SMTP_FROM", ""),
+		
+		// SMTP安全连接配置
+		SMTPTLSEnabled:      getEnvAsBool("SMTP_TLS_ENABLED", true),
+		SMTPSTARTTLSEnabled: getEnvAsBool("SMTP_STARTTLS_ENABLED", true),
 
 		// 允许注册的邮箱域名
 		AllowedEmailDomains: getEnvAsSlice("ALLOWED_EMAIL_DOMAINS", []string{}),
@@ -157,6 +165,15 @@ func getEnvAsFloat(key string, defaultValue float64) float64 {
 	if value := os.Getenv(key); value != "" {
 		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
 			return floatValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
 		}
 	}
 	return defaultValue
