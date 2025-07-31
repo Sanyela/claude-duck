@@ -58,6 +58,9 @@ func InitDB() error {
 
 // Migrate 执行数据库迁移
 func Migrate() error {
+	// 删除可能存在的重复索引
+	cleanupDuplicateIndexes()
+
 	err := DB.AutoMigrate(
 		&models.User{},
 		&models.DeviceCode{},
@@ -277,6 +280,60 @@ func ensureNewArchitectureIndexes() {
 		}
 	} else {
 		log.Println("✅ 新架构表唯一索引已存在")
+	}
+}
+
+// cleanupDuplicateIndexes 清理重复的索引
+func cleanupDuplicateIndexes() {
+	// 获取所有表的重复deleted_at索引
+	duplicateIndexes := []string{
+		"idx_announcements_deleted_at",
+		"idx_subscription_plans_deleted_at", 
+		"idx_subscriptions_deleted_at",
+		"idx_activation_codes_deleted_at",
+		"idx_gift_records_deleted_at",
+		"idx_oauth_accounts_deleted_at",
+	}
+
+	for _, indexName := range duplicateIndexes {
+		// 检查索引是否存在
+		var indexCount int64
+		checkSQL := `SELECT COUNT(*) FROM information_schema.statistics 
+			WHERE table_schema = DATABASE() 
+			AND index_name = ?`
+
+		if err := DB.Raw(checkSQL, indexName).Scan(&indexCount).Error; err != nil {
+			log.Printf("检查索引 %s 失败: %v", indexName, err)
+			continue
+		}
+
+		if indexCount > 0 {
+			// 删除索引
+			tableName := ""
+			switch indexName {
+			case "idx_announcements_deleted_at":
+				tableName = "announcements"
+			case "idx_subscription_plans_deleted_at":
+				tableName = "subscription_plans"
+			case "idx_subscriptions_deleted_at":
+				tableName = "subscriptions"
+			case "idx_activation_codes_deleted_at":
+				tableName = "activation_codes"
+			case "idx_gift_records_deleted_at":
+				tableName = "gift_records"
+			case "idx_oauth_accounts_deleted_at":
+				tableName = "oauth_accounts"
+			}
+
+			if tableName != "" {
+				dropSQL := fmt.Sprintf("DROP INDEX %s ON %s", indexName, tableName)
+				if err := DB.Exec(dropSQL).Error; err != nil {
+					log.Printf("删除重复索引 %s 失败: %v", indexName, err)
+				} else {
+					log.Printf("✅ 删除重复索引: %s", indexName)
+				}
+			}
+		}
 	}
 }
 

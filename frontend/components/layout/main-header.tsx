@@ -9,6 +9,7 @@ import {
   CreditCard,
   DollarSign,
   BookOpen,
+  Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePathname } from "next/navigation"
@@ -40,6 +41,14 @@ const navItems = [
     activeColor: "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300",
   },
 ]
+
+// 设置项
+const settingsItem = {
+  href: "/settings",
+  label: "设置",
+  icon: Settings,
+  activeColor: "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300",
+}
 
 
 export function MainHeader() {
@@ -86,10 +95,8 @@ export function MainHeader() {
                 {item.label}
               </Link>
             ))}
-            {/* 设置按钮已隐藏 - 暂时不开放给用户使用 */}
-            {/*
             <Link
-              href="/settings"
+              href={settingsItem.href}
               className={cn(
                 "flex items-center gap-3 rounded-full px-3 py-2 transition-all",
                 pathname === settingsItem.href
@@ -101,7 +108,6 @@ export function MainHeader() {
               <settingsItem.icon className="h-5 w-5" />
               {settingsItem.label}
             </Link>
-            */}
           </nav>
         </SheetContent>
       </Sheet>

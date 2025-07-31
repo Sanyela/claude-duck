@@ -40,6 +40,12 @@ func SetupRoutes(r *gin.Engine) {
 		auth.POST("/register-with-code", handlers.HandleRegisterWithCode)
 		auth.POST("/login-with-code", handlers.HandleLoginWithCode)
 		auth.POST("/email-auth", handlers.HandleEmailOnlyAuth) // 邮箱验证码一键登录/注册
+
+		// 设置相关路由（需要登录）
+		auth.POST("/check-username", handlers.HandleCheckUsername)                              // 检查用户名可用性
+		auth.POST("/send-verification-code-settings", middleware.JWTAuth(), handlers.HandleSendVerificationCodeForSettings) // 发送设置验证码
+		auth.POST("/change-username", middleware.JWTAuth(), handlers.HandleChangeUsername)      // 修改用户名
+		auth.POST("/change-password", middleware.JWTAuth(), handlers.HandleChangePassword)      // 修改密码
 	}
 
 	// OAuth相关路由

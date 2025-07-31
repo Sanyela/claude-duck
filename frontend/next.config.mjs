@@ -12,7 +12,6 @@ const nextConfig = {
   generateEtags: false,
   output: 'standalone',
   experimental: {
-    isrMemoryCacheSize: 0,
   },
 
   async headers() {
