@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,11 +13,11 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Settings, Edit, Server, DollarSign, Gift, Zap, Search, RefreshCw } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { adminAPI, type SystemConfig } from "@/api/admin"
 
 export default function AdminConfigsPage() {
-  const { toast } = useToast()
+  
   const [loading, setLoading] = useState(false)
   const [configs, setConfigs] = useState<SystemConfig[]>([])
   const [editingConfig, setEditingConfig] = useState<SystemConfig | null>(null)
@@ -61,10 +59,8 @@ export default function AdminConfigsPage() {
       setConfigs(Array.isArray(result.configs) ? result.configs : [])
     } else {
       setConfigs([])
-      toast({
-        title: "加载失败",
+      toast.error("加载失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
     setLoading(false)
@@ -80,14 +76,12 @@ export default function AdminConfigsPage() {
       config_value: config.config_value
     })
     if (result.success) {
-      toast({ title: "更新成功", variant: "default" })
+      toast.success("更新成功")
       setIsConfigDialogOpen(false)
       loadConfigs()
     } else {
-      toast({
-        title: "更新失败",
+      toast.error("更新失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }

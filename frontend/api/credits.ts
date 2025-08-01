@@ -72,7 +72,7 @@ export const creditsAPI = {
   // 获取积分余额
   async getBalance(): Promise<{ success: boolean; data?: CreditBalance; message?: string }> {
     try {
-      const response = await request.get("/api/credits/balance");
+      const response = await request.get("/credits/balance");
       
       // 检查并处理后端返回的数据结构
       if (response.data && response.data.balance) {
@@ -114,7 +114,7 @@ export const creditsAPI = {
     end_date?: string;
   }): Promise<{ success: boolean; data?: { history: CreditUsageHistory[]; totalPages: number; currentPage: number } | null; message?: string }> {
     try {
-      const response = await request.get("/api/credits/history", { params });
+      const response = await request.get("/credits/history", { params });
       return { 
         success: true, 
         data: response.data
@@ -131,7 +131,7 @@ export const creditsAPI = {
   // 获取模型价格
   async getModelCosts(): Promise<{ success: boolean; data?: ModelCost[]; message?: string }> {
     try {
-      const response = await request.get("/api/credits/model-costs");
+      const response = await request.get("/credits/model-costs");
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("获取模型价格失败:", error);
@@ -145,7 +145,7 @@ export const creditsAPI = {
   // 获取累计token计费配置
   async getPricingTable(): Promise<{ success: boolean; data?: TokenThresholdConfig; message?: string }> {
     try {
-      const response = await request.get("/api/credits/pricing-table");
+      const response = await request.get("/credits/pricing-table");
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error("获取计费配置失败:", error);

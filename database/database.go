@@ -58,6 +58,12 @@ func InitDB() error {
 
 // Migrate 执行数据库迁移
 func Migrate() error {
+	// 检查是否需要执行初始化
+	if shouldSkipInitialization() {
+		log.Println("Database already initialized, skipping migration details")
+		return nil
+	}
+
 	// 删除可能存在的重复索引
 	cleanupDuplicateIndexes()
 
@@ -96,6 +102,9 @@ func Migrate() error {
 
 	// 确保新架构表的索引
 	ensureNewArchitectureIndexes()
+
+	// 标记初始化完成
+	markInitializationComplete()
 
 	log.Println("Database migration completed")
 	return nil
@@ -384,4 +393,41 @@ func InitRedis() error {
 	log.Println("- DB 3: 用户设备集合")
 	log.Println("- DB 4: 设备详情")
 	return nil
+}
+
+// shouldSkipInitialization 检查是否应该跳过初始化
+func shouldSkipInitialization() bool {
+	// 检查是否存在初始化标记配置
+	var config models.SystemConfig
+	err := DB.Where("config_key = ?", "db_initialized").First(&config).Error
+	if err == nil && config.ConfigValue == "true" {
+		return true
+	}
+	
+	// 如果没有标记，但已经有用户表和系统配置，说明已经初始化过
+	var userCount int64
+	var configCount int64
+	
+	DB.Model(&models.User{}).Count(&userCount)
+	DB.Model(&models.SystemConfig{}).Count(&configCount)
+	
+	// 如果有配置项超过10个，认为已经初始化过
+	return configCount > 10
+}
+
+// markInitializationComplete 标记初始化完成
+func markInitializationComplete() {
+	initFlag := models.SystemConfig{
+		ConfigKey:   "db_initialized",
+		ConfigValue: "true",
+		Description: "数据库初始化完成标记",
+	}
+	
+	// 使用UPSERT语义
+	var existing models.SystemConfig
+	if err := DB.Where("config_key = ?", initFlag.ConfigKey).First(&existing).Error; err != nil {
+		DB.Create(&initFlag)
+	} else {
+		DB.Model(&existing).Updates(initFlag)
+	}
 }

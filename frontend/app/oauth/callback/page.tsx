@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic'
-
 import { OAuthCallbackHandler } from "@/components/oauth/callback-handler"
 import { Suspense } from "react"
 

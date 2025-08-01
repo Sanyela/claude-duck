@@ -9,9 +9,31 @@ import (
 	"net"
 	"net/smtp"
 	"strings"
+	"time"
 
 	"claude/config"
 )
+
+type PlainAuthIgnoreTLS struct {
+	identity, username, password string
+	host                         string
+}
+
+func PlainAuthIgnoreTLSNew(identity, username, password, host string) smtp.Auth {
+	return &PlainAuthIgnoreTLS{identity, username, password, host}
+}
+
+func (a *PlainAuthIgnoreTLS) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	// 允许在非TLS连接上使用PLAIN认证
+	return "PLAIN", []byte(a.identity + "\x00" + a.username + "\x00" + a.password), nil
+}
+
+func (a *PlainAuthIgnoreTLS) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, fmt.Errorf("unexpected server challenge")
+	}
+	return nil, nil
+}
 
 // GenerateVerificationCode 生成6位数字验证码
 func GenerateVerificationCode() string {
@@ -147,23 +169,28 @@ Content-Transfer-Encoding: 8bit
 	// 根据端口和配置选择连接方式
 	switch port {
 	case "465":
-		// 使用SSL连接（如果启用TLS）
-		if config.AppConfig.SMTPTLSEnabled {
-			return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
-		} else {
-			log.Printf("TLS未启用，使用标准SMTP连接")
-			return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		// 如果启用明文认证，强制使用明文方式
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 		}
+		// 否则使用TLS连接（465端口默认TLS）
+		return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	case "587":
-		// 使用STARTTLS连接（如果启用STARTTLS）
-		if config.AppConfig.SMTPSTARTTLSEnabled {
-			return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
-		} else {
-			log.Printf("STARTTLS未启用，使用标准SMTP连接")
-			return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		// 如果启用明文认证，强制使用明文方式
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 		}
+		// 否则使用STARTTLS连接（587端口默认STARTTLS）
+		return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	default:
-		// 使用标准SMTP连接（25端口）
+		// 如果启用明文认证，使用明文方式（适用于2525等端口）
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
+		// 使用标准SMTP连接（25端口或其他端口）
 		return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	}
 }
@@ -276,33 +303,44 @@ Content-Transfer-Encoding: 8bit
 	// 根据端口和配置选择连接方式
 	switch port {
 	case "465":
-		// 使用SSL连接（如果启用TLS）
-		if config.AppConfig.SMTPTLSEnabled {
-			return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
-		} else {
-			log.Printf("TLS未启用，使用标准SMTP连接")
-			return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		// 如果启用明文认证，强制使用明文方式
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 		}
+		// 否则使用TLS连接（465端口默认TLS）
+		return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	case "587":
-		// 使用STARTTLS连接（如果启用STARTTLS）
-		if config.AppConfig.SMTPSTARTTLSEnabled {
-			return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
-		} else {
-			log.Printf("STARTTLS未启用，使用标准SMTP连接")
-			return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		// 如果启用明文认证，强制使用明文方式
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 		}
+		// 否则使用STARTTLS连接（587端口默认STARTTLS）
+		return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	default:
-		// 使用标准SMTP连接（25端口）
+		// 如果启用明文认证，使用明文方式（适用于2525等端口）
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
+		// 使用标准SMTP连接（25端口或其他端口）
 		return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	}
 }
 
-// sendMailStandard 使用标准SMTP发送邮件（适用于25端口）
+// sendMailStandard 使用标准SMTP发送邮件（支持明文认证）
 func sendMailStandard(host, port, username, password, from string, to []string, msg []byte) error {
+	log.Printf("使用标准SMTP发送邮件到: %s:%s", host, port)
+
+	// 如果启用了明文认证，使用自定义方法
+	if config.AppConfig.SMTPPlainAuthEnabled {
+		return sendMailWithPlainAuth(host, port, username, password, from, to, msg)
+	}
+
+	// 否则使用标准方法
 	auth := smtp.PlainAuth("", username, password, host)
 	addr := fmt.Sprintf("%s:%s", host, port)
-
-	log.Printf("使用标准SMTP发送邮件到: %s:%s", host, port)
 
 	err := smtp.SendMail(addr, auth, from, to, msg)
 	if err != nil {
@@ -311,6 +349,69 @@ func sendMailStandard(host, port, username, password, from string, to []string, 
 	}
 
 	log.Printf("邮件发送成功（标准SMTP）: %v", to)
+	return nil
+}
+
+// sendMailWithPlainAuth 使用明文认证发送邮件
+func sendMailWithPlainAuth(host, port, username, password, from string, to []string, msg []byte) error {
+	log.Printf("使用明文认证SMTP发送邮件到: %s:%s", host, port)
+
+	// 1. 建立TCP连接
+	conn, err := net.DialTimeout("tcp", host+":"+port, 30*time.Second)
+	if err != nil {
+		log.Printf("TCP连接失败: %v", err)
+		return fmt.Errorf("failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// 2. 创建SMTP客户端
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		log.Printf("SMTP客户端创建失败: %v", err)
+		return fmt.Errorf("failed to create SMTP client: %v", err)
+	}
+	defer client.Quit()
+
+	// 3. 发送EHLO命令
+	if err = client.Hello("localhost"); err != nil {
+		log.Printf("EHLO命令失败: %v", err)
+		return fmt.Errorf("failed to send EHLO: %v", err)
+	}
+
+	// 4. 使用自定义认证（允许明文连接）
+	auth := PlainAuthIgnoreTLSNew("", username, password, host)
+	if err = client.Auth(auth); err != nil {
+		log.Printf("SMTP认证失败: %v", err)
+		return fmt.Errorf("SMTP authentication failed: %v", err)
+	}
+
+	// 5. 发送邮件
+	if err = client.Mail(from); err != nil {
+		return fmt.Errorf("failed to set sender: %v", err)
+	}
+
+	for _, addr := range to {
+		if err = client.Rcpt(addr); err != nil {
+			return fmt.Errorf("failed to set recipient %s: %v", addr, err)
+		}
+	}
+
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("failed to send email data: %v", err)
+	}
+
+	_, err = w.Write(msg)
+	if err != nil {
+		return fmt.Errorf("failed to write email content: %v", err)
+	}
+
+	err = w.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close email writer: %v", err)
+	}
+
+	log.Printf("邮件发送成功（明文认证SMTP）: %v", to)
 	return nil
 }
 

@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,11 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Megaphone, Plus, Edit, Trash2 } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { adminAPI, type Announcement } from "@/api/admin"
 
 export default function AdminAnnouncementsPage() {
-  const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
@@ -33,10 +30,8 @@ export default function AdminAnnouncementsPage() {
       setAnnouncements(Array.isArray(result.announcements) ? result.announcements : [])
     } else {
       setAnnouncements([])
-      toast({
-        title: "加载失败",
+      toast.error("加载失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
     setLoading(false)
@@ -52,14 +47,12 @@ export default function AdminAnnouncementsPage() {
       : await adminAPI.updateAnnouncement(announcement.id, announcement)
     
     if (result.success) {
-      toast({ title: isCreateAnnouncementMode ? "创建成功" : "更新成功", variant: "default" })
+      toast.success(isCreateAnnouncementMode ? "创建成功" : "更新成功")
       setIsAnnouncementDialogOpen(false)
       loadAnnouncements()
     } else {
-      toast({
-        title: isCreateAnnouncementMode ? "创建失败" : "更新失败",
+      toast.error(isCreateAnnouncementMode ? "创建失败" : "更新失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -69,13 +62,11 @@ export default function AdminAnnouncementsPage() {
     
     const result = await adminAPI.deleteAnnouncement(announcementId)
     if (result.success) {
-      toast({ title: "删除成功", variant: "default" })
+      toast.success("删除成功")
       loadAnnouncements()
     } else {
-      toast({
-        title: "删除失败",
+      toast.error("删除失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }

@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,11 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { CreditCard, Plus, Edit, Trash2 } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { adminAPI, type SubscriptionPlan } from "@/api/admin"
 
 export default function AdminPlansPage() {
-  const { toast } = useToast()
+  
   const [loading, setLoading] = useState(false)
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null)

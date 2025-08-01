@@ -10,7 +10,7 @@ import { KeyRound, Mail, Timer, AlertCircle, CheckCircle, Loader2 } from "lucide
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import { login, sendVerificationCode, registerWithCode, emailOnlyAuth, checkEmail, getLinuxDoConfig, getLinuxDoAuthorizeUrl } from "@/api/auth"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { useAuth } from "@/contexts/AuthContext"
 import { getEmailValidationError, getSupportedDomainsText } from "@/lib/email-validator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -18,7 +18,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 export function LoginForm() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { toast } = useToast()
   const { login: authLogin } = useAuth()
   const initialTab = searchParams.get("tab") || "login"
   

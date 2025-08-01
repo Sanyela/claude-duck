@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Button } from "@/components/ui/button"
@@ -14,7 +12,7 @@ import { toast } from "sonner"
 import { request } from "@/api/request"
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   
   // 用户名修改相关状态
@@ -53,7 +51,7 @@ export default function SettingsPage() {
       setUsernameChecking(true)
       setUsernameError("")
       
-      await request.post("/api/auth/check-username", {
+      await request.post("/auth/check-username", {
         username: username
       })
       
@@ -118,7 +116,7 @@ export default function SettingsPage() {
       setIsLoading(true)
       
       // 发送验证码
-      await request.post("/api/auth/send-verification-code-settings", {
+      await request.post("/auth/send-verification-code-settings", {
         type: "change_username",
         new_username: newUsername
       })
@@ -154,7 +152,7 @@ export default function SettingsPage() {
 
     try {
       setIsLoading(true)
-      await request.post("/api/auth/send-verification-code-settings", {
+      await request.post("/auth/send-verification-code-settings", {
         type: "change_password"
       })
       
@@ -189,7 +187,7 @@ export default function SettingsPage() {
 
     try {
       setIsLoading(true)
-      await request.post("/api/auth/change-username", {
+      await request.post("/auth/change-username", {
         new_username: newUsername,
         verification_code: usernameVerificationCode
       })
@@ -217,17 +215,22 @@ export default function SettingsPage() {
 
     try {
       setIsLoading(true)
-      await request.post("/api/auth/change-password", {
+      await request.post("/auth/change-password", {
         new_password: newPassword,
         verification_code: passwordVerificationCode
       })
       
-      toast.success("密码修改成功")
+      toast.success("密码修改成功，请重新登录")
       setNewPassword("")
       setConfirmPassword("")
       setPasswordVerificationCode("")
       setPasswordCodeSent(false)
       setPasswordCountdown(0)
+      
+      // 密码修改成功后，3秒后自动退出登录
+      setTimeout(() => {
+        logout()
+      }, 3000)
     } catch (error: any) {
       toast.error(error.response?.data?.message || "密码修改失败")
     } finally {

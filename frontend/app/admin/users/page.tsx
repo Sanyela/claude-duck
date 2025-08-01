@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect } from "react"
 import {
   ColumnDef,
@@ -39,7 +37,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { adminAPI, type AdminUser, type SubscriptionPlan } from "@/api/admin"
 
 // 数据类型定义
@@ -55,7 +53,7 @@ type UserRow = {
 
 
 export default function AdminUsersPage() {
-  const { toast } = useToast()
+  
   const [data, setData] = useState<UserRow[]>([])
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [loading, setLoading] = useState(false)
