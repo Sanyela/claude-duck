@@ -507,20 +507,34 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	}
 
 	// 获取倍率配置
-	inputMultiplier, _ := strconv.ParseFloat(configMap["prompt_multiplier"], 64)
-	if inputMultiplier == 0 {
+	// 获取输入倍率配置
+	inputMultiplier := 0.0
+	if inputConfig, exists := configMap["prompt_multiplier"]; exists {
+		// 如果配置存在，直接使用配置值（包括0）
+		inputMultiplier, _ = strconv.ParseFloat(inputConfig, 64)
+	} else {
+		// 如果配置不存在，使用默认值
 		inputMultiplier = config.AppConfig.DefaultPromptMultiplier
 	}
 
-	outputMultiplier, _ := strconv.ParseFloat(configMap["completion_multiplier"], 64)
-	if outputMultiplier == 0 {
+	// 获取输出倍率配置
+	outputMultiplier := 0.0
+	if outputConfig, exists := configMap["completion_multiplier"]; exists {
+		// 如果配置存在，直接使用配置值（包括0）
+		outputMultiplier, _ = strconv.ParseFloat(outputConfig, 64)
+	} else {
+		// 如果配置不存在，使用默认值
 		outputMultiplier = config.AppConfig.DefaultCompletionMultiplier
 	}
 
 	// 获取缓存倍率配置
-	cacheMultiplier, _ := strconv.ParseFloat(configMap["cache_multiplier"], 64)
-	if cacheMultiplier == 0 {
-		cacheMultiplier = inputMultiplier // 如果没有配置，默认使用输入倍率
+	cacheMultiplier := 0.0
+	if cacheConfig, exists := configMap["cache_multiplier"]; exists {
+		// 如果配置存在，直接使用配置值（包括0）
+		cacheMultiplier, _ = strconv.ParseFloat(cacheConfig, 64)
+	} else {
+		// 如果配置不存在，使用输入倍率作为默认值
+		cacheMultiplier = inputMultiplier
 	}
 
 	// 计算总缓存token（创建 + 读取）
@@ -540,8 +554,8 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	if modelMultiplierConfig != "" {
 		var multiplierMap map[string]float64
 		if err := json.Unmarshal([]byte(modelMultiplierConfig), &multiplierMap); err == nil {
-			if multiplier, exists := multiplierMap[model]; exists && multiplier > 0 {
-				modelMultiplier = multiplier
+			if multiplier, exists := multiplierMap[model]; exists {
+				modelMultiplier = multiplier // 允许0值倍率
 			}
 		}
 	}

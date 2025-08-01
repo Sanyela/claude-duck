@@ -1,4 +1,11 @@
-# Duck Code 部署脚本
+# Duck Code 统一部署脚本
+
+## SPA架构说明
+
+现在Duck Code采用SPA（单页应用）架构：
+- **统一容器**: 前后端打包在一个Docker镜像中
+- **Go服务**: 同时提供API服务和前端静态文件服务
+- **Nginx重定向**: www.duckcode.top → api.duckcode.top:9998
 
 ## 自动化部署流程
 
@@ -6,10 +13,10 @@
 
 ```bash
 # 创建标签 (格式: vyyyymmddhhmm)
-git tag v202507101934
+git tag v202508011500
 
 # 推送标签到远程仓库 (这将触发自动构建)
-git push origin v202507101934
+git push origin v202508011500
 ```
 
 ### 2. 部署步骤
@@ -27,6 +34,57 @@ docker-compose -f docker-compose.prod.yml down
 **拉取最新镜像:**
 ```bash
 docker-compose -f docker-compose.prod.yml pull
+```
+
+**启动统一服务:**
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+**检查服务状态:**
+```bash
+docker-compose -f docker-compose.prod.yml ps
+```
+
+**服务访问地址:** 
+- API服务: http://localhost:9998/api
+- 前端页面: http://localhost:9998/
+
+## Nginx配置
+
+```nginx
+# www.duckcode.top - 前端域名重定向到后端
+server {
+    listen 443 ssl;
+    server_name www.duckcode.top;
+    
+    # SSL配置
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    # 直接代理到统一的Go服务
+    location / {
+        proxy_pass http://localhost:9998;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# api.duckcode.top - API域名（保持不变）
+server {
+    listen 443 ssl;
+    server_name api.duckcode.top;
+    
+    location / {
+        proxy_pass http://localhost:9998;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
 
 **启动服务:**

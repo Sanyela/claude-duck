@@ -193,7 +193,6 @@ export function Sidebar() {
           )}
           <span>切换主题</span>
         </Button>
-        {/* 临时注释设置链接 - 只能通过直接链接访问
         <Link
           href={settingsItem.href}
           className={cn(
@@ -205,7 +204,6 @@ export function Sidebar() {
           <settingsItem.icon className="h-4 w-4" />
           {settingsItem.label}
         </Link>
-        */}
       </div>
     </aside>
   )

@@ -1,11 +1,9 @@
-export const dynamic = 'force-dynamic'
-
 import type { Metadata } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { AuthGuard } from '@/components/auth/auth-guard'
-import { Toaster } from '@/components/ui/toaster'
+import { Toaster } from '@/components/ui/sonner'  // 改为使用 Sonner
 import { getServerAppName } from '@/lib/env'
 
 const appName = getServerAppName()

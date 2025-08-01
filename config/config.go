@@ -56,9 +56,8 @@ type Config struct {
 	SMTPPassword string
 	SMTPFrom     string
 	
-	// SMTP安全连接配置
-	SMTPTLSEnabled      bool
-	SMTPSTARTTLSEnabled bool
+	// SMTP明文认证配置
+	SMTPPlainAuthEnabled bool  // 是否启用明文认证（适用于不支持TLS的SMTP服务器）
 
 	// 允许注册的邮箱域名
 	AllowedEmailDomains []string
@@ -73,6 +72,11 @@ type Config struct {
 	
 	// 前端域名配置
 	FrontendURL         string
+	
+	// 前端配置项
+	InstallCommand string
+	DocsURL        string
+	ClaudeURL      string
 }
 
 var AppConfig *Config
@@ -125,9 +129,8 @@ func LoadConfig() {
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:     getEnv("SMTP_FROM", ""),
 		
-		// SMTP安全连接配置
-		SMTPTLSEnabled:      getEnvAsBool("SMTP_TLS_ENABLED", true),
-		SMTPSTARTTLSEnabled: getEnvAsBool("SMTP_STARTTLS_ENABLED", true),
+		// SMTP明文认证配置
+		SMTPPlainAuthEnabled: getEnvAsBool("SMTP_PLAIN_AUTH_ENABLED", false),
 
 		// 允许注册的邮箱域名
 		AllowedEmailDomains: getEnvAsSlice("ALLOWED_EMAIL_DOMAINS", []string{}),
@@ -142,6 +145,11 @@ func LoadConfig() {
 		
 		// 前端域名配置
 		FrontendURL:         getEnv("FRONTEND_URL", "https://www.duckcode.top"),
+		
+		// 前端配置项
+		InstallCommand: getEnv("INSTALL_COMMAND", "npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com"),
+		DocsURL:        getEnv("DOCS_URL", "https://github.com/anthropics/claude-code"),
+		ClaudeURL:      getEnv("CLAUDE_URL", "https://api.anthropic.com"),
 	}
 }
 

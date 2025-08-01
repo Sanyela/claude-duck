@@ -191,7 +191,7 @@ export const adminAPI = {
       if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
       if (params?.search) queryParams.append('search', params.search);
       
-      const url = `/api/admin/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const url = `/admin/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await request.get(url);
       // 后端返回分页格式，数据在data字段中
       const paginatedData = response.data as PaginatedResponse<AdminUser>;
@@ -214,7 +214,7 @@ export const adminAPI = {
   // 更新用户
   updateUser: async (id: number, data: Partial<AdminUser>): Promise<{ success: boolean; message?: string }> => {
     try {
-      await request.put(`/api/admin/users/${id}`, data);
+      await request.put(`/admin/users/${id}`, data);
       return { success: true };
     } catch (error: any) {
       return {
@@ -227,7 +227,7 @@ export const adminAPI = {
   // 删除用户
   deleteUser: async (id: number): Promise<{ success: boolean; message?: string }> => {
     try {
-      await request.delete(`/api/admin/users/${id}`);
+      await request.delete(`/admin/users/${id}`);
       return { success: true };
     } catch (error: any) {
       return {
@@ -240,7 +240,7 @@ export const adminAPI = {
   // 切换用户禁用状态
   toggleUserStatus: async (id: number, isDisabled: boolean): Promise<{ success: boolean; message?: string; user?: any }> => {
     try {
-      const response = await request.put(`/api/admin/users/${id}/status`, { is_disabled: isDisabled });
+      const response = await request.put(`/admin/users/${id}/status`, { is_disabled: isDisabled });
       return { 
         success: true, 
         message: response.data?.message,
@@ -257,7 +257,7 @@ export const adminAPI = {
   // 获取系统配置
   getSystemConfigs: async (): Promise<{ success: boolean; configs?: SystemConfig[]; message?: string }> => {
     try {
-      const response = await request.get("/api/admin/system-configs");
+      const response = await request.get("/admin/system-configs");
       return {
         success: true,
         configs: Array.isArray(response.data) ? response.data : []
@@ -273,7 +273,7 @@ export const adminAPI = {
   // 更新系统配置
   updateSystemConfig: async (data: { config_key: string; config_value: string }): Promise<{ success: boolean; message?: string }> => {
     try {
-      await request.put("/api/admin/system-config", data);
+      await request.put("/admin/system-config", data);
       return { success: true };
     } catch (error: any) {
       return {
@@ -286,7 +286,7 @@ export const adminAPI = {
   // 获取订阅计划
   getSubscriptionPlans: async (): Promise<{ success: boolean; plans?: SubscriptionPlan[]; message?: string }> => {
     try {
-      const response = await request.get("/api/admin/subscription-plans");
+      const response = await request.get("/admin/subscription-plans");
       // 后端返回分页格式，数据在data字段中
       const paginatedData = response.data as PaginatedResponse<SubscriptionPlan>;
       return {
@@ -306,7 +306,7 @@ export const adminAPI = {
     try {
       // 过滤掉不应该发送的字段
       const { id, created_at, updated_at, ...createData } = data;
-      await request.post("/api/admin/subscription-plans", createData);
+      await request.post("/admin/subscription-plans", createData);
       return { success: true };
     } catch (error: any) {
       return {
@@ -321,7 +321,7 @@ export const adminAPI = {
     try {
       // 过滤掉不应该发送的字段
       const { id: planId, created_at, updated_at, ...updateData } = data;
-      await request.put(`/api/admin/subscription-plans/${id}`, updateData);
+      await request.put(`/admin/subscription-plans/${id}`, updateData);
       return { success: true };
     } catch (error: any) {
       return {
@@ -334,7 +334,7 @@ export const adminAPI = {
   // 删除订阅计划
   deleteSubscriptionPlan: async (id: number): Promise<{ success: boolean; message?: string }> => {
     try {
-      await request.delete(`/api/admin/subscription-plans/${id}`);
+      await request.delete(`/admin/subscription-plans/${id}`);
       return { success: true };
     } catch (error: any) {
       return {
@@ -371,7 +371,7 @@ export const adminAPI = {
       if (params?.code) queryParams.append('code', params.code);
       if (params?.username) queryParams.append('username', params.username);
       
-      const url = `/api/admin/activation-codes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const url = `/admin/activation-codes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await request.get(url);
       // 后端返回分页格式，数据在data字段中
       const paginatedData = response.data as PaginatedResponse<ActivationCode>;
@@ -398,7 +398,7 @@ export const adminAPI = {
     batch_number?: string;
   }): Promise<{ success: boolean; message?: string }> => {
     try {
-      await request.post("/api/admin/activation-codes", data);
+      await request.post("/admin/activation-codes", data);
       return { success: true };
     } catch (error: any) {
       return {
@@ -411,7 +411,7 @@ export const adminAPI = {
   // 删除激活码
   async deleteActivationCode(id: number): Promise<{ success: boolean; message?: string }> {
     try {
-      await request.delete(`/api/admin/activation-codes/${id}`);
+      await request.delete(`/admin/activation-codes/${id}`);
       return { success: true };
     } catch (error: any) {
       console.error("删除激活码失败:", error);
@@ -425,7 +425,7 @@ export const adminAPI = {
   // 获取订阅每日限制
   async getSubscriptionDailyLimit(activationCodeId: number): Promise<{ success: boolean; daily_limit?: number; message?: string }> {
     try {
-      const response = await request.get(`/api/admin/activation-codes/${activationCodeId}/daily-limit`);
+      const response = await request.get(`/admin/activation-codes/${activationCodeId}/daily-limit`);
       return { success: true, daily_limit: response.data.daily_limit };
     } catch (error: any) {
       console.error("获取每日限制失败:", error);
@@ -439,7 +439,7 @@ export const adminAPI = {
   // 更新订阅每日限制
   async updateSubscriptionDailyLimit(activationCodeId: number, dailyLimit: number): Promise<{ success: boolean; message?: string }> {
     try {
-      await request.put(`/api/admin/activation-codes/${activationCodeId}/daily-limit`, { daily_limit: dailyLimit });
+      await request.put(`/admin/activation-codes/${activationCodeId}/daily-limit`, { daily_limit: dailyLimit });
       return { success: true };
     } catch (error: any) {
       console.error("更新每日限制失败:", error);
@@ -453,7 +453,7 @@ export const adminAPI = {
   // 获取公告列表
   async getAnnouncements(): Promise<{ success: boolean; announcements?: Announcement[]; message?: string }> {
     try {
-      const response = await request.get("/api/admin/announcements");
+      const response = await request.get("/admin/announcements");
       return { success: true, announcements: response.data.data || response.data };
     } catch (error: any) {
       console.error("获取公告列表失败:", error);
@@ -467,7 +467,7 @@ export const adminAPI = {
   // 创建公告
   async createAnnouncement(announcement: Omit<Announcement, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; message?: string }> {
     try {
-      await request.post("/api/admin/announcements", announcement);
+      await request.post("/admin/announcements", announcement);
       return { success: true };
     } catch (error: any) {
       console.error("创建公告失败:", error);
@@ -481,7 +481,7 @@ export const adminAPI = {
   // 更新公告
   async updateAnnouncement(id: number, announcement: Partial<Announcement>): Promise<{ success: boolean; message?: string }> {
     try {
-      await request.put(`/api/admin/announcements/${id}`, announcement);
+      await request.put(`/admin/announcements/${id}`, announcement);
       return { success: true };
     } catch (error: any) {
       console.error("更新公告失败:", error);
@@ -495,7 +495,7 @@ export const adminAPI = {
   // 删除公告
   async deleteAnnouncement(id: number): Promise<{ success: boolean; message?: string }> {
     try {
-      await request.delete(`/api/admin/announcements/${id}`);
+      await request.delete(`/admin/announcements/${id}`);
       return { success: true };
     } catch (error: any) {
       console.error("删除公告失败:", error);
@@ -509,7 +509,7 @@ export const adminAPI = {
   // 获取用户订阅列表
   getUserSubscriptions: async (userId: number): Promise<{ success: boolean; subscriptions?: any[]; message?: string }> => {
     try {
-      const response = await request.get(`/api/admin/users/${userId}/subscriptions`);
+      const response = await request.get(`/admin/users/${userId}/subscriptions`);
       return {
         success: true,
         subscriptions: response.data?.subscriptions || []
@@ -531,7 +531,7 @@ export const adminAPI = {
     reason?: string;
   }): Promise<{ success: boolean; message?: string; gift_record?: any; subscription?: any }> => {
     try {
-      const response = await request.post(`/api/admin/users/${userId}/gift`, data);
+      const response = await request.post(`/admin/users/${userId}/gift`, data);
       return {
         success: true,
         message: response.data?.message,
@@ -549,7 +549,7 @@ export const adminAPI = {
   // 获取数据看板统计信息
   getDashboard: async (): Promise<{ success: boolean; data?: DashboardData; message?: string }> => {
     try {
-      const response = await request.get("/api/admin/dashboard");
+      const response = await request.get("/admin/dashboard");
       return {
         success: true,
         data: response.data
@@ -578,7 +578,7 @@ export const adminAPI = {
     message?: string;
   }> => {
     try {
-      const response = await request.post("/api/admin/activation-codes/ban-preview", data);
+      const response = await request.post("/admin/activation-codes/ban-preview", data);
       return {
         success: true,
         ...response.data  // 返回后端响应的所有字段
@@ -598,7 +598,7 @@ export const adminAPI = {
     reason?: string;
   }): Promise<{ success: boolean; message?: string }> => {
     try {
-      await request.post("/api/admin/activation-codes/ban", data);
+      await request.post("/admin/activation-codes/ban", data);
       return { success: true };
     } catch (error: any) {
       return {
@@ -614,7 +614,7 @@ export const adminAPI = {
     activation_code: string;
   }): Promise<{ success: boolean; message?: string }> => {
     try {
-      await request.post("/api/admin/activation-codes/unban", data);
+      await request.post("/admin/activation-codes/unban", data);
       return { success: true };
     } catch (error: any) {
       return {
@@ -648,7 +648,7 @@ export const adminAPI = {
       if (params?.status) queryParams.append('status', params.status);
       if (params?.activation_code) queryParams.append('activation_code', params.activation_code);
 
-      const url = `/api/admin/frozen-records${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      const url = `/admin/frozen-records${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
       const response = await request.get(url);
       
       return {
@@ -674,7 +674,7 @@ export const adminAPI = {
     message?: string;
   }> => {
     try {
-      const response = await request.get(`/api/admin/frozen-records/${recordId}`);
+      const response = await request.get(`/admin/frozen-records/${recordId}`);
       return {
         success: true,
         data: response.data
