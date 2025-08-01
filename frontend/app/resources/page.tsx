@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Download, Copy, Terminal, Code2, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react"
@@ -135,7 +133,7 @@ function ConfigSection() {
   return (
     <div className="space-y-4">
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-        <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">配置文件路径</h4>
+        <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">配置文件路径(如果没有 文件/文件夹 请手动创建)</h4>
         <div className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
           <p><strong>macOS/Linux:</strong> <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">~/.claude/settings.json</code></p>
           <p><strong>Windows:</strong> <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">C:\Users\[username]\.claude\settings.json</code></p>
@@ -227,8 +225,8 @@ export default function ResourcesPage() {
   const [appName, setAppName] = useState('Duck Code')
   const [installCommand, setInstallCommand] = useState('npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com')
   const [docsUrl, setDocsUrl] = useState('https://github.com/anthropics/claude-code')
-  const [isOfficialClientOpen, setIsOfficialClientOpen] = useState(false)
-  const [isOneClickOpen, setIsOneClickOpen] = useState(true) // 默认展开方式一
+  const [isOfficialClientOpen, setIsOfficialClientOpen] = useState(true) // 默认展开方式二
+  const [isOneClickOpen, setIsOneClickOpen] = useState(false)
   
   // 当官方客户端展开时，自动折叠一键包
   const handleOfficialClientToggle = (open: boolean) => {
@@ -361,13 +359,7 @@ export default function ResourcesPage() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent>
-                  <div className="space-y-6">
-                    <Alert className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-                      <AlertDescription className="text-blue-700 dark:text-blue-300">
-                        <strong>注意：</strong> 此方式需要手动配置，如果您不熟悉配置文件，建议使用方式一的一键包安装
-                      </AlertDescription>
-                    </Alert>
-                    
+                  <div className="space-y-6">           
                     <div>
                       <p className="text-sm text-muted-foreground mb-3">
                         安装 Claude Code 官方客户端：

@@ -1,7 +1,25 @@
 import axios from "axios";
 
 const getBaseURL = () => {
-  return "/api/proxy";
+  // 根据环境动态设置API地址
+  if (typeof window === 'undefined') {
+    // 服务端环境，使用默认地址
+    return "http://localhost:9998/api";
+  }
+  
+  // 客户端环境，根据当前域名判断
+  const hostname = window.location.hostname;
+  
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // 本地开发环境
+    return "http://localhost:9998/api";
+  } else if (hostname === 'www.duckcode.top') {
+    // 生产环境
+    return "https://api.duckcode.top/api";
+  } else {
+    // 其他环境，使用相对路径
+    return "/api";
+  }
 };
 
 // 创建axios实例

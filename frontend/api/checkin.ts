@@ -25,13 +25,13 @@ export interface CheckinResponse {
 export const checkinAPI = {
   // 获取签到状态
   getStatus: async (): Promise<CheckinStatusResponse> => {
-    const response = await request.get('/api/checkin/status');
+    const response = await request.get('/checkin/status');
     return response.data;
   },
 
   // 执行签到
   checkin: async (): Promise<CheckinResponse> => {
-    const response = await request.post('/api/checkin');
+    const response = await request.post('/checkin');
     return response.data;
   }
 }; 

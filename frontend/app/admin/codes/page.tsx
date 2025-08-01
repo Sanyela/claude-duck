@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
   ColumnDef,
@@ -38,7 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { adminAPI, type ActivationCode, type SubscriptionPlan, type FrozenPointsRecord } from "@/api/admin"
 import { getUserInfo, type User } from "@/api/auth"
 
@@ -68,7 +66,6 @@ type ActivationCodeRow = {
 }
 
 export default function AdminCodesPage() {
-  const { toast } = useToast()
   const [data, setData] = useState<ActivationCodeRow[]>([])
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [currentUser, setCurrentUser] = useState<User | null>(null)
@@ -568,10 +565,8 @@ export default function AdminCodesPage() {
         }))
       } else {
         setFrozenRecords([])
-        toast({
-          title: "加载失败",
+        toast.error("加载失败", {
           description: result.message,
-          variant: "destructive"
         })
       }
     } else {
@@ -617,10 +612,8 @@ export default function AdminCodesPage() {
         }))
       } else {
         setData([])
-        toast({
-          title: "加载失败",
+        toast.error("加载失败", {
           description: result.message,
-          variant: "destructive"
         })
       }
     }
@@ -728,10 +721,7 @@ export default function AdminCodesPage() {
   // 处理创建激活码
   const handleCreateCodes = async () => {
     if (newCodeData.subscription_plan_id === 0) {
-      toast({
-        title: "请选择订阅计划",
-        variant: "destructive"
-      })
+      toast.error("请选择订阅计划")
       return
     }
 
@@ -740,10 +730,8 @@ export default function AdminCodesPage() {
       const batchNumber = newCodeData.batch_number
       
       // 显示成功toast
-      toast({
-        title: "创建成功",
+        toast.success("创建成功", {
         description: "激活码生成完成",
-        variant: "default"
       })
       
       // 设置批次号并显示复制弹窗
@@ -758,10 +746,8 @@ export default function AdminCodesPage() {
       })
       loadCodes(pagination.page, pagination.pageSize, searchParams)
     } else {
-      toast({
-        title: "创建失败",
+      toast.error("创建失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -772,13 +758,11 @@ export default function AdminCodesPage() {
     
     const result = await adminAPI.deleteActivationCode(codeId)
     if (result.success) {
-      toast({ title: "删除成功", variant: "default" })
+      toast.success("删除成功")
       loadCodes(pagination.page, pagination.pageSize, searchParams)
     } else {
-      toast({
-        title: "删除失败",
+      toast.error("删除失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -788,10 +772,8 @@ export default function AdminCodesPage() {
   // 处理封禁预览
   const handleBanPreview = async (code: ActivationCodeRow) => {
     if (!code.used_by_username) {
-      toast({
-        title: "无法预览",
+      toast.error("无法预览", {
         description: "该激活码未被使用",
-        variant: "destructive"
       })
       return
     }
@@ -803,20 +785,16 @@ export default function AdminCodesPage() {
       // 通过用户名获取用户信息
       const userResult = await adminAPI.getUsers({ search: code.used_by_username })
       if (!userResult.success || !userResult.users || userResult.users.length === 0) {
-        toast({
-          title: "预览失败",
+        toast.error("预览失败", {
           description: "无法找到对应的用户信息",
-          variant: "destructive"
         })
         return
       }
       
       const user = userResult.users.find(u => u.username === code.used_by_username)
       if (!user) {
-        toast({
-          title: "预览失败",
+        toast.error("预览失败", {
           description: "无法找到对应的用户",
-          variant: "destructive"
         })
         return
       }
@@ -830,17 +808,13 @@ export default function AdminCodesPage() {
         setBanPreviewData(result)
         setIsBanPreviewDialogOpen(true)
       } else {
-        toast({
-          title: "预览失败",
+        toast.error("预览失败", {
           description: result.message,
-          variant: "destructive"
         })
       }
     } catch (error) {
-      toast({
-        title: "预览失败",
+      toast.error("预览失败", {
         description: "获取封禁预览信息时发生错误",
-        variant: "destructive"
       })
     }
     
@@ -863,20 +837,16 @@ export default function AdminCodesPage() {
       // 通过用户名获取用户信息
       const userResult = await adminAPI.getUsers({ search: selectedCodeForBan.used_by_username! })
       if (!userResult.success || !userResult.users || userResult.users.length === 0) {
-        toast({
-          title: "封禁失败",
+        toast.error("封禁失败", {
           description: "无法找到对应的用户信息",
-          variant: "destructive"
         })
         return
       }
       
       const user = userResult.users.find(u => u.username === selectedCodeForBan.used_by_username)
       if (!user) {
-        toast({
-          title: "封禁失败",
+        toast.error("封禁失败", {
           description: "无法找到对应的用户",
-          variant: "destructive"
         })
         return
       }
@@ -888,25 +858,19 @@ export default function AdminCodesPage() {
       })
       
       if (result.success) {
-        toast({
-          title: "封禁成功",
+        toast.success("封禁成功", {
           description: "激活码已被封禁",
-          variant: "default"
         })
         setIsBanDialogOpen(false)
         loadCodes(pagination.page, pagination.pageSize, searchParams)
       } else {
-        toast({
-          title: "封禁失败",
+        toast.error("封禁失败", {
           description: result.message,
-          variant: "destructive"
         })
       }
     } catch (error) {
-      toast({
-        title: "封禁失败",
+      toast.error("封禁失败", {
         description: "执行封禁操作时发生错误",
-        variant: "destructive"
       })
     }
     setLoading(false)
@@ -923,24 +887,18 @@ export default function AdminCodesPage() {
       })
       
       if (result.success) {
-        toast({
-          title: "解禁成功",
+        toast.success("解禁成功", {
           description: "激活码已被解禁",
-          variant: "default"
         })
         loadCodes(pagination.page, pagination.pageSize, searchParams)
       } else {
-        toast({
-          title: "解禁失败",
+        toast.error("解禁失败", {
           description: result.message,
-          variant: "destructive"
         })
       }
     } catch (error) {
-      toast({
-        title: "解禁失败",
+      toast.error("解禁失败", {
         description: "执行解禁操作时发生错误",
-        variant: "destructive"
       })
     }
   }
@@ -968,18 +926,14 @@ export default function AdminCodesPage() {
     
     const result = await adminAPI.updateSubscriptionDailyLimit(editingCode.id, dailyLimitData.daily_limit)
     if (result.success) {
-      toast({ 
-        title: "更新成功", 
+      toast.success("更新成功", {
         description: "每日使用量限制已更新",
-        variant: "default" 
       })
       setIsDailyLimitDialogOpen(false)
       loadCodes(pagination.page, pagination.pageSize, searchParams)
     } else {
-      toast({
-        title: "更新失败",
+      toast.error("更新失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -1036,8 +990,7 @@ export default function AdminCodesPage() {
     link.download = fileName
     link.click()
     
-    toast({
-      title: "导出成功",
+    toast.success("导出成功", {
       description: `已导出 ${dataToExport.length} 条记录${selectedRows.length > 0 ? ' (仅选中项)' : ''}`,
     })
   }
@@ -1062,24 +1015,18 @@ export default function AdminCodesPage() {
     try {
       const success = await copyToClipboard(generatedBatchNumber)
       if (success) {
-        toast({
-          title: "复制成功",
+        toast.success("复制成功", {
           description: "批次号已复制到剪贴板",
-          variant: "default"
         })
         setIsCopyDialogOpen(false)
       } else {
-        toast({
-          title: "复制失败",
+        toast.error("复制失败", {
           description: "请手动选择批次号文本进行复制",
-          variant: "destructive"
         })
       }
     } catch {
-      toast({
-        title: "复制失败",
+      toast.error("复制失败", {
         description: "请手动选择批次号文本进行复制",
-        variant: "destructive"
       })
     }
   }

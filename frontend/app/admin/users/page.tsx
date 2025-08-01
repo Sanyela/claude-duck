@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect } from "react"
 import {
   ColumnDef,
@@ -39,7 +37,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { adminAPI, type AdminUser, type SubscriptionPlan } from "@/api/admin"
 
 // 数据类型定义
@@ -55,7 +53,7 @@ type UserRow = {
 
 
 export default function AdminUsersPage() {
-  const { toast } = useToast()
+  
   const [data, setData] = useState<UserRow[]>([])
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [loading, setLoading] = useState(false)
@@ -329,10 +327,8 @@ export default function AdminUsersPage() {
       }))
     } else {
       setData([])
-      toast({
-        title: "加载失败",
+      toast.error("加载失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
     setLoading(false)
@@ -377,14 +373,12 @@ export default function AdminUsersPage() {
   const handleUpdateUser = async (user: AdminUser) => {
     const result = await adminAPI.updateUser(user.id, user)
     if (result.success) {
-      toast({ title: "更新成功", variant: "default" })
+      toast.success("更新成功")
       setIsUserDialogOpen(false)
       loadUsers()
     } else {
-      toast({
-        title: "更新失败",
+      toast.error("更新失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -395,13 +389,11 @@ export default function AdminUsersPage() {
     
     const result = await adminAPI.deleteUser(userId)
     if (result.success) {
-      toast({ title: "删除成功", variant: "default" })
+      toast.success("删除成功")
       loadUsers()
     } else {
-      toast({
-        title: "删除失败",
+      toast.error("删除失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -415,17 +407,13 @@ export default function AdminUsersPage() {
     
     const result = await adminAPI.toggleUserStatus(user.id, newDisabledStatus)
     if (result.success) {
-      toast({ 
-        title: `${actionText}成功`, 
+      toast.success(`${actionText}成功`, {
         description: result.message,
-        variant: "default" 
       })
       loadUsers()
     } else {
-      toast({
-        title: `${actionText}失败`,
+      toast.error(`${actionText}失败`, {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -446,9 +434,8 @@ export default function AdminUsersPage() {
   // 执行赠送订阅
   const handleSubmitGift = async () => {
     if (!giftingUser || giftData.subscription_plan_id === 0) {
-      toast({
-        title: "请选择订阅计划",
-        variant: "destructive"
+      toast.error("请选择订阅计划", {
+        description: "请选择订阅计划",
       })
       return
     }
@@ -471,18 +458,14 @@ export default function AdminUsersPage() {
 
     const result = await adminAPI.giftSubscription(giftingUser.id, requestData)
     if (result.success) {
-      toast({
-        title: "赠送成功",
+      toast.success("赠送成功", {
         description: result.message,
-        variant: "default"
       })
       setIsGiftDialogOpen(false)
       loadUsers()
     } else {
-      toast({
-        title: "赠送失败",
+      toast.error("赠送失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -516,8 +499,7 @@ export default function AdminUsersPage() {
     link.download = `users_${new Date().toISOString().split('T')[0]}.csv`
     link.click()
     
-    toast({
-      title: "导出成功",
+    toast.success("导出成功", {
       description: `已导出 ${dataToExport.length} 条记录${selectedRows.length > 0 ? ' (仅选中项)' : ''}`,
     })
   }

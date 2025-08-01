@@ -54,25 +54,25 @@ export interface DeviceActionResponse {
 
 // 获取设备列表
 export const getDevices = (): Promise<DeviceListResponse> => {
-  return request.get('/api/devices')
+  return request.get('/devices')
 }
 
 // 获取设备统计
 export const getDeviceStats = (): Promise<DeviceStatsResponse> => {
-  return request.get('/api/devices/stats')
+  return request.get('/devices/stats')
 }
 
 // 下线指定设备
 export const revokeDevice = (deviceId: string): Promise<DeviceActionResponse> => {
-  return request.delete(`/api/devices/${deviceId}`)
+  return request.delete(`/devices/${deviceId}`)
 }
 
 // 下线其他设备（保留当前设备）
 export const revokeOtherDevices = (): Promise<DeviceActionResponse> => {
-  return request.delete('/api/devices')
+  return request.delete('/devices')
 }
 
 // 强制下线所有设备（包括当前设备）
 export const revokeAllDevices = (): Promise<DeviceActionResponse> => {
-  return request.delete('/api/devices/force')
+  return request.delete('/devices/force')
 }

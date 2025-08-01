@@ -1,76 +1,71 @@
 #!/bin/bash
 set -e
 
+# SPA统一架构部署脚本
 # 配置
-BACKEND_IMAGE="ghcr.io/cloxl/claude-duck-backend:latest"
-FRONTEND_IMAGE="ghcr.io/cloxl/claude-duck-frontend:latest"
+IMAGE="ghcr.io/cloxl/claude-duck-backend:latest"
 
-echo "开始零停机部署..."
+echo "开始SPA统一服务零停机部署..."
 
 # 1. 拉取最新镜像
-echo "拉取最新镜像..."
-docker pull $BACKEND_IMAGE
-docker pull $FRONTEND_IMAGE
+echo "拉取最新统一镜像..."
+docker pull $IMAGE
 
-# 2. 创建新的后端容器（不启动）
-echo "创建新的后端容器..."
+# 2. 创建新的统一容器（不启动）
+echo "创建新的统一容器..."
 docker create \
-  --name claude-duck-backend-new \
+  --name claude-duck-new \
   --network host \
   -e TZ=Asia/Shanghai \
   -e PORT=9998 \
   -v $(pwd)/.env:/app/.env \
   -v $(pwd)/logs:/app/logs \
-  $BACKEND_IMAGE
-
-# 3. 创建新的前端容器（不启动）
-echo "创建新的前端容器..."
-docker create \
-  --name claude-duck-frontend-new \
-  --network host \
-  -e TZ=Asia/Shanghai \
-  -e API_URL=http://154.219.117.38:9998 \
-  -e APP_NAME=Claude Duck \
-  -e INSTALL_COMMAND="npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com" \
-  -e DOCS_URL=https://swjqc4r0111.feishu.cn/docx/CJT6dbdUBofDlrxfwpNcp1klnCg \
-  $FRONTEND_IMAGE
+  $IMAGE
 
 echo "容器创建完成，准备进行快速切换..."
 
-# 4. 快速切换：停止旧容器，立即启动新容器
-echo "执行快速切换..."
+# 3. 快速切换：停止旧容器，立即启动新容器
+echo "执行快速服务切换..."
 
-# 停止旧的前端服务
-docker stop claude-duck-frontend 2>/dev/null || true
+# 停止旧的统一服务
+docker stop claude-duck 2>/dev/null || true
 
-# 立即启动新的前端服务
-docker start claude-duck-frontend-new
-
-# 停止旧的后端服务
-docker stop claude-duck-backend 2>/dev/null || true
-
-# 立即启动新的后端服务
-docker start claude-duck-backend-new
+# 立即启动新的统一服务
+docker start claude-duck-new
 
 echo "服务切换完成，等待服务启动..."
 
-# 6. 清理旧容器，重命名新容器
+# 等待服务启动
+sleep 5
+
+# 4. 健康检查
+echo "执行健康检查..."
+if curl -f http://localhost:9998/health >/dev/null 2>&1; then
+    echo "✅ 服务健康检查通过"
+else
+    echo "❌ 服务健康检查失败，正在回滚..."
+    docker stop claude-duck-new 2>/dev/null || true
+    docker start claude-duck 2>/dev/null || true
+    echo "回滚完成"
+    exit 1
+fi
+
+# 5. 清理旧容器，重命名新容器
 echo "清理旧容器..."
-docker rm claude-duck-backend 2>/dev/null || true
-docker rm claude-duck-frontend 2>/dev/null || true
+docker rm claude-duck 2>/dev/null || true
 
 echo "重命名新容器..."
-docker rename claude-duck-backend-new claude-duck-backend
-docker rename claude-duck-frontend-new claude-duck-frontend
+docker rename claude-duck-new claude-duck
 
-# 7. 更新重启策略
+# 6. 更新重启策略
 echo "更新重启策略..."
-docker update --restart unless-stopped claude-duck-backend
-docker update --restart unless-stopped claude-duck-frontend
+docker update --restart unless-stopped claude-duck
 
-echo "部署完成！"
-echo "后端服务: http://localhost:9998"
-echo "前端服务: http://localhost:3000"
+echo "SPA统一部署完成！"
+echo "统一服务地址:"
+echo "  - 前端页面: http://localhost:9998/"
+echo "  - API服务: http://localhost:9998/api"
+echo "  - 健康检查: http://localhost:9998/health"
 echo ""
 echo "服务状态:"
 docker ps | grep claude-duck

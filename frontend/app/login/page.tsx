@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic'
-
 import { LoginForm } from "@/components/auth/login-form-api"
 
 export default function LoginPage() {

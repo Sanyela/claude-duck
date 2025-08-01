@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"os"
 	"claude/handlers"
 	"claude/middleware"
 
@@ -24,6 +25,8 @@ func SetupRoutes(r *gin.Engine) {
 		public.GET("/bing", handlers.GetBingDailyImage)
 		// 公告API
 		public.GET("/announcements", handlers.HandleAnnouncements)
+		// 前端配置API
+		public.GET("/config", handlers.HandleFrontendConfig)
 	}
 
 	// 认证相关路由
@@ -165,13 +168,13 @@ func SetupRoutes(r *gin.Engine) {
 		admin.DELETE("/announcements/:id", handlers.HandleAdminDeleteAnnouncement)
 	}
 
-	// 静态文件服务 - 提供前端构建的静态资源
+	// 静态文件服务 - 提供SPA构建的静态资源
 	r.Static("/assets", "./ui/dist/assets")
 	r.Static("/_next", "./ui/dist/_next") // Next.js 静态文件
 	r.StaticFile("/favicon.ico", "./ui/dist/favicon.ico")
 	r.StaticFile("/icon.png", "./ui/dist/icon.png")
 
-	// SPA fallback - 所有未匹配的路由都返回前端应用
+	// SPA fallback - 根据路径返回对应的静态HTML文件
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 
@@ -191,7 +194,26 @@ func SetupRoutes(r *gin.Engine) {
 			return
 		}
 
-		// 否则返回前端应用
-		c.File("./ui/dist/index.html")
+		// 设置HTML文件无缓存头
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+
+		// 根据路径返回对应的HTML文件
+		htmlPath := "./ui/dist" + path
+		if path == "/" {
+			htmlPath = "./ui/dist/index.html"
+		} else {
+			// 尝试路径对应的index.html
+			htmlPath = "./ui/dist" + path + "/index.html"
+		}
+
+		// 检查文件是否存在
+		if _, err := os.Stat(htmlPath); os.IsNotExist(err) {
+			// 如果对应路径的HTML不存在，返回根目录的index.html
+			htmlPath = "./ui/dist/index.html"
+		}
+
+		c.File(htmlPath)
 	})
 }

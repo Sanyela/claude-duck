@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic';
-
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, User, Mail, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface LinuxDoUserInfo {
@@ -31,7 +29,7 @@ interface TemporaryLinuxDoUser {
 export default function OAuthCompletePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
+  ;
   const { login } = useAuth();
   
   const [tempToken, setTempToken] = useState<string>("");
@@ -55,10 +53,24 @@ export default function OAuthCompletePage() {
     fetchTemporaryUserInfo(token);
   }, [searchParams]);
 
+  // 动态获取API基础URL
+  const getApiBaseURL = () => {
+    const hostname = window.location.hostname;
+    
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return "http://localhost:9998/api";
+    } else if (hostname === 'www.duckcode.top') {
+      return "https://api.duckcode.top/api";
+    } else {
+      return "/api";
+    }
+  };
+
   // 获取临时用户信息
   const fetchTemporaryUserInfo = async (token: string) => {
     try {
-      const response = await fetch(`/api/proxy/api/oauth/linuxdo/temp-user?temp_token=${encodeURIComponent(token)}`);
+      const apiBaseURL = getApiBaseURL();
+      const response = await fetch(`${apiBaseURL}/oauth/linuxdo/temp-user?temp_token=${encodeURIComponent(token)}`);
       const data = await response.json();
 
       if (response.ok && data.success) {
@@ -84,10 +96,8 @@ export default function OAuthCompletePage() {
     e.preventDefault();
     
     if (!username.trim() || !email.trim()) {
-      toast({
-        title: "输入错误",
+      toast.error("输入错误", {
         description: "请填写完整的用户名和邮箱",
-        variant: "destructive",
       });
       return;
     }
@@ -95,10 +105,8 @@ export default function OAuthCompletePage() {
     // 简单的邮箱格式验证
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      toast({
-        title: "邮箱格式错误",
+      toast.error("邮箱格式错误", {
         description: "请输入有效的邮箱地址",
-        variant: "destructive",
       });
       return;
     }
@@ -106,7 +114,8 @@ export default function OAuthCompletePage() {
     setSubmitting(true);
 
     try {
-      const response = await fetch("/api/proxy/api/oauth/linuxdo/complete-registration", {
+      const apiBaseURL = getApiBaseURL();
+      const response = await fetch(`${apiBaseURL}/oauth/linuxdo/complete-registration`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -125,10 +134,8 @@ export default function OAuthCompletePage() {
         if (data.token && data.user) {
           login(data.token, data.user);
           
-          toast({
-            title: "注册成功",
+          toast.success("注册成功", {
             description: "欢迎加入！正在跳转到主页...",
-            variant: "default",
           });
 
           setTimeout(() => {
@@ -139,19 +146,15 @@ export default function OAuthCompletePage() {
         }
       } else {
         setError(data.message || "注册失败");
-        toast({
-          title: "注册失败",
+        toast.error("注册失败", {
           description: data.message || "注册过程中出现错误",
-          variant: "destructive",
         });
       }
     } catch (err) {
       console.error("完成注册失败:", err);
       setError("网络错误，请稍后重试");
-      toast({
-        title: "注册失败",
+      toast.error("注册失败", {
         description: "网络错误，请稍后重试",
-        variant: "destructive",
       });
     } finally {
       setSubmitting(false);

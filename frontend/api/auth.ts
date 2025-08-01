@@ -75,7 +75,7 @@ export interface CheckEmailResponse {
 // 发送验证码
 export const sendVerificationCode = async (data: SendVerificationCodeRequest): Promise<{ success: boolean; message?: string }> => {
   try {
-    const response = await request.post("/api/auth/send-verification-code", data);
+    const response = await request.post("/auth/send-verification-code", data);
     return response.data;
   } catch (error: any) {
     console.error("发送验证码失败:", error);
@@ -89,7 +89,7 @@ export const sendVerificationCode = async (data: SendVerificationCodeRequest): P
 // 带验证码的用户注册
 export const registerWithCode = async (data: RegisterWithCodeRequest): Promise<AuthResponse> => {
   try {
-    const response = await request.post("/api/auth/register-with-code", data);
+    const response = await request.post("/auth/register-with-code", data);
     return response.data;
   } catch (error: any) {
     console.error("注册请求失败:", error);
@@ -103,7 +103,7 @@ export const registerWithCode = async (data: RegisterWithCodeRequest): Promise<A
 // 带验证码的用户登录
 export const loginWithCode = async (data: LoginWithCodeRequest): Promise<AuthResponse> => {
   try {
-    const response = await request.post("/api/auth/login-with-code", data);
+    const response = await request.post("/auth/login-with-code", data);
     return response.data;
   } catch (error: any) {
     console.error("登录请求失败:", error);
@@ -117,7 +117,7 @@ export const loginWithCode = async (data: LoginWithCodeRequest): Promise<AuthRes
 // 用户注册
 export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
   try {
-    const response = await request.post("/api/auth/register", data);
+    const response = await request.post("/auth/register", data);
     return response.data;
   } catch (error: any) {
     console.error("注册请求失败:", error);
@@ -131,7 +131,7 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 // 用户登录
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
   try {
-    const response = await request.post("/api/auth/login", data);
+    const response = await request.post("/auth/login", data);
     return response.data;
   } catch (error: any) {
     console.error("登录请求失败:", error);
@@ -145,7 +145,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 // 用户登出
 export const logout = async (): Promise<{ success: boolean; message?: string }> => {
   try {
-    const response = await request.post("/api/auth/logout");
+    const response = await request.post("/auth/logout");
     return response.data;
   } catch (error: any) {
     console.error("登出请求失败:", error);
@@ -159,7 +159,7 @@ export const logout = async (): Promise<{ success: boolean; message?: string }> 
 // 获取当前用户信息
 export const getUserInfo = async (): Promise<{ success: boolean; user?: User; message?: string }> => {
   try {
-    const response = await request.get("/api/auth/user");
+    const response = await request.get("/auth/user");
     if (response.data && response.data.user) {
     return {
       success: true,
@@ -198,7 +198,7 @@ export const authorize = async (params: OAuthAuthorizeParams): Promise<{
   message?: string;
 }> => {
   try {
-    const response = await request.post("/api/sso/authorize", {
+    const response = await request.post("/sso/authorize", {
       client_id: params.client_id,
       redirect_uri: params.redirect_uri,
       state: params.state,
@@ -224,7 +224,7 @@ export const verifyToken = async (token: string): Promise<{
   message?: string;
 }> => {
   try {
-    const response = await request.post("/api/sso/verify-token", { token });
+    const response = await request.post("/sso/verify-token", { token });
     return response.data;
   } catch (error: any) {
     return {
@@ -242,7 +242,7 @@ export const verifyCode = async (code: string): Promise<{
   message?: string;
 }> => {
   try {
-    const response = await request.post("/api/sso/verify-code", { code });
+    const response = await request.post("/sso/verify-code", { code });
     return response.data;
   } catch (error: any) {
     return {
@@ -256,7 +256,7 @@ export const verifyCode = async (code: string): Promise<{
 // 邮箱验证码一键登录/注册
 export const emailOnlyAuth = async (data: EmailOnlyAuthRequest): Promise<AuthResponse> => {
   try {
-    const response = await request.post("/api/auth/email-auth", data);
+    const response = await request.post("/auth/email-auth", data);
     return response.data;
   } catch (error: any) {
     console.error("邮箱验证码认证失败:", error);
@@ -270,7 +270,7 @@ export const emailOnlyAuth = async (data: EmailOnlyAuthRequest): Promise<AuthRes
 // 检查邮箱是否已注册
 export const checkEmail = async (data: CheckEmailRequest): Promise<CheckEmailResponse> => {
   try {
-    const response = await request.post("/api/auth/check-email", data);
+    const response = await request.post("/auth/check-email", data);
     return response.data;
   } catch (error: any) {
     console.error("检查邮箱失败:", error);
@@ -300,7 +300,7 @@ export interface LinuxDoAuthorizeResponse {
 // 获取Linux Do配置状态
 export const getLinuxDoConfig = async (): Promise<LinuxDoConfigResponse> => {
   try {
-    const response = await request.get("/api/oauth/linux-do/config");
+    const response = await request.get("/oauth/linux-do/config");
     return response.data;
   } catch (error: any) {
     console.error("获取Linux Do配置失败:", error);
@@ -315,7 +315,7 @@ export const getLinuxDoConfig = async (): Promise<LinuxDoConfigResponse> => {
 // 生成Linux Do授权URL
 export const getLinuxDoAuthorizeUrl = async (): Promise<LinuxDoAuthorizeResponse> => {
   try {
-    const response = await request.get("/api/oauth/linux-do/authorize");
+    const response = await request.get("/oauth/linux-do/authorize");
     return response.data;
   } catch (error: any) {
     console.error("生成Linux Do授权URL失败:", error);

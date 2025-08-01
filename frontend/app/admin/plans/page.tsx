@@ -1,7 +1,5 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,11 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { CreditCard, Plus, Edit, Trash2 } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { adminAPI, type SubscriptionPlan } from "@/api/admin"
 
 export default function AdminPlansPage() {
-  const { toast } = useToast()
+  
   const [loading, setLoading] = useState(false)
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null)
@@ -33,10 +31,8 @@ export default function AdminPlansPage() {
       setPlans(Array.isArray(result.plans) ? result.plans : [])
     } else {
       setPlans([])
-      toast({
-        title: "加载失败",
+      toast.error("加载失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
     setLoading(false)
@@ -52,14 +48,12 @@ export default function AdminPlansPage() {
       : await adminAPI.updateSubscriptionPlan(plan.id, plan)
     
     if (result.success) {
-      toast({ title: isCreatePlanMode ? "创建成功" : "更新成功", variant: "default" })
+      toast.success(isCreatePlanMode ? "创建成功" : "更新成功")
       setIsPlanDialogOpen(false)
       loadPlans()
     } else {
-      toast({
-        title: isCreatePlanMode ? "创建失败" : "更新失败",
+      toast.error(isCreatePlanMode ? "创建失败" : "更新失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }
@@ -69,13 +63,11 @@ export default function AdminPlansPage() {
     
     const result = await adminAPI.deleteSubscriptionPlan(planId)
     if (result.success) {
-      toast({ title: "删除成功", variant: "default" })
+      toast.success("删除成功")
       loadPlans()
     } else {
-      toast({
-        title: "删除失败",
+      toast.error("删除失败", {
         description: result.message,
-        variant: "destructive"
       })
     }
   }

@@ -1,5 +1,6 @@
 // 支持的邮箱域名列表
 export const ALLOWED_EMAIL_DOMAINS = [
+  'gmail.com',
   'qq.com',
   'outlook.com', 
   'foxmail.com',
