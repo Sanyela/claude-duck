@@ -58,6 +58,15 @@ func InitDB() error {
 
 // Migrate 执行数据库迁移
 func Migrate() error {
+	// 检查是否需要执行初始化
+	if shouldSkipInitialization() {
+		log.Println("Database already initialized, skipping migration details")
+		return nil
+	}
+
+	// 删除可能存在的重复索引
+	cleanupDuplicateIndexes()
+
 	err := DB.AutoMigrate(
 		&models.User{},
 		&models.DeviceCode{},
@@ -94,6 +103,9 @@ func Migrate() error {
 
 	// 确保新架构表的索引
 	ensureNewArchitectureIndexes()
+
+	// 标记初始化完成
+	markInitializationComplete()
 
 	log.Println("Database migration completed")
 	return nil
@@ -281,6 +293,60 @@ func ensureNewArchitectureIndexes() {
 	}
 }
 
+// cleanupDuplicateIndexes 清理重复的索引
+func cleanupDuplicateIndexes() {
+	// 获取所有表的重复deleted_at索引
+	duplicateIndexes := []string{
+		"idx_announcements_deleted_at",
+		"idx_subscription_plans_deleted_at", 
+		"idx_subscriptions_deleted_at",
+		"idx_activation_codes_deleted_at",
+		"idx_gift_records_deleted_at",
+		"idx_oauth_accounts_deleted_at",
+	}
+
+	for _, indexName := range duplicateIndexes {
+		// 检查索引是否存在
+		var indexCount int64
+		checkSQL := `SELECT COUNT(*) FROM information_schema.statistics 
+			WHERE table_schema = DATABASE() 
+			AND index_name = ?`
+
+		if err := DB.Raw(checkSQL, indexName).Scan(&indexCount).Error; err != nil {
+			log.Printf("检查索引 %s 失败: %v", indexName, err)
+			continue
+		}
+
+		if indexCount > 0 {
+			// 删除索引
+			tableName := ""
+			switch indexName {
+			case "idx_announcements_deleted_at":
+				tableName = "announcements"
+			case "idx_subscription_plans_deleted_at":
+				tableName = "subscription_plans"
+			case "idx_subscriptions_deleted_at":
+				tableName = "subscriptions"
+			case "idx_activation_codes_deleted_at":
+				tableName = "activation_codes"
+			case "idx_gift_records_deleted_at":
+				tableName = "gift_records"
+			case "idx_oauth_accounts_deleted_at":
+				tableName = "oauth_accounts"
+			}
+
+			if tableName != "" {
+				dropSQL := fmt.Sprintf("DROP INDEX %s ON %s", indexName, tableName)
+				if err := DB.Exec(dropSQL).Error; err != nil {
+					log.Printf("删除重复索引 %s 失败: %v", indexName, err)
+				} else {
+					log.Printf("✅ 删除重复索引: %s", indexName)
+				}
+			}
+		}
+	}
+}
+
 // InitRedis 初始化Redis连接
 func InitRedis() error {
 	cfg := config.AppConfig
@@ -328,4 +394,41 @@ func InitRedis() error {
 	log.Println("- DB 3: 用户设备集合")
 	log.Println("- DB 4: 设备详情")
 	return nil
+}
+
+// shouldSkipInitialization 检查是否应该跳过初始化
+func shouldSkipInitialization() bool {
+	// 检查是否存在初始化标记配置
+	var config models.SystemConfig
+	err := DB.Where("config_key = ?", "db_initialized").First(&config).Error
+	if err == nil && config.ConfigValue == "true" {
+		return true
+	}
+	
+	// 如果没有标记，但已经有用户表和系统配置，说明已经初始化过
+	var userCount int64
+	var configCount int64
+	
+	DB.Model(&models.User{}).Count(&userCount)
+	DB.Model(&models.SystemConfig{}).Count(&configCount)
+	
+	// 如果有配置项超过10个，认为已经初始化过
+	return configCount > 10
+}
+
+// markInitializationComplete 标记初始化完成
+func markInitializationComplete() {
+	initFlag := models.SystemConfig{
+		ConfigKey:   "db_initialized",
+		ConfigValue: "true",
+		Description: "数据库初始化完成标记",
+	}
+	
+	// 使用UPSERT语义
+	var existing models.SystemConfig
+	if err := DB.Where("config_key = ?", initFlag.ConfigKey).First(&existing).Error; err != nil {
+		DB.Create(&initFlag)
+	} else {
+		DB.Model(&existing).Updates(initFlag)
+	}
 }

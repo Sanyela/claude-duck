@@ -22,10 +22,28 @@ export const getServerClaudeUrl = (): string => {
 // 客户端配置获取（通过API）
 let configCache: { appName: string; apiUrl: string; installCommand: string; docsUrl: string; claudeUrl: string } | null = null
 
+// 动态获取API基础URL
+const getApiBaseURL = () => {
+  if (typeof window === 'undefined') {
+    return "http://localhost:9998/api";
+  }
+  
+  const hostname = window.location.hostname;
+  
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return "http://localhost:9998/api";
+  } else if (hostname === 'www.duckcode.top') {
+    return "https://api.duckcode.top/api";
+  } else {
+    return "/api";
+  }
+};
+
 export const getConfig = async () => {
   // 移除缓存确保每次都获取最新配置
   try {
-    const response = await fetch('/api/config', {
+    const apiBaseURL = getApiBaseURL();
+    const response = await fetch(`${apiBaseURL}/config`, {
       cache: 'no-store' // 禁用缓存
     })
     const config = await response.json()
@@ -34,7 +52,7 @@ export const getConfig = async () => {
     console.error('Failed to fetch config:', error)
     return {
       appName: 'Duck Code',
-      apiUrl: 'http://localhost:9998',
+      apiUrl: getApiBaseURL(),
       installCommand: 'npm install -g http://111.180.197.234:7778/install --registry=https://registry.npmmirror.com',
       docsUrl: 'https://github.com/anthropics/claude-code',
       claudeUrl: 'https://api.anthropic.com'

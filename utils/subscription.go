@@ -12,11 +12,26 @@ import (
 
 // DetermineServiceLevel 判断服务等级（升级/降级/同级）
 func DetermineServiceLevel(currentWallet *models.UserWallet, newPlan *models.SubscriptionPlan) string {
+	// 获取排除冻结卡密后的实际权益配置
+	actualBenefits, err := GetActualWalletBenefits(currentWallet.UserID)
+	if err != nil {
+		// 如果获取失败，使用钱包当前配置作为备选方案
+		actualBenefits = map[string]interface{}{
+			"daily_checkin_points":     currentWallet.DailyCheckinPoints,
+			"daily_checkin_points_max": currentWallet.DailyCheckinPointsMax,
+			"auto_refill_amount":       currentWallet.AutoRefillAmount,
+		}
+	}
+	
 	// 比较关键属性来判断服务等级
 	newScore := calculateServiceScore(newPlan.DailyCheckinPoints, newPlan.DailyCheckinPointsMax, 
 		newPlan.AutoRefillAmount)
-	currentScore := calculateServiceScore(currentWallet.DailyCheckinPoints, currentWallet.DailyCheckinPointsMax,
-		currentWallet.AutoRefillAmount)
+	
+	currentCheckinMin := getInt64FromInterface(actualBenefits["daily_checkin_points"])
+	currentCheckinMax := getInt64FromInterface(actualBenefits["daily_checkin_points_max"])
+	currentAutoRefill := getInt64FromInterface(actualBenefits["auto_refill_amount"])
+	
+	currentScore := calculateServiceScore(currentCheckinMin, currentCheckinMax, currentAutoRefill)
 	
 	if newScore > currentScore {
 		return "upgrade"
@@ -382,4 +397,91 @@ func GetWalletRedemptionHistory(userID uint, limit, offset int) ([]models.Redemp
 		Find(&records).Error
 
 	return records, total, err
+}
+
+// GetActualWalletBenefits 获取排除冻结卡密后的实际钱包权益配置
+func GetActualWalletBenefits(userID uint) (map[string]interface{}, error) {
+	// 获取所有有效的兑换记录（排除被冻结的激活码）
+	var records []models.RedemptionRecord
+	
+	// 获取被封禁的激活码列表
+	var bannedCodes []string
+	database.DB.Table("frozen_points_records").
+		Where("user_id = ? AND status = 'frozen'", userID).
+		Pluck("banned_activation_code", &bannedCodes)
+	
+	query := database.DB.Where("user_id = ? AND expires_at > ?", userID, time.Now())
+	
+	// 排除被封禁的激活码记录
+	if len(bannedCodes) > 0 {
+		query = query.Where("NOT (source_type = 'activation_code' AND source_id IN ?)", bannedCodes)
+	}
+	
+	err := query.Find(&records).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	// 如果没有有效记录，返回默认配置
+	if len(records) == 0 {
+		return map[string]interface{}{
+			"daily_max_points":         int64(0),
+			"degradation_guaranteed":   0,
+			"daily_checkin_points":     int64(0),
+			"daily_checkin_points_max": int64(0),
+			"auto_refill_enabled":      false,
+			"auto_refill_threshold":    int64(0),
+			"auto_refill_amount":       int64(0),
+		}, nil
+	}
+	
+	// 计算综合权益（取最优配置）
+	benefits := map[string]interface{}{
+		"daily_max_points":         int64(0),
+		"degradation_guaranteed":   0,
+		"daily_checkin_points":     int64(0),
+		"daily_checkin_points_max": int64(0),
+		"auto_refill_enabled":      false,
+		"auto_refill_threshold":    int64(0),
+		"auto_refill_amount":       int64(0),
+	}
+	
+	for _, record := range records {
+		// 取最大值策略
+		if record.DailyMaxPoints > benefits["daily_max_points"].(int64) {
+			benefits["daily_max_points"] = record.DailyMaxPoints
+		}
+		if record.DegradationGuaranteed > benefits["degradation_guaranteed"].(int) {
+			benefits["degradation_guaranteed"] = record.DegradationGuaranteed
+		}
+		if record.DailyCheckinPoints > benefits["daily_checkin_points"].(int64) {
+			benefits["daily_checkin_points"] = record.DailyCheckinPoints
+		}
+		if record.DailyCheckinPointsMax > benefits["daily_checkin_points_max"].(int64) {
+			benefits["daily_checkin_points_max"] = record.DailyCheckinPointsMax
+		}
+		
+		// 自动补给配置：取最优配置
+		if record.AutoRefillEnabled && record.AutoRefillAmount > benefits["auto_refill_amount"].(int64) {
+			benefits["auto_refill_enabled"] = true
+			benefits["auto_refill_threshold"] = record.AutoRefillThreshold
+			benefits["auto_refill_amount"] = record.AutoRefillAmount
+		}
+	}
+	
+	return benefits, nil
+}
+
+// getInt64FromInterface 从interface{}中安全获取int64值
+func getInt64FromInterface(value interface{}) int64 {
+	switch v := value.(type) {
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	default:
+		return 0
+	}
 }

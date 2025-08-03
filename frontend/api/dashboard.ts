@@ -45,7 +45,7 @@ export const dashboardAPI = {
   // 获取用户积分余额
   async getPointBalance(): Promise<{ success: boolean; data?: PointBalance; message?: string }> {
     try {
-      const response = await request.get("/api/credits/balance");
+      const response = await request.get("/credits/balance");
       
       // 检查并处理后端返回的数据结构
       if (response.data && response.data.balance) {
@@ -80,7 +80,7 @@ export const dashboardAPI = {
   // 获取用户所有订阅
   async getActiveSubscription(): Promise<{ success: boolean; data?: ActiveSubscription[]; message?: string }> {
     try {
-      const response = await request.get("/api/subscription/active");
+      const response = await request.get("/subscription/active");
       return { 
         success: true, 
         data: response.data.subscriptions || []

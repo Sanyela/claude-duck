@@ -59,6 +59,14 @@ const userNavItems = [
   },
 ]
 
+// 设置项
+const settingsItem = {
+  href: "/settings",
+  label: "设置",
+  icon: Settings,
+  activeColor: "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300",
+}
+
 // 管理员功能导航项
 const adminNavItems = [
   {
@@ -192,10 +200,8 @@ export function Sidebar() {
           )}
           <span>切换主题</span>
         </Button>
-        {/* 设置按钮已隐藏 - 暂时不开放给用户使用 */}
-        {/*
         <Link
-          href="/settings"
+          href={settingsItem.href}
           className={cn(
             "flex items-center gap-3 rounded-full px-4 py-2 text-sm font-medium transition-colors",
             pathname === settingsItem.href ? settingsItem.activeColor : inactiveItemClasses,
@@ -205,7 +211,6 @@ export function Sidebar() {
           <settingsItem.icon className="h-4 w-4" />
           {settingsItem.label}
         </Link>
-        */}
       </div>
     </aside>
   )

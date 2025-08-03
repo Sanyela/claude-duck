@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"os"
 	"claude/handlers"
 	"claude/middleware"
 
@@ -24,6 +25,8 @@ func SetupRoutes(r *gin.Engine) {
 		public.GET("/bing", handlers.GetBingDailyImage)
 		// 公告API
 		public.GET("/announcements", handlers.HandleAnnouncements)
+		// 前端配置API
+		public.GET("/config", handlers.HandleFrontendConfig)
 	}
 
 	// 认证相关路由
@@ -40,6 +43,12 @@ func SetupRoutes(r *gin.Engine) {
 		auth.POST("/register-with-code", handlers.HandleRegisterWithCode)
 		auth.POST("/login-with-code", handlers.HandleLoginWithCode)
 		auth.POST("/email-auth", handlers.HandleEmailOnlyAuth) // 邮箱验证码一键登录/注册
+
+		// 设置相关路由（需要登录）
+		auth.POST("/check-username", handlers.HandleCheckUsername)                              // 检查用户名可用性
+		auth.POST("/send-verification-code-settings", middleware.JWTAuth(), handlers.HandleSendVerificationCodeForSettings) // 发送设置验证码
+		auth.POST("/change-username", middleware.JWTAuth(), handlers.HandleChangeUsername)      // 修改用户名
+		auth.POST("/change-password", middleware.JWTAuth(), handlers.HandleChangePassword)      // 修改密码
 	}
 
 	// OAuth相关路由
@@ -164,13 +173,13 @@ func SetupRoutes(r *gin.Engine) {
 		admin.GET("/conversation-logs/:id", handlers.GetConversationLogDetail)  // 获取对话日志详情
 	}
 
-	// 静态文件服务 - 提供前端构建的静态资源
+	// 静态文件服务 - 提供SPA构建的静态资源
 	r.Static("/assets", "./ui/dist/assets")
 	r.Static("/_next", "./ui/dist/_next") // Next.js 静态文件
 	r.StaticFile("/favicon.ico", "./ui/dist/favicon.ico")
 	r.StaticFile("/icon.png", "./ui/dist/icon.png")
 
-	// SPA fallback - 所有未匹配的路由都返回前端应用
+	// SPA fallback - 根据路径返回对应的静态HTML文件
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 
@@ -190,7 +199,26 @@ func SetupRoutes(r *gin.Engine) {
 			return
 		}
 
-		// 否则返回前端应用
-		c.File("./ui/dist/index.html")
+		// 设置HTML文件无缓存头
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+
+		// 根据路径返回对应的HTML文件
+		htmlPath := "./ui/dist" + path
+		if path == "/" {
+			htmlPath = "./ui/dist/index.html"
+		} else {
+			// 尝试路径对应的index.html
+			htmlPath = "./ui/dist" + path + "/index.html"
+		}
+
+		// 检查文件是否存在
+		if _, err := os.Stat(htmlPath); os.IsNotExist(err) {
+			// 如果对应路径的HTML不存在，返回根目录的index.html
+			htmlPath = "./ui/dist/index.html"
+		}
+
+		c.File(htmlPath)
 	})
 }

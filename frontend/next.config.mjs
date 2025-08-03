@@ -9,38 +9,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // 静态导出配置
+  output: 'export',
+  distDir: 'dist', // 指定输出目录为 dist
+  trailingSlash: true,
   generateEtags: false,
-
-  async headers() {
-    return [
-      {
-        source: '/api/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          },
-          {
-            key: 'Pragma',
-            value: 'no-cache',
-          },
-          {
-            key: 'Expires',
-            value: '0',
-          },
-        ],
-      },
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'no-store, no-cache, must-revalidate, max-age=0',
-          },
-        ],
-      },
-    ];
-  },
+  
+  // 删除SSR相关配置，不再需要headers设置
+  // SPA模式下缓存由nginx或后端控制
 };
 
 export default nextConfig;

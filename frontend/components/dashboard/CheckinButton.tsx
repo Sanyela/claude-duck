@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Gift, Calendar, Sparkles } from "lucide-react"
 import { checkinAPI, CheckinStatusResponse } from "@/api/checkin"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import confetti from "canvas-confetti"
 
 interface CheckinButtonProps {
@@ -14,7 +14,7 @@ interface CheckinButtonProps {
 }
 
 export function CheckinButton({ onCheckinSuccess }: CheckinButtonProps) {
-  const { toast } = useToast()
+  
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [checkinStatus, setCheckinStatus] = useState<CheckinStatusResponse | null>(null)
@@ -51,10 +51,8 @@ export function CheckinButton({ onCheckinSuccess }: CheckinButtonProps) {
         // 触发纸屑动效
         triggerConfetti()
         
-        toast({
-          title: "签到成功! 🎉",
+        toast.success(`签到成功! 🎉`, {
           description: `恭喜获得 ${result.rewardPoints} 积分奖励`,
-          variant: "default"
         })
         
         // 重新加载状态

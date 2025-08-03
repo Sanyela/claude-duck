@@ -113,7 +113,6 @@ function ConfigSection() {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "${jwtToken}",
     "ANTHROPIC_BASE_URL": "${claudeUrl}",
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": 64000,
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
     "API_TIMEOUT_MS": 600000
   },
@@ -205,7 +204,6 @@ function ConfigSection() {
                     </span>
                   )}
                 </span>{`",
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": 64000,
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
     "API_TIMEOUT_MS": 600000
   },

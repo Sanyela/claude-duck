@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, User, Mail, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface LinuxDoUserInfo {
@@ -29,7 +29,7 @@ interface TemporaryLinuxDoUser {
 export default function OAuthCompletePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
+  ;
   const { login } = useAuth();
   
   const [tempToken, setTempToken] = useState<string>("");
@@ -53,10 +53,24 @@ export default function OAuthCompletePage() {
     fetchTemporaryUserInfo(token);
   }, [searchParams]);
 
+  // 动态获取API基础URL
+  const getApiBaseURL = () => {
+    const hostname = window.location.hostname;
+    
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return "http://localhost:9998/api";
+    } else if (hostname === 'www.duckcode.top') {
+      return "https://api.duckcode.top/api";
+    } else {
+      return "/api";
+    }
+  };
+
   // 获取临时用户信息
   const fetchTemporaryUserInfo = async (token: string) => {
     try {
-      const response = await fetch(`/api/proxy/api/oauth/linuxdo/temp-user?temp_token=${encodeURIComponent(token)}`);
+      const apiBaseURL = getApiBaseURL();
+      const response = await fetch(`${apiBaseURL}/oauth/linuxdo/temp-user?temp_token=${encodeURIComponent(token)}`);
       const data = await response.json();
 
       if (response.ok && data.success) {
@@ -104,7 +118,8 @@ export default function OAuthCompletePage() {
     setSubmitting(true);
 
     try {
-      const response = await fetch("/api/proxy/api/oauth/linuxdo/complete-registration", {
+      const apiBaseURL = getApiBaseURL();
+      const response = await fetch(`${apiBaseURL}/oauth/linuxdo/complete-registration`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

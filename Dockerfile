@@ -1,4 +1,5 @@
-# 第一阶段：构建前端
+# 统一Docker构建 - SPA模式
+# 第一阶段：构建前端SPA
 FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/frontend
@@ -12,7 +13,7 @@ RUN npm install -g pnpm && pnpm install --frozen-lockfile
 # 复制前端源码
 COPY frontend/ .
 
-# 构建前端
+# 构建前端SPA（静态导出）
 RUN pnpm build
 
 # 第二阶段：构建后端
@@ -38,13 +39,13 @@ RUN rm -rf frontend
 # 构建后端应用
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
-# 第三阶段：运行时镜像
+# 第三阶段：统一运行时镜像
 FROM alpine:latest
 
 WORKDIR /app
 
 # 安装必要的运行时依赖
-RUN apk --no-cache add ca-certificates tzdata && \
+RUN apk --no-cache add ca-certificates tzdata wget && \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone
 
@@ -54,14 +55,8 @@ COPY --from=backend-builder /app/main .
 # 创建前端静态文件目录
 RUN mkdir -p ui/dist
 
-# 复制构建好的前端文件
-COPY --from=frontend-builder /app/frontend/out/ ui/dist/
-
-# 不复制环境配置文件到镜像中，改为运行时映射
-# COPY .env* ./
-
-# 复制其他必要文件
-RUN mkdir -p scripts
+# 复制构建好的前端SPA文件
+COPY --from=frontend-builder /app/frontend/dist/ ui/dist/
 
 # 创建非 root 用户
 RUN addgroup -g 1000 appgroup && \

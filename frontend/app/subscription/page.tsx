@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tag, Loader2, AlertCircle } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { dashboardAPI, type ActiveSubscription } from "@/api/dashboard"
 import { request } from "@/api/request"
 
@@ -25,7 +25,7 @@ interface PaymentHistory {
 }
 
 export default function SubscriptionPage() {
-  const { toast } = useToast()
+  
   const [loading, setLoading] = useState(true)
   const [subscriptions, setSubscriptions] = useState<ActiveSubscription[]>([])
   const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([])
@@ -76,7 +76,7 @@ export default function SubscriptionPage() {
   // 获取支付历史
   const getPaymentHistory = async (): Promise<{ success: boolean; data?: PaymentHistory[]; message?: string }> => {
     try {
-      const response = await request.get("/api/subscription/history")
+      const response = await request.get("/subscription/history")
       return { success: true, data: response.data.history || [] }
     } catch {
       console.error("获取支付历史失败:", error)
@@ -101,7 +101,7 @@ export default function SubscriptionPage() {
 
     try {
       // 调用预检查接口，不执行实际兑换
-      const response = await request.post("/api/subscription/redeem/preview", {
+      const response = await request.post("/subscription/redeem/preview", {
         couponCode: couponCode.trim()
       })
 
@@ -173,7 +173,7 @@ export default function SubscriptionPage() {
   // 执行实际兑换操作
   const executeActualRedeem = async () => {
     try {
-      const response = await request.post("/api/subscription/redeem", {
+      const response = await request.post("/subscription/redeem", {
         couponCode: couponCode.trim()
       })
 

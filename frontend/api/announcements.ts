@@ -40,7 +40,7 @@ export const announcementsAPI = {
   // 获取活跃公告列表（用户端）
   async getActiveAnnouncements(language: string = "zh"): Promise<{ success: boolean; data?: PublicAnnouncement[]; message?: string }> {
     try {
-      const response = await request.get(`/api/announcements?language=${language}&active=true`);
+      const response = await request.get(`/announcements?language=${language}&active=true`);
       return { success: true, data: response.data.announcements };
     } catch (error: any) {
       console.error("获取公告失败:", error);

@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -14,14 +14,14 @@ import { AnimatedNumber } from "@/components/ui/animated-number"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/AuthContext"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { dashboardAPI, type DashboardData } from "@/api/dashboard"
 import { creditsAPI, type CreditBalance } from "@/api/credits"
 import { announcementsAPI, type PublicAnnouncement } from "@/api/announcements"
+import { request } from "@/api/request"
 
 export default function DashboardPage() {
   const { user, login: authLogin } = useAuth();
-  const { toast } = useToast();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -45,34 +45,25 @@ export default function DashboardPage() {
       const fetchUserAndLogin = async () => {
         try {
           // 临时设置token，以便API调用能正常工作
-          const response = await fetch('/api/proxy/api/auth/user', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
+          localStorage.setItem("auth_token", token);
+          const response = await request.get('/auth/user');
+          const userData = response.data;
           
-          const userData = await response.json();
-          
-          if (response.ok && userData.success && userData.user) {
+          if (userData.success && userData.user) {
             // 使用AuthContext的login方法更新状态
             authLogin(token, userData.user);
             
             // 显示成功消息
-            toast({
-              title: "登录成功",
+            toast.success("登录成功", {
               description: decodeURIComponent(message || '登录成功'),
-              variant: "default",
             });
           } else {
             throw new Error('获取用户信息失败');
           }
         } catch (error) {
           console.error('OAuth登录处理失败:', error);
-          toast({
-            title: "登录失败",
+          toast.error("登录失败", {
             description: "获取用户信息失败，请重试",
-            variant: "destructive",
           });
           // 清理token
           localStorage.removeItem('auth_token');

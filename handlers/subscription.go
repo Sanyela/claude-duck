@@ -379,11 +379,22 @@ func HandleRedeemCouponPreview(c *gin.Context) {
 	if err == nil && wallet.Status == "active" {
 		serviceLevel = utils.DetermineServiceLevel(wallet, &activationCode.Plan)
 
-		// 当前用户权益数据
+		// 获取排除冻结卡密后的实际权益配置
+		actualBenefits, benefitsErr := utils.GetActualWalletBenefits(userID)
+		if benefitsErr != nil {
+			// 如果获取失败，使用钱包当前配置作为备选方案
+			actualBenefits = map[string]interface{}{
+				"daily_checkin_points":     wallet.DailyCheckinPoints,
+				"daily_checkin_points_max": wallet.DailyCheckinPointsMax,
+				"auto_refill_amount":       wallet.AutoRefillAmount,
+			}
+		}
+
+		// 当前用户权益数据（使用实际权益配置）
 		currentPoints = wallet.AvailablePoints
-		currentCheckinMin = wallet.DailyCheckinPoints
-		currentCheckinMax = wallet.DailyCheckinPointsMax
-		currentAutoRefill = wallet.AutoRefillAmount
+		currentCheckinMin = getInt64FromInterface(actualBenefits["daily_checkin_points"])
+		currentCheckinMax = getInt64FromInterface(actualBenefits["daily_checkin_points_max"])
+		currentAutoRefill = getInt64FromInterface(actualBenefits["auto_refill_amount"])
 
 		// 新套餐权益数据
 		newPoints = activationCode.Plan.PointAmount
@@ -731,23 +742,49 @@ func getWalletCheckinPointsRange(userID uint) CheckinPointsRange {
 		return CheckinPointsRange{MinPoints: 0, MaxPoints: 0, HasValid: false}
 	}
 
-	// 检查钱包是否有效且有签到配置
-	if wallet.Status != "active" ||
-		wallet.WalletExpiresAt.Before(time.Now()) ||
-		wallet.DailyCheckinPoints <= 0 {
+	// 检查钱包是否有效
+	if wallet.Status != "active" || wallet.WalletExpiresAt.Before(time.Now()) {
+		return CheckinPointsRange{MinPoints: 0, MaxPoints: 0, HasValid: false}
+	}
+
+	// 获取排除冻结卡密后的实际权益配置
+	actualBenefits, err := utils.GetActualWalletBenefits(userID)
+	if err != nil {
+		return CheckinPointsRange{MinPoints: 0, MaxPoints: 0, HasValid: false}
+	}
+
+	// 获取实际的签到积分配置
+	minPoints := getInt64FromInterface(actualBenefits["daily_checkin_points"])
+	maxPoints := getInt64FromInterface(actualBenefits["daily_checkin_points_max"])
+
+	// 检查是否有有效的签到配置
+	if minPoints <= 0 {
 		return CheckinPointsRange{MinPoints: 0, MaxPoints: 0, HasValid: false}
 	}
 
 	// 确保最大值不小于最小值
-	maxPoints := wallet.DailyCheckinPointsMax
-	if maxPoints <= 0 || maxPoints < wallet.DailyCheckinPoints {
-		maxPoints = wallet.DailyCheckinPoints
+	if maxPoints <= 0 || maxPoints < minPoints {
+		maxPoints = minPoints
 	}
 
 	return CheckinPointsRange{
-		MinPoints: wallet.DailyCheckinPoints,
+		MinPoints: minPoints,
 		MaxPoints: maxPoints,
 		HasValid:  true,
+	}
+}
+
+// getInt64FromInterface 从interface{}中安全获取int64值
+func getInt64FromInterface(value interface{}) int64 {
+	switch v := value.(type) {
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	default:
+		return 0
 	}
 }
 

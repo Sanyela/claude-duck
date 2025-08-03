@@ -281,6 +281,30 @@ func handleNonStreamResponse(c *gin.Context, resp *http.Response, userID uint, u
 
 	// 如果请求成功，解析响应并记录
 	if resp.StatusCode == http.StatusOK {
+		// 检查响应中是否包含 is_error 字段
+		var responseCheck map[string]interface{}
+		if err := json.Unmarshal(responseBody, &responseCheck); err == nil {
+			if isError, exists := responseCheck["is_error"]; exists && isError == true {
+				// 如果检测到 is_error，记录失败请求但不扣费
+				apiTransaction := models.APITransaction{
+					UserID:      userID,
+					RequestID:   fmt.Sprintf("req_%d_%d", userID, time.Now().UnixNano()),
+					Model:       model,
+					RequestType: "api",
+					IP:          c.ClientIP(),
+					UID:         fmt.Sprintf("%d", userID),
+					Username:    username,
+					Status:      "claude_error",
+					Error:       "Claude API returned is_error: true",
+					Duration:    int(time.Since(startTime).Milliseconds()),
+					ServiceTier: "standard",
+					CreatedAt:   time.Now(),
+				}
+				database.DB.Create(&apiTransaction)
+				return
+			}
+		}
+
 		var claudeResp ClaudeResponse
 		if err := json.Unmarshal(responseBody, &claudeResp); err == nil {
 			// 记录成功的请求并扣费
@@ -365,6 +389,7 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 	var totalInputTokens, totalOutputTokens int
 	var streamError error
 	var finalClaudeResp *ClaudeResponse
+	var hasError bool = false // 标记是否检测到错误
 
 	// 创建读取器
 	reader := bufio.NewReader(resp.Body)
@@ -389,6 +414,15 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 			data = bytes.TrimSpace(data)
 
 			if len(data) > 0 && !bytes.Equal(data, []byte("[DONE]")) {
+				// 首先检查是否包含 is_error 字段
+				var errorCheck map[string]interface{}
+				if err := json.Unmarshal(data, &errorCheck); err == nil {
+					if isError, exists := errorCheck["is_error"]; exists && isError == true {
+						hasError = true
+						// 继续写入数据给客户端，但标记为错误
+					}
+				}
+
 				var event ClaudeStreamEvent
 				if err := json.Unmarshal(data, &event); err == nil {
 					// 记录消息开始事件
@@ -413,8 +447,8 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 	}
 
 	// 记录流式请求的使用情况
-	if messageID != "" && resp.StatusCode == http.StatusOK && streamError == nil {
-		// 成功的流式请求
+	if messageID != "" && resp.StatusCode == http.StatusOK && streamError == nil && !hasError {
+		// 成功的流式请求，没有错误
 		recordUsage(userID, username, model, messageID,
 			totalInputTokens, totalOutputTokens,
 			0, 0, // 流式响应暂时没有缓存信息
@@ -425,7 +459,15 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 		// 记录成功的流式对话日志
 		recordConversationLog(userID, username, c.ClientIP(), requestData, finalClaudeResp, nil, "stream", isFreeModel, startTime)
 	} else if messageID != "" {
-		// 失败的流式请求，记录但不扣费
+		// 失败的流式请求或检测到 is_error，记录但不扣费
+		status := "failed"
+		errorMsg := fmt.Sprintf("HTTP %d or stream error", resp.StatusCode)
+		
+		if hasError {
+			status = "claude_error"
+			errorMsg = "Claude API returned is_error: true in stream"
+		}
+		
 		apiTransaction := models.APITransaction{
 			UserID:       userID,
 			MessageID:    messageID,
@@ -437,8 +479,8 @@ func handleStreamResponse(c *gin.Context, resp *http.Response, userID uint, user
 			IP:           c.ClientIP(),
 			UID:          fmt.Sprintf("%d", userID),
 			Username:     username,
-			Status:       "failed",
-			Error:        fmt.Sprintf("HTTP %d or stream error", resp.StatusCode),
+			Status:       status,
+			Error:        errorMsg,
 			Duration:     int(time.Since(startTime).Milliseconds()),
 			ServiceTier:  "standard",
 			CreatedAt:    time.Now(),
@@ -474,20 +516,34 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	}
 
 	// 获取倍率配置
-	inputMultiplier, _ := strconv.ParseFloat(configMap["prompt_multiplier"], 64)
-	if inputMultiplier == 0 {
+	// 获取输入倍率配置
+	inputMultiplier := 0.0
+	if inputConfig, exists := configMap["prompt_multiplier"]; exists {
+		// 如果配置存在，直接使用配置值（包括0）
+		inputMultiplier, _ = strconv.ParseFloat(inputConfig, 64)
+	} else {
+		// 如果配置不存在，使用默认值
 		inputMultiplier = config.AppConfig.DefaultPromptMultiplier
 	}
 
-	outputMultiplier, _ := strconv.ParseFloat(configMap["completion_multiplier"], 64)
-	if outputMultiplier == 0 {
+	// 获取输出倍率配置
+	outputMultiplier := 0.0
+	if outputConfig, exists := configMap["completion_multiplier"]; exists {
+		// 如果配置存在，直接使用配置值（包括0）
+		outputMultiplier, _ = strconv.ParseFloat(outputConfig, 64)
+	} else {
+		// 如果配置不存在，使用默认值
 		outputMultiplier = config.AppConfig.DefaultCompletionMultiplier
 	}
 
 	// 获取缓存倍率配置
-	cacheMultiplier, _ := strconv.ParseFloat(configMap["cache_multiplier"], 64)
-	if cacheMultiplier == 0 {
-		cacheMultiplier = inputMultiplier // 如果没有配置，默认使用输入倍率
+	cacheMultiplier := 0.0
+	if cacheConfig, exists := configMap["cache_multiplier"]; exists {
+		// 如果配置存在，直接使用配置值（包括0）
+		cacheMultiplier, _ = strconv.ParseFloat(cacheConfig, 64)
+	} else {
+		// 如果配置不存在，使用输入倍率作为默认值
+		cacheMultiplier = inputMultiplier
 	}
 
 	// 计算总缓存token（创建 + 读取）
@@ -507,8 +563,8 @@ func recordUsage(userID uint, username string, model string, messageID string, i
 	if modelMultiplierConfig != "" {
 		var multiplierMap map[string]float64
 		if err := json.Unmarshal([]byte(modelMultiplierConfig), &multiplierMap); err == nil {
-			if multiplier, exists := multiplierMap[model]; exists && multiplier > 0 {
-				modelMultiplier = multiplier
+			if multiplier, exists := multiplierMap[model]; exists {
+				modelMultiplier = multiplier // 允许0值倍率
 			}
 		}
 	}

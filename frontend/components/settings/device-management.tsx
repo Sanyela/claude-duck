@@ -20,7 +20,7 @@ import {
   RotateCcw
 } from "lucide-react"
 import { Device, DeviceStats, getDevices, getDeviceStats, revokeDevice, revokeOtherDevices, revokeAllDevices } from "@/api/devices"
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,7 +97,7 @@ export function DeviceManagement() {
   const [stats, setStats] = useState<DeviceStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const { toast } = useToast()
+  
 
   // 加载设备数据
   const loadDevices = async () => {

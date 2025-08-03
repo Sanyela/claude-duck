@@ -9,9 +9,31 @@ import (
 	"net"
 	"net/smtp"
 	"strings"
+	"time"
 
 	"claude/config"
 )
+
+type PlainAuthIgnoreTLS struct {
+	identity, username, password string
+	host                         string
+}
+
+func PlainAuthIgnoreTLSNew(identity, username, password, host string) smtp.Auth {
+	return &PlainAuthIgnoreTLS{identity, username, password, host}
+}
+
+func (a *PlainAuthIgnoreTLS) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	// 允许在非TLS连接上使用PLAIN认证
+	return "PLAIN", []byte(a.identity + "\x00" + a.username + "\x00" + a.password), nil
+}
+
+func (a *PlainAuthIgnoreTLS) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, fmt.Errorf("unexpected server challenge")
+	}
+	return nil, nil
+}
 
 // GenerateVerificationCode 生成6位数字验证码
 func GenerateVerificationCode() string {
@@ -144,26 +166,181 @@ Content-Transfer-Encoding: 8bit
 
 	msg := []byte(headers)
 
-	// 根据端口选择连接方式
+	// 根据端口和配置选择连接方式
 	switch port {
 	case "465":
-		// 使用SSL连接
+		// 如果启用明文认证，强制使用明文方式
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
+		// 否则使用TLS连接（465端口默认TLS）
 		return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	case "587":
-		// 使用STARTTLS连接
+		// 如果启用明文认证，强制使用明文方式
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
+		// 否则使用STARTTLS连接（587端口默认STARTTLS）
 		return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	default:
-		// 使用标准SMTP连接（25端口）
+		// 如果启用明文认证，使用明文方式（适用于2525等端口）
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
+		// 使用标准SMTP连接（25端口或其他端口）
 		return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
 	}
 }
 
-// sendMailStandard 使用标准SMTP发送邮件（适用于25端口）
+// SendSettingsVerificationEmail 发送设置相关验证码邮件
+func SendSettingsVerificationEmail(to, code, emailType string) error {
+	from := config.AppConfig.SMTPFrom
+	password := config.AppConfig.SMTPPassword
+	host := config.AppConfig.SMTPHost
+	port := config.AppConfig.SMTPPort
+
+	log.Printf("SMTP配置 - Host: %s, Port: %s, User: %s, From: %s", host, port, config.AppConfig.SMTPUser, from)
+
+	// 根据类型设置邮件标题和内容
+	var subject, body string
+	appName := config.AppConfig.AppName
+	switch emailType {
+	case "change_username":
+		subject = appName + " 修改用户名验证码"
+		body = fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>修改用户名验证</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #007bff;">%s</h1>
+            <h2 style="color: #666;">修改用户名验证</h2>
+        </div>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <p>尊敬的用户，您好！</p>
+            <p>您正在尝试修改%s的用户名。为了保护您的账户安全，请使用以下验证码完成操作：</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <span style="font-size: 24px; font-weight: bold; color: #17a2b8; background-color: #e1f7fa; padding: 10px 20px; border-radius: 5px; letter-spacing: 2px;">%s</span>
+            </div>
+            
+            <p style="color: #666; font-size: 14px;">
+                • 验证码有效期：%d分钟<br>
+                • 请勿将验证码告诉他人<br>
+                • 如非本人操作，请立即检查账户安全
+            </p>
+        </div>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">
+            <p>此邮件由系统自动发送，请勿回复。</p>
+            <p>%s团队</p>
+        </div>
+    </div>
+</body>
+</html>`, appName, appName, code, config.AppConfig.VerificationCodeExpireMinutes, appName)
+	case "change_password":
+		subject = appName + " 修改密码验证码"
+		body = fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>修改密码验证</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #007bff;">%s</h1>
+            <h2 style="color: #666;">修改密码验证</h2>
+        </div>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <p>尊敬的用户，您好！</p>
+            <p>您正在尝试修改%s的登录密码。为了保护您的账户安全，请使用以下验证码完成操作：</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <span style="font-size: 24px; font-weight: bold; color: #dc3545; background-color: #f8d7da; padding: 10px 20px; border-radius: 5px; letter-spacing: 2px;">%s</span>
+            </div>
+            
+            <p style="color: #666; font-size: 14px;">
+                • 验证码有效期：%d分钟<br>
+                • 请勿将验证码告诉他人<br>
+                • 如非本人操作，请立即检查账户安全并联系客服
+            </p>
+        </div>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">
+            <p>此邮件由系统自动发送，请勿回复。</p>
+            <p>%s团队</p>
+        </div>
+    </div>
+</body>
+</html>`, appName, appName, code, config.AppConfig.VerificationCodeExpireMinutes, appName)
+	default:
+		return fmt.Errorf("unsupported email type: %s", emailType)
+	}
+
+	// 构建邮件消息，使用更简洁的头部
+	headers := fmt.Sprintf(`From: %s
+To: %s
+Subject: %s
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+%s`, from, to, subject, body)
+
+	msg := []byte(headers)
+
+	// 根据端口和配置选择连接方式
+	switch port {
+	case "465":
+		// 如果启用明文认证，强制使用明文方式
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
+		// 否则使用TLS连接（465端口默认TLS）
+		return sendMailWithTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+	case "587":
+		// 如果启用明文认证，强制使用明文方式
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
+		// 否则使用STARTTLS连接（587端口默认STARTTLS）
+		return sendMailWithSTARTTLS(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+	default:
+		// 如果启用明文认证，使用明文方式（适用于2525等端口）
+		if config.AppConfig.SMTPPlainAuthEnabled {
+			log.Printf("明文认证启用，使用明文SMTP连接")
+			return sendMailWithPlainAuth(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+		}
+		// 使用标准SMTP连接（25端口或其他端口）
+		return sendMailStandard(host, port, config.AppConfig.SMTPUser, password, from, []string{to}, msg)
+	}
+}
+
+// sendMailStandard 使用标准SMTP发送邮件（支持明文认证）
 func sendMailStandard(host, port, username, password, from string, to []string, msg []byte) error {
+	log.Printf("使用标准SMTP发送邮件到: %s:%s", host, port)
+
+	// 如果启用了明文认证，使用自定义方法
+	if config.AppConfig.SMTPPlainAuthEnabled {
+		return sendMailWithPlainAuth(host, port, username, password, from, to, msg)
+	}
+
+	// 否则使用标准方法
 	auth := smtp.PlainAuth("", username, password, host)
 	addr := fmt.Sprintf("%s:%s", host, port)
-
-	log.Printf("使用标准SMTP发送邮件到: %s:%s", host, port)
 
 	err := smtp.SendMail(addr, auth, from, to, msg)
 	if err != nil {
@@ -172,6 +349,69 @@ func sendMailStandard(host, port, username, password, from string, to []string, 
 	}
 
 	log.Printf("邮件发送成功（标准SMTP）: %v", to)
+	return nil
+}
+
+// sendMailWithPlainAuth 使用明文认证发送邮件
+func sendMailWithPlainAuth(host, port, username, password, from string, to []string, msg []byte) error {
+	log.Printf("使用明文认证SMTP发送邮件到: %s:%s", host, port)
+
+	// 1. 建立TCP连接
+	conn, err := net.DialTimeout("tcp", host+":"+port, 30*time.Second)
+	if err != nil {
+		log.Printf("TCP连接失败: %v", err)
+		return fmt.Errorf("failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// 2. 创建SMTP客户端
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		log.Printf("SMTP客户端创建失败: %v", err)
+		return fmt.Errorf("failed to create SMTP client: %v", err)
+	}
+	defer client.Quit()
+
+	// 3. 发送EHLO命令
+	if err = client.Hello("localhost"); err != nil {
+		log.Printf("EHLO命令失败: %v", err)
+		return fmt.Errorf("failed to send EHLO: %v", err)
+	}
+
+	// 4. 使用自定义认证（允许明文连接）
+	auth := PlainAuthIgnoreTLSNew("", username, password, host)
+	if err = client.Auth(auth); err != nil {
+		log.Printf("SMTP认证失败: %v", err)
+		return fmt.Errorf("SMTP authentication failed: %v", err)
+	}
+
+	// 5. 发送邮件
+	if err = client.Mail(from); err != nil {
+		return fmt.Errorf("failed to set sender: %v", err)
+	}
+
+	for _, addr := range to {
+		if err = client.Rcpt(addr); err != nil {
+			return fmt.Errorf("failed to set recipient %s: %v", addr, err)
+		}
+	}
+
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("failed to send email data: %v", err)
+	}
+
+	_, err = w.Write(msg)
+	if err != nil {
+		return fmt.Errorf("failed to write email content: %v", err)
+	}
+
+	err = w.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close email writer: %v", err)
+	}
+
+	log.Printf("邮件发送成功（明文认证SMTP）: %v", to)
 	return nil
 }
 

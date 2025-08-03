@@ -17,3 +17,6 @@ code
 
 .claude
 deploy*
+
+ui/dist
+ui/
