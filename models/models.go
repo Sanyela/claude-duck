@@ -27,7 +27,7 @@ type User struct {
 // DeviceCode 设备码模型
 type DeviceCode struct {
 	ID        uint      `gorm:"primarykey" json:"id"`
-	Code      string    `gorm:"type:varchar(191);uniqueIndex;not null" json:"code"`
+	代码      string    `gorm:"type:varchar(191);uniqueIndex;not null" json:"code"`
 	UserID    uint      `gorm:"not null" json:"user_id"`
 	User      User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Used      bool      `gorm:"default:false" json:"used"`
@@ -38,8 +38,8 @@ type DeviceCode struct {
 // Announcement 公告模型
 type Announcement struct {
 	ID          uint           `gorm:"primarykey" json:"id"`
-	Type        string         `gorm:"not null" json:"type"` // info, warning, error, success
-	Title       string         `gorm:"not null" json:"title"`
+	请键入        string         `gorm:"not null" json:"type"` // info, warning, error, success
+	标题       string         `gorm:"not null" json:"title"`
 	Description string         `gorm:"type:text" json:"description"` // 支持HTML
 	Language    string         `gorm:"default:'en'" json:"language"` // 语言标识
 	Active      bool           `gorm:"default:true" json:"active"`   // 是否启用
@@ -61,7 +61,7 @@ type AccessToken struct {
 // SubscriptionPlan 订阅计划模型
 type SubscriptionPlan struct {
 	ID                    uint           `gorm:"primarykey" json:"id"`
-	Title                 string         `gorm:"not null" json:"title"`        // 标题
+	标题                 string         `gorm:"not null" json:"title"`        // 标题
 	Description           string         `gorm:"type:text" json:"description"` // 描述
 	PointAmount           int64          `gorm:"not null" json:"point_amount"` // 套餐包含的积分数
 	Price                 float64        `gorm:"not null" json:"price"`        // 套餐价格
@@ -436,4 +436,72 @@ type FrozenPointsRecord struct {
 // 添加表名方法
 func (FrozenPointsRecord) TableName() string {
 	return "frozen_points_records"
+}
+// ConversationLog 对话记录表 - 记录完整的用户输入和AI输出
+type ConversationLog struct {
+	ID     uint `gorm:"primarykey" json:"id"`
+	UserID uint `gorm:"not null;index" json:"user_id"` // 用户ID
+
+	// 关联API事务
+	APITransactionID *uint `gorm:"index" json:"api_transaction_id"` // 关联的API事务ID
+	MessageID        string `gorm:"type:varchar(191);index" json:"message_id"` // Claude返回的message_id
+	RequestID        string `gorm:"type:varchar(191);index" json:"request_id"` // 请求唯一ID
+
+	// 对话基本信息
+	Model       string `gorm:"not null;index" json:"model"`        // 使用的模型
+	RequestType string `gorm:"default:'api'" json:"request_type"` // api/stream
+	IP          string `gorm:"type:varchar(45)" json:"ip"`        // 客户端IP
+	Username    string `gorm:"type:varchar(191)" json:"username"` // 用户名
+
+	// 完整的输入内容 (JSON格式存储)
+	UserInput     string `gorm:"type:longtext" json:"user_input"`     // 用户完整输入(包括messages、system等)
+	SystemPrompt  string `gorm:"type:text" json:"system_prompt"`      // 系统提示词
+	Messages      string `gorm:"type:longtext" json:"messages"`       // 用户消息历史(JSON格式)
+	Tools         string `gorm:"type:longtext" json:"tools"`          // 工具配置(JSON格式)
+	Temperature   *float64 `json:"temperature"`                       // 温度参数
+	MaxTokens     *int   `json:"max_tokens"`                         // 最大token数
+	TopP          *float64 `json:"top_p"`                            // Top P参数
+	TopK          *int   `json:"top_k"`                             // Top K参数
+	StopSequences string `gorm:"type:text" json:"stop_sequences"` // 停止序列(JSON格式)
+
+	// 完整的输出内容
+	AIResponse   string `gorm:"type:longtext" json:"ai_response"`  // AI完整响应内容(JSON格式)
+	ResponseText string `gorm:"type:longtext" json:"response_text"` // 提取的纯文本响应
+	StopReason   string `gorm:"type:varchar(50)" json:"stop_reason"` // 停止原因
+	StopSequence string `gorm:"type:varchar(255)" json:"stop_sequence"` // 实际停止序列
+
+	// Token统计
+	InputTokens              int `gorm:"not null" json:"input_tokens"`                 // 输入tokens
+	OutputTokens             int `gorm:"not null" json:"output_tokens"`                // 输出tokens
+	CacheCreationInputTokens int `gorm:"default:0" json:"cache_creation_input_tokens"` // 缓存创建输入tokens
+	CacheReadInputTokens     int `gorm:"default:0" json:"cache_read_input_tokens"`     // 缓存读取输入tokens
+	TotalTokens              int `gorm:"not null" json:"total_tokens"`                 // 总tokens(input+output)
+
+	// 计费信息
+	InputMultiplier  float64 `gorm:"not null" json:"input_multiplier"`    // 输入token倍率
+	OutputMultiplier float64 `gorm:"not null" json:"output_multiplier"`   // 输出token倍率
+	CacheMultiplier  float64 `gorm:"default:1.0" json:"cache_multiplier"` // 缓存token倍率
+	PointsUsed       int64   `gorm:"not null" json:"points_used"`         // 消耗的积分
+
+	// 请求性能信息
+	Duration    int    `gorm:"not null" json:"duration"`     // 请求耗时(毫秒)
+	ServiceTier string `gorm:"default:'standard'" json:"service_tier"` // 服务等级
+	状态      string `gorm:"not null;index" json:"status"` // success/failed/partial
+	错误       string `gorm:"type:text" json:"error"`       // 错误信息(如果有)
+
+	// 是否为免费模型请求
+	IsFreeModel bool `gorm:"default:false" json:"is_free_model"`
+
+	// 时间戳
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// 关联关系
+	User           User            `gorm:"foreignKey:UserID;references:ID" json:"user,omitempty"`
+	APITransaction *APITransaction `gorm:"foreignKey:APITransactionID;references:ID" json:"api_transaction,omitempty"`
+}
+
+// 添加表名方法
+func (ConversationLog) TableName() string {
+	return "conversation_logs"
 }
