@@ -239,18 +239,14 @@ export function LoginForm() {
         // 重定向到Linux Do授权页面
         window.location.href = response.auth_url
       } else {
-        toast({
-          title: "授权失败",
+        toast.error("授权失败", {
           description: response.message || "无法生成授权链接",
-          variant: "destructive",
         })
       }
     } catch (error) {
       console.error("Linux Do登录失败:", error)
-      toast({
-        title: "授权失败",
+      toast.error("授权失败", {
         description: "连接Linux Do服务失败，请稍后重试",
-        variant: "destructive",
       })
     } finally {
       setIsLoading(false)
@@ -297,30 +293,24 @@ export function LoginForm() {
       const response = await sendVerificationCode({ email, type })
       
       if (response.success) {
-        toast({
-          title: "验证码已发送",
+        toast.success("验证码已发送", {
           description: `请查收邮件，验证码10分钟内有效`,
-          variant: "default",
         })
         startCountdown()
         setErrors(prev => ({ ...prev, verification: undefined }))
       } else {
         const errorMessage = getErrorMessage(response.message || "")
         setErrors(prev => ({ ...prev, verification: errorMessage }))
-        toast({
-          title: "验证码发送失败",
+        toast.error("验证码发送失败", {
           description: errorMessage,
-          variant: "destructive",
         })
       }
     } catch (error) {
       console.error("发送验证码出错:", error)
       const errorMessage = "网络错误，请检查网络连接后重试"
       setErrors(prev => ({ ...prev, verification: errorMessage }))
-      toast({
-        title: "网络错误",
+      toast.error("网络错误", {
         description: errorMessage,
-        variant: "destructive",
       })
     } finally {
       setIsLoading(false)
@@ -340,30 +330,24 @@ export function LoginForm() {
       const response = await sendVerificationCode({ email, type })
       
       if (response.success) {
-        toast({
-          title: "验证码已发送",
+        toast.success("验证码已发送", {
           description: "请查收邮件，验证码10分钟内有效",
-          variant: "default",
         })
         startCountdown()
         setErrors(prev => ({ ...prev, verification: undefined }))
       } else {
         const errorMessage = getErrorMessage(response.message || "")
         setErrors(prev => ({ ...prev, verification: errorMessage }))
-        toast({
-          title: "验证码发送失败",
+        toast.error("验证码发送失败", {
           description: errorMessage,
-          variant: "destructive",
         })
       }
     } catch (error) {
       console.error("发送验证码出错:", error)
       const errorMessage = "网络错误，请检查网络连接后重试"
       setErrors(prev => ({ ...prev, verification: errorMessage }))
-      toast({
-        title: "网络错误",
+      toast.error("网络错误", {
         description: errorMessage,
-        variant: "destructive",
       })
     } finally {
       setIsLoading(false)
@@ -396,10 +380,8 @@ export function LoginForm() {
       const response = await emailOnlyAuth({ email, code, username })
       
       if (response.success) {
-        toast({
-          title: response.message?.includes("注册") ? "注册成功" : "登录成功",
+        toast.success(response.message?.includes("注册") ? "注册成功" : "登录成功", {
           description: "正在跳转到主页...",
-          variant: "default",
         })
         
         if (response.token && response.user) {
@@ -412,20 +394,16 @@ export function LoginForm() {
       } else {
         const errorMessage = getErrorMessage(response.message || "")
         setErrors(prev => ({ ...prev, email_auth: errorMessage }))
-        toast({
-          title: "认证失败",
+        toast.error("认证失败", {
           description: errorMessage,
-          variant: "destructive",
         })
       }
     } catch (error) {
       console.error("邮箱验证码认证出错:", error)
       const errorMessage = "网络错误，请检查网络连接后重试"
       setErrors(prev => ({ ...prev, email_auth: errorMessage }))
-      toast({
-        title: "认证失败",
+      toast.error("认证失败", {
         description: errorMessage,
-        variant: "destructive",
       })
     } finally {
       setIsLoading(false)
@@ -451,10 +429,8 @@ export function LoginForm() {
       const response = await login({ email, password })
       
       if (response.success) {
-        toast({
-          title: "登录成功",
+        toast.success("登录成功", {
           description: "正在跳转到主页...",
-          variant: "default",
         })
         
         if (response.token && response.user) {
@@ -467,20 +443,16 @@ export function LoginForm() {
       } else {
         const errorMessage = getErrorMessage(response.message || "")
         setErrors(prev => ({ ...prev, login: errorMessage }))
-        toast({
-          title: "登录失败",
+        toast.error("登录失败", {
           description: errorMessage,
-          variant: "destructive",
         })
       }
     } catch (error) {
       console.error("登录出错:", error)
       const errorMessage = "网络错误，请检查网络连接后重试"
       setErrors(prev => ({ ...prev, login: errorMessage }))
-      toast({
-        title: "登录失败",
+      toast.error("登录失败", {
         description: errorMessage,
-        variant: "destructive",
       })
     } finally {
       setIsLoading(false)
@@ -518,10 +490,8 @@ export function LoginForm() {
       const response = await registerWithCode({ username, email, password, code })
       
       if (response.success) {
-        toast({
-          title: "注册成功",
+        toast.success("注册成功", {
           description: "正在跳转到主页...",
-          variant: "default",
         })
         
         if (response.token && response.user) {
@@ -534,20 +504,16 @@ export function LoginForm() {
       } else {
         const errorMessage = getErrorMessage(response.message || "")
         setErrors(prev => ({ ...prev, register: errorMessage }))
-        toast({
-          title: "注册失败",
+        toast.error("注册失败", {
           description: errorMessage,
-          variant: "destructive",
         })
       }
     } catch (error) {
       console.error("注册出错:", error)
       const errorMessage = "网络错误，请检查网络连接后重试"
       setErrors(prev => ({ ...prev, register: errorMessage }))
-      toast({
-        title: "注册失败",
+      toast.error("注册失败", {
         description: errorMessage,
-        variant: "destructive",
       })
     } finally {
       setIsLoading(false)

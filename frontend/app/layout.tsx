@@ -30,7 +30,7 @@ export default function RootLayout({
             <AuthGuard>
               {children}
             </AuthGuard>
-            <Toaster />
+            <Toaster position="top-center" />
           </AuthProvider>
         </ThemeProvider>
       </body>

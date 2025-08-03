@@ -96,10 +96,8 @@ export default function OAuthCompletePage() {
     e.preventDefault();
     
     if (!username.trim() || !email.trim()) {
-      toast({
-        title: "输入错误",
+      toast.error("输入错误", {
         description: "请填写完整的用户名和邮箱",
-        variant: "destructive",
       });
       return;
     }
@@ -107,10 +105,8 @@ export default function OAuthCompletePage() {
     // 简单的邮箱格式验证
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      toast({
-        title: "邮箱格式错误",
+      toast.error("邮箱格式错误", {
         description: "请输入有效的邮箱地址",
-        variant: "destructive",
       });
       return;
     }
@@ -138,10 +134,8 @@ export default function OAuthCompletePage() {
         if (data.token && data.user) {
           login(data.token, data.user);
           
-          toast({
-            title: "注册成功",
+          toast.success("注册成功", {
             description: "欢迎加入！正在跳转到主页...",
-            variant: "default",
           });
 
           setTimeout(() => {
@@ -152,19 +146,15 @@ export default function OAuthCompletePage() {
         }
       } else {
         setError(data.message || "注册失败");
-        toast({
-          title: "注册失败",
+        toast.error("注册失败", {
           description: data.message || "注册过程中出现错误",
-          variant: "destructive",
         });
       }
     } catch (err) {
       console.error("完成注册失败:", err);
       setError("网络错误，请稍后重试");
-      toast({
-        title: "注册失败",
+      toast.error("注册失败", {
         description: "网络错误，请稍后重试",
-        variant: "destructive",
       });
     } finally {
       setSubmitting(false);

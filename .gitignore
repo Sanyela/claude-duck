@@ -20,3 +20,7 @@ deploy*
 
 ui/dist
 ui/
+
+# Frontend build outputs
+frontend/dist/
+frontend/out

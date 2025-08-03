@@ -63,18 +63,14 @@ export function CheckinButton({ onCheckinSuccess }: CheckinButtonProps) {
           onCheckinSuccess()
         }
       } else {
-        toast({
-          title: "签到失败",
+        toast.error("签到失败", {
           description: result.message,
-          variant: "destructive"
         })
       }
     } catch {
       console.error("签到失败:", error)
-      toast({
-        title: "签到失败",
+      toast.error("签到失败", {
         description: error.message || "网络错误，请稍后再试",
-        variant: "destructive"
       })
     } finally {
       setLoading(false)

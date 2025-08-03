@@ -118,10 +118,8 @@ export function DeviceManagement() {
       }
     } catch (error) {
       console.error('加载设备数据失败:', error)
-      toast({
-        title: "加载失败",
+      toast.error("加载失败", {
         description: "无法加载设备数据，请刷新重试",
-        variant: "destructive",
       })
     } finally {
       setLoading(false)
@@ -139,8 +137,7 @@ export function DeviceManagement() {
       const result = await revokeDevice(device.id)
       
       if (result.data.success) {
-        toast({
-          title: "设备已下线",
+        toast.success("设备已下线", {
           description: `${device.device_name} 已成功下线`,
         })
         
@@ -157,10 +154,8 @@ export function DeviceManagement() {
       }
     } catch (error: any) {
       console.error('下线设备失败:', error)
-      toast({
-        title: "下线失败",
+      toast.error("下线失败", {
         description: error.message || "下线设备失败，请重试",
-        variant: "destructive",
       })
     } finally {
       setActionLoading(null)
@@ -174,8 +169,7 @@ export function DeviceManagement() {
       const result = await revokeOtherDevices()
       
       if (result.data.success) {
-        toast({
-          title: "其他设备已下线",
+        toast.success("其他设备已下线", {
           description: `已下线 ${result.data.data?.revoked_count || 0} 个设备`,
         })
         loadDevices()
@@ -184,10 +178,8 @@ export function DeviceManagement() {
       }
     } catch (error: any) {
       console.error('下线其他设备失败:', error)
-      toast({
-        title: "下线失败",
+      toast.error("下线失败", {
         description: error.message || "下线其他设备失败，请重试",
-        variant: "destructive",
       })
     } finally {
       setActionLoading(null)
@@ -201,8 +193,7 @@ export function DeviceManagement() {
       const result = await revokeAllDevices()
       
       if (result.data.success) {
-        toast({
-          title: "所有设备已下线",
+        toast.success("所有设备已下线", {
           description: "您将需要重新登录",
         })
         // 强制下线所有设备后，用户会被登出
@@ -212,10 +203,8 @@ export function DeviceManagement() {
       }
     } catch (error: any) {
       console.error('下线所有设备失败:', error)
-      toast({
-        title: "下线失败",
+      toast.error("下线失败", {
         description: error.message || "下线所有设备失败，请重试",
-        variant: "destructive",
       })
     } finally {
       setActionLoading(null)
