@@ -48,7 +48,7 @@ export default function AdminConfigsPage() {
       title: "系统配置",
       icon: Zap,
       color: "bg-orange-500",
-      configs: ["free_models_list", "model_redirect_map", "model_multiplier_map", "default_degradation_guaranteed", "registration_plan_mapping"]
+      configs: ["free_models_list", "hide_models_list", "model_redirect_map", "model_multiplier_map", "default_degradation_guaranteed", "registration_plan_mapping"]
     }
   }
 
@@ -120,6 +120,25 @@ export default function AdminConfigsPage() {
           <div className="flex flex-wrap gap-1">
             {models.map((model: string, idx: number) => (
               <Badge key={idx} variant="outline" className="text-xs">
+                {model}
+              </Badge>
+            ))}
+          </div>
+        )
+      } catch {
+        return <span className="text-muted-foreground">格式错误</span>
+      }
+    }
+    if (config.config_key === "hide_models_list") {
+      try {
+        const models = JSON.parse(value)
+        if (models.length === 0) {
+          return <Badge variant="secondary" className="text-xs">未隐藏任何模型</Badge>
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {models.map((model: string, idx: number) => (
+              <Badge key={idx} variant="destructive" className="text-xs">
                 {model}
               </Badge>
             ))}
@@ -209,6 +228,17 @@ export default function AdminConfigsPage() {
           value={config.config_value}
           onChange={(e) => setEditingConfig({...config, config_value: e.target.value})}
           placeholder='["model1", "model2"]'
+          className="font-mono text-sm"
+          rows={3}
+        />
+      )
+    }
+    if (config.config_key === "hide_models_list") {
+      return (
+        <Textarea
+          value={config.config_value}
+          onChange={(e) => setEditingConfig({...config, config_value: e.target.value})}
+          placeholder='["claude-3-opus-20240229", "claude-3-sonnet-20240229"]'
           className="font-mono text-sm"
           rows={3}
         />
@@ -506,6 +536,11 @@ export default function AdminConfigsPage() {
                   {editingConfig.config_key === "free_models_list" && (
                     <p className="text-xs text-muted-foreground">
                       格式：JSON 数组，例如 ["model1", "model2"]
+                    </p>
+                  )}
+                  {editingConfig.config_key === "hide_models_list" && (
+                    <p className="text-xs text-muted-foreground">
+                      格式：JSON 数组，例如 ["claude-3-opus-20240229", "claude-3-sonnet-20240229"]，列表中的模型将返回503不支持错误
                     </p>
                   )}
                   {editingConfig.config_key === "model_redirect_map" && (

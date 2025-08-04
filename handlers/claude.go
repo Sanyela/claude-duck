@@ -113,6 +113,23 @@ func HandleClaudeProxy(c *gin.Context) {
 		configMap[cfg.ConfigKey] = cfg.ConfigValue
 	}
 
+	// 检查模型是否在隐藏列表中
+	hideModelsConfig := configMap["hide_models_list"]
+	if hideModelsConfig == "" {
+		hideModelsConfig = `[]` // 默认空数组
+	}
+	
+	var hideModels []string
+	if err := json.Unmarshal([]byte(hideModelsConfig), &hideModels); err == nil {
+		if slices.Contains(hideModels, originalModel) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "不支持当前您选中的模型",
+				"code":  "MODEL_NOT_SUPPORTED",
+			})
+			return
+		}
+	}
+
 	// 处理模型重定向
 	modelRedirectConfig := configMap["model_redirect_map"]
 	var actualModel string = originalModel // 实际发送给API的模型名

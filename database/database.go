@@ -198,6 +198,11 @@ func initDefaultConfigs() {
 			ConfigValue: `{}`,
 			Description: "模型倍率映射，JSON格式：{\"模型名\": 倍率}，在现有计费基础上乘以对应倍率，空对象表示不应用额外倍率",
 		},
+		{
+			ConfigKey:   "hide_models_list",
+			ConfigValue: `[]`,
+			Description: "隐藏模型列表，JSON数组格式，列表中的模型将返回503不支持错误",
+		},
 	}
 
 	for _, cfg := range defaultConfigs {
