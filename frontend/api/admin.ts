@@ -212,14 +212,18 @@ export const adminAPI = {
   },
 
   // 更新用户
-  updateUser: async (id: number, data: Partial<AdminUser>): Promise<{ success: boolean; message?: string }> => {
+  updateUser: async (id: number, data: Partial<AdminUser>): Promise<{ success: boolean; message?: string; emailChanged?: boolean }> => {
     try {
-      await request.put(`/admin/users/${id}`, data);
-      return { success: true };
+      const response = await request.put(`/admin/users/${id}`, data);
+      return { 
+        success: true, 
+        message: response.data?.message,
+        emailChanged: response.data?.email_changed
+      };
     } catch (error: any) {
       return {
         success: false,
-        message: error.response?.data?.message || "更新用户失败"
+        message: error.response?.data?.error || error.response?.data?.message || "更新用户失败"
       };
     }
   },

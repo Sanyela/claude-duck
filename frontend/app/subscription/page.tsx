@@ -78,11 +78,11 @@ export default function SubscriptionPage() {
     try {
       const response = await request.get("/subscription/history")
       return { success: true, data: response.data.history || [] }
-    } catch {
+    } catch (error: any) {
       console.error("获取支付历史失败:", error)
       return { 
         success: false, 
-        message: error.response?.data?.error || "获取支付历史失败" 
+        message: error?.response?.data?.error || "获取支付历史失败" 
       }
     }
   }
@@ -154,9 +154,9 @@ export default function SubscriptionPage() {
           description: response.data.message,
         })
       }
-    } catch {
+    } catch (error: any) {
       toast.error("预检查失败", {
-        description: error.response?.data?.message || "预检查失败",
+        description: error?.response?.data?.message || "预检查失败",
       })
     }
 
@@ -196,9 +196,9 @@ export default function SubscriptionPage() {
           description: response.data.message,
         })
       }
-    } catch {
+    } catch (error: any) {
       toast.error("兑换失败", {
-        description: error.response?.data?.message || "激活码兑换失败",
+        description: error?.response?.data?.message || "激活码兑换失败",
       })
     }
   }

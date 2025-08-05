@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"claude/database"
@@ -12,6 +14,7 @@ import (
 	"claude/utils"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Pagination 分页参数
@@ -97,13 +100,26 @@ func HandleAdminUpdateUser(c *gin.Context) {
 		return
 	}
 
+	// 先获取原用户信息，用于比较邮箱是否变更
+	var originalUser models.User
+	if err := database.DB.First(&originalUser, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
 	updates := make(map[string]interface{})
+	var emailChanged bool
+	var newEmail string
 
 	if updateData.Username != nil {
 		updates["username"] = *updateData.Username
 	}
 	if updateData.Email != nil {
-		updates["email"] = *updateData.Email
+		newEmail = *updateData.Email
+		if originalUser.Email != newEmail {
+			emailChanged = true
+			updates["email"] = newEmail
+		}
 	}
 	if updateData.IsAdmin != nil {
 		updates["is_admin"] = *updateData.IsAdmin
@@ -124,13 +140,43 @@ func HandleAdminUpdateUser(c *gin.Context) {
 		updates["degradation_counter"] = *updateData.DegradationCounter
 	}
 
+	// 如果邮箱变更，生成新密码并添加到更新字段
+	var newPassword string
+	if emailChanged {
+		var err error
+		newPassword, err = utils.GenerateSecurePassword()
+		if err != nil {
+			log.Printf("生成安全密码失败: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate secure password"})
+			return
+		}
+
+		// 加密密码
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("密码加密失败: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			return
+		}
+
+		// 将密码转换为字符串指针
+		hashedPasswordStr := string(hashedPassword)
+		updates["password"] = &hashedPasswordStr
+	}
+
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No fields to update"})
 		return
 	}
 
+	// 执行数据库更新
 	result := database.DB.Model(&models.User{}).Where("id = ?", userID).Updates(updates)
 	if result.Error != nil {
+		// 检查是否是邮箱重复错误
+		if strings.Contains(result.Error.Error(), "Duplicate entry") && strings.Contains(result.Error.Error(), "email") {
+			c.JSON(http.StatusConflict, gin.H{"error": "该邮箱已被其他用户使用"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return
 	}
@@ -140,7 +186,24 @@ func HandleAdminUpdateUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
+	// 如果邮箱变更，发送密码重置邮件
+	if emailChanged && newPassword != "" {
+		go func() {
+			log.Printf("发送邮箱变更通知到: %s", newEmail)
+			if err := utils.SendSettingsVerificationEmail(newEmail, newPassword, "admin_email_change"); err != nil {
+				log.Printf("发送邮箱变更通知失败: %v", err)
+			} else {
+				log.Printf("邮箱变更通知发送成功: %s", newEmail)
+			}
+		}()
+		
+		c.JSON(http.StatusOK, gin.H{
+			"message": "用户信息更新成功，密码重置邮件已发送到新邮箱",
+			"email_changed": true,
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
+	}
 }
 
 // HandleAdminDeleteUser 删除用户

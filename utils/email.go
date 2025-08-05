@@ -284,6 +284,53 @@ func SendSettingsVerificationEmail(to, code, emailType string) error {
     </div>
 </body>
 </html>`, appName, appName, code, config.AppConfig.VerificationCodeExpireMinutes, appName)
+	case "admin_email_change":
+		subject = appName + " 邮箱变更通知"
+		body = fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>邮箱变更通知</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #007bff;">%s</h1>
+            <h2 style="color: #666;">邮箱变更通知</h2>
+        </div>
+        
+        <div style="background-color: #fff3cd; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+            <p><strong>重要安全通知</strong></p>
+            <p>您好！管理员已将您的账户邮箱变更到此邮箱地址。</p>
+            <p>为了保障账户安全，系统已重置您的登录密码。新密码如下：</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; border: 2px dashed #6c757d;">
+                    <p style="margin: 5px 0; font-weight: bold; color: #495057;">新登录密码：</p>
+                    <span style="font-size: 20px; font-weight: bold; color: #dc3545; font-family: 'Courier New', monospace; letter-spacing: 1px;">%s</span>
+                </div>
+            </div>
+            
+            <div style="background-color: #d1ecf1; padding: 15px; border-radius: 5px; border-left: 4px solid #bee5eb;">
+                <p style="margin: 0; font-weight: bold; color: #0c5460;">安全提醒：</p>
+                <ul style="margin: 10px 0; padding-left: 20px; color: #0c5460;">
+                    <li>请立即登录并修改为您的个人密码</li>
+                    <li>请妥善保管新密码，勿告诉他人</li>
+                    <li>如有疑问，请联系管理员</li>
+                    <li>如非本人操作，请立即联系客服</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">
+            <p>此邮件由系统自动发送，请勿回复。</p>
+            <p>%s 管理团队</p>
+            <p style="margin-top: 10px; font-size: 11px;">如果您没有进行此操作，请立即联系客服。</p>
+        </div>
+    </div>
+</body>
+</html>`, appName, code, appName)
 	default:
 		return fmt.Errorf("unsupported email type: %s", emailType)
 	}

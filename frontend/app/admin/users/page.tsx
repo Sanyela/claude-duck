@@ -373,7 +373,14 @@ export default function AdminUsersPage() {
   const handleUpdateUser = async (user: AdminUser) => {
     const result = await adminAPI.updateUser(user.id, user)
     if (result.success) {
-      toast.success("更新成功")
+      if (result.emailChanged) {
+        toast.success("更新成功", {
+          description: "用户邮箱已变更，密码重置邮件已发送到新邮箱",
+          duration: 6000,
+        })
+      } else {
+        toast.success("更新成功")
+      }
       setIsUserDialogOpen(false)
       loadUsers()
     } else {
@@ -735,6 +742,29 @@ export default function AdminUsersPage() {
                       value={editingUser.email}
                       onChange={(e) => setEditingUser({...editingUser, email: e.target.value})}
                     />
+                    {editingUser.email !== data.find(u => u.id === editingUser.id)?.email && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <h3 className="text-sm font-medium text-yellow-800">
+                              邮箱变更提醒
+                            </h3>
+                            <div className="mt-2 text-sm text-yellow-700">
+                              <p>
+                                • 修改邮箱后，系统将自动重置该用户的登录密码<br/>
+                                • 新密码将发送到新邮箱地址<br/>
+                                • 用户需要使用新密码重新登录
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center space-x-2">
                     <Switch
