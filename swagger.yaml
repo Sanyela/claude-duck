@@ -27,6 +27,8 @@ tags:
     description: Claude API 代理接口
   - name: public
     description: 公共接口
+  - name: oauth
+    description: OAuth相关接口
   
   # 管理员接口标签
   - name: admin-users
@@ -86,6 +88,30 @@ paths:
                   title:
                     type: string
                     example: 每日图片标题
+
+  /config:
+    get:
+      tags:
+        - public
+      summary: 获取前端配置
+      description: 获取前端页面所需的配置信息
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  site_name:
+                    type: string
+                    example: Claude Code API
+                  oauth_enabled:
+                    type: boolean
+                    example: true
+                  registration_enabled:
+                    type: boolean
+                    example: true
 
   #============================================
   # 用户接口
@@ -501,6 +527,290 @@ paths:
                     example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
                   user:
                     $ref: '#/components/schemas/UserData'
+
+  /auth/check-username:
+    post:
+      tags:
+        - auth
+      summary: 检查用户名可用性
+      description: 检查指定用户名是否可用
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+              properties:
+                username:
+                  type: string
+                  example: newuser123
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 用户名可用
+
+  /auth/send-verification-code-settings:
+    post:
+      tags:
+        - auth
+      summary: 发送设置页面验证码
+      description: 向用户邮箱发送用于修改设置的验证码
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+      responses:
+        '200':
+          description: 验证码发送成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 验证码发送成功
+
+  /auth/change-username:
+    post:
+      tags:
+        - auth
+      summary: 修改用户名
+      description: 使用验证码修改用户名
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - new_username
+                - verification_code
+              properties:
+                new_username:
+                  type: string
+                  example: newusername
+                verification_code:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: 用户名修改成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 用户名修改成功
+
+  /auth/change-password:
+    post:
+      tags:
+        - auth
+      summary: 修改密码
+      description: 使用验证码修改密码
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - new_password
+                - verification_code
+              properties:
+                new_password:
+                  type: string
+                  format: password
+                  example: newpassword123
+                verification_code:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: 密码修改成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 密码修改成功
+  
+  #--------------------------------------------
+  # OAuth相关接口
+  #--------------------------------------------
+  /oauth/linux-do/config:
+    get:
+      tags:
+        - oauth
+      summary: 获取Linux Do OAuth配置
+      description: 获取Linux Do OAuth配置状态
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    example: true
+                  client_id:
+                    type: string
+                    example: your-client-id
+
+  /oauth/linux-do/authorize:
+    get:
+      tags:
+        - oauth
+      summary: 生成Linux Do授权URL
+      description: 生成Linux Do OAuth授权URL
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authorize_url:
+                    type: string
+                    example: https://connect.linux.do/oauth2/authorize?...
+
+  /oauth/linuxdo/temp-user:
+    get:
+      tags:
+        - oauth
+      summary: 获取临时用户信息
+      description: 获取Linux Do OAuth临时用户信息
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 临时令牌
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_info:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 123
+                      username:
+                        type: string
+                        example: linuxdo_user
+                      name:
+                        type: string
+                        example: Linux Do User
+
+  /oauth/linuxdo/complete-registration:
+    post:
+      tags:
+        - oauth
+      summary: 完成Linux Do注册
+      description: 完成Linux Do OAuth注册流程
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - username
+              properties:
+                token:
+                  type: string
+                  example: temp-token-123
+                username:
+                  type: string
+                  example: new_username
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: '#/components/schemas/UserData'
+
+  /oauth/linuxdo:
+    get:
+      tags:
+        - oauth
+      summary: Linux Do回调处理
+      description: Linux Do OAuth回调处理端点
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+          description: 授权码
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: 状态参数
+      responses:
+        '302':
+          description: 重定向到前端页面
   
   #--------------------------------------------
   # SSO认证接口
@@ -1078,6 +1388,10 @@ paths:
                     example: '2024-01-15T10:30:00Z'
 
   /credits/history:
+    get:
+      tags:
+        - user-credits
+      summary: 获取积分使用记录
       description: 获取用户的积分使用记录
       security:
         - BearerAuth: []
@@ -2245,6 +2559,171 @@ paths:
                     type: string
                     example: 每日限制已更新
 
+  /admin/activation-codes/ban:
+    post:
+      tags:
+        - admin-activation-codes
+      summary: 封禁激活码
+      description: 封禁用户的指定激活码并冻结相关积分
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+                - activation_code
+                - reason
+              properties:
+                user_id:
+                  type: integer
+                  example: 123
+                activation_code:
+                  type: string
+                  example: ABCD-EFGH-IJKL-MNOP
+                reason:
+                  type: string
+                  example: 违规使用
+      responses:
+        '200':
+          description: 封禁成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 激活码封禁成功
+
+  /admin/activation-codes/ban-preview:
+    post:
+      tags:
+        - admin-activation-codes
+      summary: 预览封禁影响
+      description: 预览封禁激活码会对用户造成的影响
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+                - activation_code
+              properties:
+                user_id:
+                  type: integer
+                  example: 123
+                activation_code:
+                  type: string
+                  example: ABCD-EFGH-IJKL-MNOP
+      responses:
+        '200':
+          description: 预览成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  frozen_points:
+                    type: integer
+                    example: 5000
+                  remaining_points:
+                    type: integer
+                    example: 3000
+                  affected_benefits:
+                    type: object
+                    example: {"daily_max_points": 1000}
+
+  /admin/frozen-records:
+    get:
+      tags:
+        - admin-activation-codes
+      summary: 获取冻结记录列表
+      description: 获取所有激活码冻结记录
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: 过滤指定用户
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [frozen]
+          description: 记录状态
+        - name: activation_code
+          in: query
+          schema:
+            type: string
+          description: 激活码过滤
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FrozenRecord'
+                  total:
+                    type: integer
+                    example: 50
+                  page:
+                    type: integer
+                    example: 1
+                  page_size:
+                    type: integer
+                    example: 10
+
+  /admin/frozen-records/{id}:
+    get:
+      tags:
+        - admin-activation-codes
+      summary: 获取冻结记录详情
+      description: 获取指定冻结记录的详细信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 冻结记录ID
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrozenRecord'
+
   #--------------------------------------------
   # 管理员公告管理接口
   #--------------------------------------------
@@ -2892,3 +3371,76 @@ components:
           type: integer
           example: 10
           description: 获得的奖励积分
+
+    FrozenRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 123
+        banned_activation_code:
+          type: string
+          example: ABCD-EFGH-IJKL-MNOP
+        banned_code_id:
+          type: integer
+          example: 456
+        frozen_points:
+          type: integer
+          example: 5000
+        frozen_benefits:
+          type: string
+          example: '{"daily_max_points": 1000}'
+        before_ban_wallet_state:
+          type: string
+          example: '{"total_points": 10000}'
+        before_ban_benefits:
+          type: string
+          example: '{"degradation_guaranteed": 3}'
+        calculation_method:
+          type: string
+          example: 虚拟消费计算结果...
+        estimated_usage:
+          type: integer
+          example: 2000
+        ban_reason:
+          type: string
+          example: 违规使用
+        admin_user_id:
+          type: integer
+          example: 1
+        status:
+          type: string
+          enum: [frozen]
+          example: frozen
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 123
+            username:
+              type: string
+              example: user123
+            email:
+              type: string
+              example: user@example.com
+        admin_user:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            username:
+              type: string
+              example: admin
