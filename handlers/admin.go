@@ -1262,37 +1262,6 @@ func HandleBanActivationCode(c *gin.Context) {
 	})
 }
 
-// HandleUnbanActivationCode 解禁激活码
-func HandleUnbanActivationCode(c *gin.Context) {
-	var request struct {
-		UserID         uint   `json:"user_id" binding:"required"`
-		ActivationCode string `json:"activation_code" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 获取操作管理员ID
-	adminUserID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "无法获取管理员信息"})
-		return
-	}
-
-	// 执行解禁操作
-	err := utils.UnbanActivationCode(request.UserID, request.ActivationCode, adminUserID.(uint))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "激活码解禁成功",
-	})
-}
 
 // HandleGetFrozenRecords 获取冻结记录列表
 func HandleGetFrozenRecords(c *gin.Context) {

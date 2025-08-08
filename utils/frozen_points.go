@@ -258,55 +258,6 @@ func BanActivationCode(userID uint, activationCode string, reason string, adminU
 	})
 }
 
-// UnbanActivationCode 解禁激活码
-func UnbanActivationCode(userID uint, activationCode string, adminUserID uint) error {
-	return database.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. 查找冻结记录
-		var frozenRecord models.FrozenPointsRecord
-		err := tx.Where("user_id = ? AND banned_activation_code = ? AND status = 'frozen'",
-			userID, activationCode).First(&frozenRecord).Error
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("未找到该卡密的封禁记录")
-			}
-			return fmt.Errorf("查询冻结记录失败: %w", err)
-		}
-
-		// 2. 获取当前钱包状态
-		wallet, err := GetOrCreateUserWallet(userID)
-		if err != nil {
-			return fmt.Errorf("获取用户钱包失败: %w", err)
-		}
-
-		// 3. 恢复冻结的积分
-		wallet.AvailablePoints += frozenRecord.FrozenPoints
-		wallet.TotalPoints += frozenRecord.FrozenPoints
-
-		// 4. 重新计算包含该卡密的权益
-		newBenefits, err := recalculateBenefitsWithUnbannedCard(userID, activationCode, tx)
-		if err != nil {
-			return fmt.Errorf("重新计算权益失败: %w", err)
-		}
-
-		// 5. 更新钱包权益
-		updateWalletBenefits(wallet, newBenefits)
-
-		// 6. 更新冻结记录状态
-		frozenRecord.Status = "restored"
-		frozenRecord.UpdatedAt = time.Now()
-
-		// 7. 更新数据库
-		if err := tx.Save(wallet).Error; err != nil {
-			return fmt.Errorf("更新钱包失败: %w", err)
-		}
-
-		if err := tx.Save(&frozenRecord).Error; err != nil {
-			return fmt.Errorf("更新冻结记录失败: %w", err)
-		}
-
-		return nil
-	})
-}
 
 // 辅助函数们...
 
@@ -479,80 +430,6 @@ func updateWalletBenefits(wallet *models.UserWallet, benefits map[string]interfa
 	}
 }
 
-// recalculateBenefitsWithUnbannedCard 重新计算包含解禁卡密的权益
-func recalculateBenefitsWithUnbannedCard(userID uint, unbannedCode string, tx *gorm.DB) (map[string]interface{}, error) {
-	// 1. 获取所有有效的兑换记录（包括刚解禁的）
-	var allRedemptions []models.RedemptionRecord
-	if err := tx.Where("user_id = ? AND source_type = 'activation_code'", userID).Find(&allRedemptions).Error; err != nil {
-		return nil, err
-	}
-
-	// 2. 排除其他仍被封禁的卡密
-	var otherBannedCodes []string
-	if err := tx.Table("frozen_points_records").
-		Where("user_id = ? AND status = 'frozen' AND banned_activation_code != ?",
-			userID, unbannedCode).
-		Pluck("banned_activation_code", &otherBannedCodes).Error; err != nil {
-		return nil, err
-	}
-
-	// 3. 筛选出有效的兑换记录
-	validRedemptions := make([]models.RedemptionRecord, 0)
-	for _, record := range allRedemptions {
-		// 检查是否被封禁
-		isBanned := false
-		for _, bannedCode := range otherBannedCodes {
-			if record.SourceID == bannedCode {
-				isBanned = true
-				break
-			}
-		}
-		if !isBanned {
-			validRedemptions = append(validRedemptions, record)
-		}
-	}
-
-	// 4. 基于有效记录计算综合权益
-	return calculateCombinedBenefits(validRedemptions)
-}
-
-// calculateCombinedBenefits 计算综合权益
-func calculateCombinedBenefits(redemptions []models.RedemptionRecord) (map[string]interface{}, error) {
-	benefits := map[string]interface{}{
-		"daily_max_points":         int64(0),
-		"degradation_guaranteed":   0,
-		"daily_checkin_points":     int64(0),
-		"daily_checkin_points_max": int64(0),
-		"auto_refill_enabled":      false,
-		"auto_refill_threshold":    int64(0),
-		"auto_refill_amount":       int64(0),
-	}
-
-	for _, record := range redemptions {
-		// 取最大值策略
-		if record.DailyMaxPoints > benefits["daily_max_points"].(int64) {
-			benefits["daily_max_points"] = record.DailyMaxPoints
-		}
-		if record.DegradationGuaranteed > benefits["degradation_guaranteed"].(int) {
-			benefits["degradation_guaranteed"] = record.DegradationGuaranteed
-		}
-		if record.DailyCheckinPoints > benefits["daily_checkin_points"].(int64) {
-			benefits["daily_checkin_points"] = record.DailyCheckinPoints
-		}
-		if record.DailyCheckinPointsMax > benefits["daily_checkin_points_max"].(int64) {
-			benefits["daily_checkin_points_max"] = record.DailyCheckinPointsMax
-		}
-
-		// 布尔值取或操作
-		if record.AutoRefillEnabled {
-			benefits["auto_refill_enabled"] = true
-			benefits["auto_refill_threshold"] = record.AutoRefillThreshold
-			benefits["auto_refill_amount"] = record.AutoRefillAmount
-		}
-	}
-
-	return benefits, nil
-}
 
 // getBannedCodeID 获取被封禁卡密的ID
 func getBannedCodeID(activationCode string, tx *gorm.DB) uint {

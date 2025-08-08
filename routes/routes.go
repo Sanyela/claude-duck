@@ -156,7 +156,6 @@ func SetupRoutes(r *gin.Engine) {
 
 		// 激活码封禁管理
 		admin.POST("/activation-codes/ban", handlers.HandleBanActivationCode)
-		admin.POST("/activation-codes/unban", handlers.HandleUnbanActivationCode)
 		admin.POST("/activation-codes/ban-preview", handlers.HandlePreviewBanActivationCode)
 		admin.GET("/frozen-records", handlers.HandleGetFrozenRecords)
 		admin.GET("/frozen-records/:id", handlers.HandleGetFrozenRecordDetail)

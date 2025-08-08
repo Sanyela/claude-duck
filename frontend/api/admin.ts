@@ -73,7 +73,7 @@ export interface FrozenPointsRecord {
   before_ban_benefits: string;
   calculation_method: string;
   estimated_usage: number;
-  status: "frozen" | "restored";
+  status: "frozen";
   ban_reason: string;
   admin_user_id?: number;
   admin_user?: AdminUser;
@@ -612,21 +612,6 @@ export const adminAPI = {
     }
   },
 
-  // 解禁激活码
-  unbanActivationCode: async (data: {
-    user_id: number;
-    activation_code: string;
-  }): Promise<{ success: boolean; message?: string }> => {
-    try {
-      await request.post("/admin/activation-codes/unban", data);
-      return { success: true };
-    } catch (error: any) {
-      return {
-        success: false,
-        message: error.response?.data?.error || "解禁激活码失败"
-      };
-    }
-  },
 
   // 获取冻结记录列表
   getFrozenRecords: async (params?: {

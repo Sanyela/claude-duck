@@ -424,7 +424,7 @@ type FrozenPointsRecord struct {
 	EstimatedUsage        int64     `gorm:"default:0" json:"estimated_usage"`           // 估算已使用积分
 	
 	// 封禁状态和原因
-	Status                string    `gorm:"default:'frozen';index" json:"status"`       // frozen, restored
+	Status                string    `gorm:"default:'frozen';index" json:"status"`       // frozen
 	BanReason             string    `gorm:"type:text" json:"ban_reason"`                // 封禁原因
 	AdminUserID           *uint     `json:"admin_user_id"`                              // 操作管理员ID
 	AdminUser             *User     `gorm:"foreignKey:AdminUserID" json:"admin_user,omitempty"`

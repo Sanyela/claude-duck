@@ -8,7 +8,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal, Key, Plus, Download, Search, Copy, Settings, Ban, ShieldOff, Eye, AlertTriangle } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Key, Plus, Download, Search, Copy, Settings, Ban, Eye, AlertTriangle } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -496,17 +496,6 @@ export default function AdminCodesPage() {
                 复制激活码
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              
-              {/* 解禁操作 */}
-              {record.status === "frozen" && (
-                <DropdownMenuItem
-                  onClick={() => handleUnbanCode(record)}
-                  className="text-green-600"
-                >
-                  <ShieldOff className="mr-2 h-4 w-4" />
-                  解禁激活码
-                </DropdownMenuItem>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -876,32 +865,6 @@ export default function AdminCodesPage() {
     setLoading(false)
   }
 
-  // 处理解禁激活码 (从冻结记录中解禁)
-  const handleUnbanCode = async (record: FrozenPointsRecord) => {
-    if (!confirm("确定要解禁此激活码吗？")) return
-    
-    try {
-      const result = await adminAPI.unbanActivationCode({
-        user_id: record.user_id,
-        activation_code: record.banned_activation_code
-      })
-      
-      if (result.success) {
-        toast.success("解禁成功", {
-          description: "激活码已被解禁",
-        })
-        loadCodes(pagination.page, pagination.pageSize, searchParams)
-      } else {
-        toast.error("解禁失败", {
-          description: result.message,
-        })
-      }
-    } catch (error) {
-      toast.error("解禁失败", {
-        description: "执行解禁操作时发生错误",
-      })
-    }
-  }
 
   // 处理编辑每日限制
   const handleEditDailyLimit = async (code: ActivationCodeRow) => {
